@@ -1,4 +1,4 @@
-import streamlit as st
+iimport streamlit as st
 import os
 import tempfile
 import json
@@ -315,9 +315,6 @@ def format_parsed_json_to_markdown(parsed_data):
     md += f"## **SUMMARY**\n---\n"
     md += parsed_data.get('personal_details', 'No summary provided.') + "\n\n"
     
-    md += "## **SKILLS**\n---\n"
-    md += "- " + "\n- ".join(parsed_data.get('skills', ['No skills listed']) if all(isinstance(s, str) for s in parsed_data.get('skills', [])) else ["Skills list structure mismatch"])
-    
     md += "\n\n## **EXPERIENCE**\n---\n"
     experience_md = []
     for exp in parsed_data.get('experience', []):
@@ -328,7 +325,7 @@ def format_parsed_json_to_markdown(parsed_data):
                 f"Responsibilities: {exp.get('responsibilities', 'N/A')}" 
             )
     md += "\n\n".join(experience_md)
-    
+
     md += "\n\n## **EDUCATION**\n---\n"
     education_md = []
     for edu in parsed_data.get('education', []):
@@ -350,6 +347,15 @@ def format_parsed_json_to_markdown(parsed_data):
                 f"{cert.get('title', 'N/A')} - Issued by: {cert.get('given_by', 'N/A')}, Date: {cert.get('issue_date', 'N/A')}"
             )
     md += "- " + "\n- ".join(certifications_md)
+
+    md += "\n\n## **SKILLS**\n---\n"
+    md += "- " + "\n- ".join(parsed_data.get('skills', ['No skills listed']) if all(isinstance(s, str) for s in parsed_data.get('skills', [])) else ["Skills list structure mismatch"])
+
+    md += "\n\n## **PROJECTS**\n---\n"
+    md += "- " + "\n- ".join(parsed_data.get('projects', ['No projects listed']) if all(isinstance(p, str) for p in parsed_data.get('projects', [])) else ["Projects list structure mismatch"])
+
+    md += "\n\n## **STRENGTHS**\n---\n"
+    md += "- " + "\n- ".join(parsed_data.get('strength', ['No strengths listed']) if all(isinstance(s, str) for s in parsed_data.get('strength', [])) else ["Strengths list structure mismatch"])
     
     return md
 
@@ -473,41 +479,16 @@ def cv_management_tab_content():
             key="cv_personal_details_input"
         ).strip() # Strip on read
         
-        # --- SKILLS & PROJECTS (Kept as text areas for quick, simple list entry) ---
-        st.markdown("---")
-        st.subheader("Skills, Projects, & Strengths (One Item per Line)")
-
-        skills_text = "\n".join(st.session_state.cv_form_data.get('skills', []) if all(isinstance(s, str) for s in st.session_state.cv_form_data.get('skills', [])) else [])
-        new_skills_text = st.text_area(
-            "Key Skills (Technical and Soft)", 
-            value=skills_text,
-            height=100,
-            key="cv_skills_input"
-        )
-        st.session_state.cv_form_data['skills'] = [s.strip() for s in new_skills_text.split('\n') if s.strip()]
+        # NOTE: SKILLS, PROJECTS, & STRENGTHS SECTION HAS BEEN MOVED DOWN
         
-        projects_text = "\n".join(st.session_state.cv_form_data.get('projects', []) if all(isinstance(p, str) for p in st.session_state.cv_form_data.get('projects', [])) else [])
-        new_projects_text = st.text_area(
-            "Projects (Name, Description, Technologies)", 
-            value=projects_text,
-            height=100,
-            key="cv_projects_input"
-        )
-        st.session_state.cv_form_data['projects'] = [p.strip() for p in new_projects_text.split('\n') if p.strip()]
+        # The form submission button must remain *inside* the st.form block.
+        # It will be moved to the very bottom of the form block, after the dynamically added fields 
+        # for Skills, Projects, & Strengths (which are now inside the form).
         
-        strength_text = "\n".join(st.session_state.cv_form_data.get('strength', []) if all(isinstance(s, str) for s in st.session_state.cv_form_data.get('strength', [])) else [])
-        new_strength_text = st.text_area(
-            "Strengths / Key Personal Qualities (One per line)", 
-            value=strength_text,
-            height=70,
-            key="cv_strength_input"
-        )
-        st.session_state.cv_form_data['strength'] = [s.strip() for s in new_strength_text.split('\n') if s.strip()]
+        # The rest of the form is broken out into dynamic sections below (Education, Certifications, Experience),
+        # which are then followed by the *rest* of the form content (Skills/Projects).
 
-        # Submitting this form will synchronize all data, including the structured education/experience/certifications.
-        submit_form_button = st.form_submit_button("Generate and Load ALL CV Data", type="primary", use_container_width=True)
-
-    
+        
     # --- DYNAMIC EDUCATION SECTION (OUTSIDE the main form) ---
     st.markdown("---")
     st.subheader("🎓 Education Details")
@@ -518,9 +499,9 @@ def cv_management_tab_content():
         current_year = date.today().year
         
         # Use simple key lookup for values and **CRITICALLY APPLY .strip()**
-        degree_val = st.session_state.get("temp_edu_degree_key", "").strip() # FIX APPLIED HERE
-        college_val = st.session_state.get("temp_edu_college_key", "").strip() # Applied to others too
-        university_val = st.session_state.get("temp_edu_university_key", "").strip() # Applied to others too
+        degree_val = st.session_state.get("temp_edu_degree_key", "").strip() 
+        college_val = st.session_state.get("temp_edu_college_key", "").strip() 
+        university_val = st.session_state.get("temp_edu_university_key", "").strip() 
         from_year_val = st.session_state.get("temp_edu_from_year_key", "").strip()
         to_year_val = st.session_state.get("temp_edu_to_year_key", str(current_year)).strip()
         score_val = st.session_state.get("temp_edu_score_key", "").strip()
@@ -911,7 +892,53 @@ def cv_management_tab_content():
                 st.button("❌ Remove", key=f"remove_exp_{i}", on_click=remove_experience_entry, args=(i,), type="secondary") 
     else:
         st.info("No experience entries added yet. Use the form above to add one.")
+    
+    # --- SKILLS & PROJECTS (Kept as text areas and moved here - back inside the main form) ---
+    # We must re-enter the form context to place the following elements inside the 'cv_builder_form'
+    with st.form("cv_builder_form", clear_on_submit=False): 
+        # The form has already been initialized, this block adds content to it.
+        # We need to re-use the form key. Since the initial block handled the Personal/Summary, 
+        # we can put the rest of the form content here. Streamlit handles multi-block forms fine.
         
+        # IMPORTANT: If the form is already submitted, this block won't re-render.
+        # Since we rely on the main submit button at the end to trigger the final save, this is fine.
+        
+        # Ensure the form's other elements are not re-rendered unnecessarily if they're handled outside.
+        # The dynamic sections above are outside, so this block starts with the Skills/Projects.
+        
+        st.markdown("---")
+        st.subheader("Skills, Projects, & Strengths (One Item per Line)")
+
+        skills_text = "\n".join(st.session_state.cv_form_data.get('skills', []) if all(isinstance(s, str) for s in st.session_state.cv_form_data.get('skills', [])) else [])
+        new_skills_text = st.text_area(
+            "Key Skills (Technical and Soft)", 
+            value=skills_text,
+            height=100,
+            key="cv_skills_input"
+        )
+        st.session_state.cv_form_data['skills'] = [s.strip() for s in new_skills_text.split('\n') if s.strip()]
+        
+        projects_text = "\n".join(st.session_state.cv_form_data.get('projects', []) if all(isinstance(p, str) for p in st.session_state.cv_form_data.get('projects', [])) else [])
+        new_projects_text = st.text_area(
+            "Projects (Name, Description, Technologies)", 
+            value=projects_text,
+            height=100,
+            key="cv_projects_input"
+        )
+        st.session_state.cv_form_data['projects'] = [p.strip() for p in new_projects_text.split('\n') if p.strip()]
+        
+        strength_text = "\n".join(st.session_state.cv_form_data.get('strength', []) if all(isinstance(s, str) for s in st.session_state.cv_form_data.get('strength', [])) else [])
+        new_strength_text = st.text_area(
+            "Strengths / Key Personal Qualities (One per line)", 
+            value=strength_text,
+            height=70,
+            key="cv_strength_input"
+        )
+        st.session_state.cv_form_data['strength'] = [s.strip() for s in new_strength_text.split('\n') if s.strip()]
+    
+        # The submission button is now at the very end of the form definition.
+        submit_form_button = st.form_submit_button("Generate and Load ALL CV Data", type="primary", use_container_width=True)
+
     
     # --- FINAL SUBMISSION LOGIC (for the main form) ---
     if submit_form_button:
