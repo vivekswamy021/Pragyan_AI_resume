@@ -24,9 +24,6 @@ def clear_interview_state():
     st.session_state.evaluation_report = ""
     st.toast("Practice answers cleared.")
     
-# --- REMOVED generate_experience_string and generate_certification_string ---
-# The parsed data will now use the structured lists directly for these sections.
-
 # --- External LLM/File Logic (Simplified or Stubbed for standalone copy) ---
 question_section_options = ["skills","experience", "certifications", "projects", "education"]
 DEFAULT_JOB_TYPES = ["Full-time", "Contract", "Internship", "Remote", "Part-time"]
@@ -196,22 +193,24 @@ Overall Summary: The candidate shows **Good** fundamental knowledge. To score hi
     
     return "\n".join(feedback_parts)
 
+# --- FIX APPLIED HERE: Simplified HTML output for Experience and Certifications ---
 def generate_cv_html(parsed_data):
-    """Stub: Simulates CV HTML generation."""
+    """Generates CV HTML with simplified text output for experience and certifications."""
     skills_list = "".join([f"<li>{s}</li>" for s in parsed_data.get('skills', []) if isinstance(s, str)])
     education_list = "".join([f"<li>{e}</li>" for e in parsed_data.get('education', []) if isinstance(e, str)])
     
-    # Use structured data for experience and certifications
+    # Use structured data for experience, but output simply
     experience_list = ""
     for exp in parsed_data.get('experience', []):
         if isinstance(exp, dict):
             experience_list += f"""
             <li>
                 **{exp.get('role', 'N/A')}** at *{exp.get('company', 'N/A')}* ({exp.get('from_year', '')} - {exp.get('to_year', '')})
-                <br>CTC: {exp.get('ctc', 'Confidential')} | Responsibilities: {exp.get('responsibilities', 'N/A')}
+                <br>{exp.get('responsibilities', 'N/A')}
             </li>
-            """
+            """ # Removed CTC display and simplified the responsibilities line
 
+    # Use structured data for certifications, but output simply
     certifications_list = ""
     for cert in parsed_data.get('certifications', []):
         if isinstance(cert, dict):
@@ -250,8 +249,9 @@ def generate_cv_html(parsed_data):
     </html>
     """
 
+# --- FIX APPLIED HERE: Simplified Markdown output for Experience and Certifications ---
 def format_parsed_json_to_markdown(parsed_data):
-    """Stub: Simulates CV Markdown generation."""
+    """Generates CV Markdown with simplified text output for experience and certifications."""
     md = f"# **{parsed_data.get('name', 'CV Preview').upper()}**\n"
     md += f"**Contact:** {parsed_data.get('email', 'N/A')} | {parsed_data.get('phone', 'N/A')} | [LinkedIn]({parsed_data.get('linkedin', '#')})\n"
     md += "\n"
@@ -264,10 +264,10 @@ def format_parsed_json_to_markdown(parsed_data):
     experience_md = []
     for exp in parsed_data.get('experience', []):
         if isinstance(exp, dict):
+            # Simplified output: Role, Company, Duration, then Responsibilities as a paragraph/list
             experience_md.append(
                 f"**{exp.get('role', 'N/A')}** at **{exp.get('company', 'N/A')}** ({exp.get('from_year', '')} - {exp.get('to_year', '')})\n"
-                f"  - *CTC:* {exp.get('ctc', 'Confidential')}\n"
-                f"  - *Responsibilities:* {exp.get('responsibilities', 'N/A')}"
+                f"{exp.get('responsibilities', 'N/A')}" # Removed *- * label for responsibilities
             )
     md += "\n\n".join(experience_md)
     
@@ -286,7 +286,7 @@ def format_parsed_json_to_markdown(parsed_data):
     return md
 
 # ==============================================================================
-# 2. TAB CONTENT FUNCTIONS
+# 2. TAB CONTENT FUNCTIONS (Remainder of the code is unchanged)
 # ==============================================================================
 
 def cv_management_tab_content():
