@@ -280,7 +280,7 @@ def cv_management_tab_content():
         else:
             st.session_state.cv_form_data = default_parsed
             
-    # CRITICAL: Ensure education and certifications are lists of strings
+    # CRITICAL: Ensure lists are initialized correctly
     if not isinstance(st.session_state.cv_form_data.get('education'), list):
          st.session_state.cv_form_data['education'] = []
     if not isinstance(st.session_state.cv_form_data.get('certifications'), list):
@@ -288,11 +288,19 @@ def cv_management_tab_content():
     if 'structured_experience' not in st.session_state.cv_form_data:
          st.session_state.cv_form_data['structured_experience'] = []
     
-    # Initialize/reset temp_experience_data structure
-    if 'temp_experience_data' not in st.session_state:
+    # Initialize/reset temp_experience_data structure (CRITICAL FIX FOR StreamlitAPIException)
+    # Ensure all required keys are always present on every script run
+    if 'temp_experience_data' not in st.session_state or not isinstance(st.session_state.temp_experience_data, dict):
          st.session_state.temp_experience_data = {
              "company": "", "role": "", "from_year": "", "to_year": "Present", "ctc": "", "responsibilities": ""
          }
+    else:
+        # Ensure missing keys are initialized with default values if the dict exists but is incomplete
+        defaults = {"company": "", "role": "", "from_year": "", "to_year": "Present", "ctc": "", "responsibilities": ""}
+        for key, default_val in defaults.items():
+            if key not in st.session_state.temp_experience_data:
+                st.session_state.temp_experience_data[key] = default_val
+
 
     
     # --- CV Builder Form (Main Sections - excluding dynamic parts) ---
@@ -411,32 +419,48 @@ def cv_management_tab_content():
     
     # Function to handle adding the experience entry
     def add_experience_entry():
-        exp_data = st.session_state.temp_experience_data
+        # Retrieve the current values from the widget keys which are automatically in st.session_state
+        # We read directly from the widget's key, which should match the keys we set below (temp_exp_***_key)
+        
+        # Use simple key lookup for values
+        company_val = st.session_state.get("temp_exp_company_key", "")
+        role_val = st.session_state.get("temp_exp_role_key", "")
+        from_year_val = st.session_state.get("temp_exp_from_year_key", "")
+        to_year_val = st.session_state.get("temp_exp_to_year_key", "Present")
+        ctc_val = st.session_state.get("temp_exp_ctc_key", "")
+        responsibilities_val = st.session_state.get("temp_exp_responsibilities_key", "")
         
         # Validation
-        if not exp_data.get('company') or not exp_data.get('role') or not exp_data.get('from_year'):
+        if not company_val or not role_val or not from_year_val:
             st.error("Please fill in **Company**, **Role**, and **From Year**.")
             return
 
         # Create new entry
         new_entry = {
-            "company": exp_data.get('company', ''),
-            "role": exp_data.get('role', ''),
-            "from_year": exp_data.get('from_year', ''),
-            "to_year": exp_data.get('to_year', 'Present'),
-            "ctc": exp_data.get('ctc', 'Confidential'),
-            "responsibilities": exp_data.get('responsibilities', '')
+            "company": company_val,
+            "role": role_val,
+            "from_year": from_year_val,
+            "to_year": to_year_val,
+            "ctc": ctc_val,
+            "responsibilities": responsibilities_val
         }
         
         # Append to the structured list
         st.session_state.cv_form_data['structured_experience'].append(new_entry)
         
-        # Clear temp state to refresh the input fields
-        st.session_state.temp_experience_data = {
-            "company": "", "role": "", "from_year": "", "to_year": "Present", "ctc": "", "responsibilities": ""
-        }
+        # Clear temp state/widget values to refresh the input fields
+        # By setting the key values to "" in session state, the widgets with these keys reset on rerun
+        st.session_state["temp_exp_company_key"] = ""
+        st.session_state["temp_exp_role_key"] = ""
+        st.session_state["temp_exp_from_year_key"] = ""
+        st.session_state["temp_exp_to_year_key"] = "Present" # Selectbox resets based on index/value
+        st.session_state["temp_exp_ctc_key"] = ""
+        st.session_state["temp_exp_responsibilities_key"] = ""
         
         st.toast(f"Experience at {new_entry['company']} added.")
+        
+        # Manually trigger a rerun to clear the input fields after adding
+        st.rerun()
         
     def remove_experience_entry(index):
         if 0 <= index < len(st.session_state.cv_form_data['structured_experience']):
@@ -448,73 +472,67 @@ def cv_management_tab_content():
     with st.container(border=True):
         st.markdown("##### Add New Experience Entry")
         
-        # Use a consistent current value from the temp state for proper key-value synchronization
-        temp_data = st.session_state.temp_experience_data
+        # CRITICAL: We now use the dedicated key (temp_exp_***_key) to manage the state of the widget.
+        # The 'value' argument is not needed when using a key, but we set the session state value
+        # prior to calling the widget to reset it (see add_experience_entry).
         
         col_c, col_r = st.columns(2)
         with col_c:
-            # FIX: Use a simple key and update the dictionary in session state.
             company_val = st.text_input(
                 "Company Name", 
-                value=temp_data.get('company', ''), # Use value from temp state
-                key="temp_exp_company_key", 
+                key="temp_exp_company_key", # The key holds the current widget value
                 placeholder="e.g., Google"
             )
-            temp_data['company'] = company_val
             
         with col_r:
-            # FIX: Use a simple key and update the dictionary in session state.
             role_val = st.text_input(
                 "Role/Title", 
-                value=temp_data.get('role', ''), # Use value from temp state
                 key="temp_exp_role_key", 
                 placeholder="e.g., Data Scientist"
             )
-            temp_data['role'] = role_val
 
         col_fy, col_ty, col_c3 = st.columns(3)
         current_year = date.today().year
         year_options = [str(y) for y in range(current_year, 1950, -1)]
         
+        # Get current state for initial selection in selectbox/default
+        current_from_year = st.session_state.get("temp_exp_from_year_key", str(current_year))
+        current_to_year = st.session_state.get("temp_exp_to_year_key", "Present")
+        
         with col_fy:
-            # FIX: Use a simple key and update the dictionary in session state.
-            from_year_val = st.selectbox(
+            from_year_options = year_options
+            from_year_index = from_year_options.index(current_from_year) if current_from_year in from_year_options else 0
+            
+            st.selectbox(
                 "From Year", 
-                options=year_options, 
-                index=year_options.index(temp_data['from_year']) if temp_data['from_year'] in year_options else 0, # Set current value
+                options=from_year_options, 
+                index=from_year_index, 
                 key="temp_exp_from_year_key"
             )
-            temp_data['from_year'] = from_year_val
             
         with col_ty:
-            # FIX: Use a simple key and update the dictionary in session state.
             to_year_options = ["Present"] + year_options
-            to_year_val = st.selectbox(
+            to_year_index = to_year_options.index(current_to_year) if current_to_year in to_year_options else 0
+            
+            st.selectbox(
                 "To Year", 
                 options=to_year_options, 
-                index=to_year_options.index(temp_data['to_year']) if temp_data['to_year'] in to_year_options else 0, # Set current value
+                index=to_year_index,
                 key="temp_exp_to_year_key"
             )
-            temp_data['to_year'] = to_year_val
             
         with col_c3:
-            # FIX: Use a simple key and update the dictionary in session state.
             ctc_val = st.text_input(
                 "CTC (Annual)", 
-                value=temp_data.get('ctc', ''), # Use value from temp state
                 key="temp_exp_ctc_key", 
                 placeholder="e.g., $150k / 20L INR"
             )
-            temp_data['ctc'] = ctc_val
 
-        # FIX: Use a simple key and update the dictionary in session state.
         responsibilities_val = st.text_area(
             "Key Responsibilities/Achievements (Brief summary)", 
-            value=temp_data.get('responsibilities', ''), # Use value from temp state
             height=70, 
             key="temp_exp_responsibilities_key"
         )
-        temp_data['responsibilities'] = responsibilities_val
         
         # Button triggers the `add_experience_entry` function
         st.button("➕ Add This Experience", on_click=add_experience_entry, use_container_width=True, type="secondary")
@@ -533,6 +551,8 @@ def cv_management_tab_content():
                 col_disp_2.markdown(f"**Duration:** {entry['from_year']} - {entry['to_year']}")
                 col_disp_3.markdown(f"**CTC:** {entry['ctc']}")
                 st.markdown(f"**Responsibilities:** {entry['responsibilities']}")
+                
+                # Ensure the button key is unique (it is now with f"remove_exp_{i}")
                 st.button("❌ Remove", key=f"remove_exp_{i}", on_click=remove_experience_entry, args=(i,), type="danger")
     else:
         st.info("No experience entries added yet. Use the form above to add one.")
@@ -809,11 +829,22 @@ def candidate_dashboard():
             "structured_experience": [] # New key for dynamic experience
         }
     
-    # Ensure temp experience data is initialized
-    if 'temp_experience_data' not in st.session_state:
+    # Initialize temp experience data (CRITICAL for StreamlitAPIException)
+    if 'temp_experience_data' not in st.session_state or not isinstance(st.session_state.temp_experience_data, dict):
          st.session_state.temp_experience_data = {
             "company": "", "role": "", "from_year": "", "to_year": "Present", "ctc": "", "responsibilities": ""
         }
+    
+    # Initialize widget keys for the "Add New Experience Entry" form
+    # This prevents the StreamlitAPIException that can occur when widget keys are not initialized
+    # or are accessed before they are created.
+    # The initial values for these keys should reflect the defaults or empty states.
+    if "temp_exp_company_key" not in st.session_state: st.session_state["temp_exp_company_key"] = ""
+    if "temp_exp_role_key" not in st.session_state: st.session_state["temp_exp_role_key"] = ""
+    if "temp_exp_from_year_key" not in st.session_state: st.session_state["temp_exp_from_year_key"] = str(date.today().year)
+    if "temp_exp_to_year_key" not in st.session_state: st.session_state["temp_exp_to_year_key"] = "Present"
+    if "temp_exp_ctc_key" not in st.session_state: st.session_state["temp_exp_ctc_key"] = ""
+    if "temp_exp_responsibilities_key" not in st.session_state: st.session_state["temp_exp_responsibilities_key"] = ""
         
     if "candidate_filter_skills_multiselect" not in st.session_state:
         st.session_state.candidate_filter_skills_multiselect = []
