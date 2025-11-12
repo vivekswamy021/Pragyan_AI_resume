@@ -26,6 +26,7 @@ def clear_interview_state():
     
 def generate_education_string(entry: Dict[str, str]) -> str:
     """Formats a structured education entry into a single string for storage."""
+    # This function is retained but less critical now that we use text areas
     degree = entry.get('degree', 'N/A')
     college = entry.get('college', 'N/A')
     university = entry.get('university', 'N/A')
@@ -44,6 +45,7 @@ def generate_education_string(entry: Dict[str, str]) -> str:
 
 def generate_experience_string(entry: Dict[str, Any]) -> str:
     """Formats a structured experience entry into a single string for storage."""
+    # This function is retained but less critical now that we use text areas
     company = entry.get('company', 'N/A')
     role = entry.get('role', 'N/A')
     from_year = entry.get('from_year', 'N/A')
@@ -65,6 +67,7 @@ def generate_experience_string(entry: Dict[str, Any]) -> str:
 
 def generate_certification_string(entry: Dict[str, str]) -> str:
     """Formats a structured certification entry into a single string for storage."""
+    # This function is retained but less critical now that we use text areas
     title = entry.get('title', 'N/A')
     issuing_body = entry.get('issuing_body', 'N/A')
     issue_date = entry.get('issue_date', 'N/A')
@@ -110,13 +113,13 @@ def parse_and_store_resume(file_input, file_name_key='default', source_type='fil
         "github": "github.com/candidate",
         "skills": ["Python", "SQL", "Streamlit", "Data Analysis", "Git"], 
         "experience": [
-            "**Senior Engineer** at **TechCorp** (2020 - Present). **CTC:** $120k. **Responsibilities:** Managed 5-person team, led migration to AWS.",
-            "**Junior Developer** at **DataStart** (2018 - 2020). **CTC:** $60k. **Responsibilities:** Developed ETL pipelines using Python and SQL."
+            "Senior Engineer at TechCorp (2020 - Present) | Managed 5-person team, led migration to AWS. CTC: $120k",
+            "Junior Developer at DataStart (2018 - 2020) | Developed ETL pipelines using Python and SQL. CTC: $60k"
         ], 
         "education": [
             "M.Sc. Computer Science (2016 - 2018) | University of Excellence | City University",
             "B.Tech. Information Technology (2012 - 2016) | College of Engineering | State University"
-        ], 
+        ],
         "certifications": ["AWS Certified Cloud Practitioner (Amazon Web Services) - Issued: 2023-10-01"], 
         "projects": ["Built this Streamlit Dashboard"], 
         "strength": ["Problem Solver", "Quick Learner"], 
@@ -294,26 +297,27 @@ def cv_management_tab_content():
     
     # --- CV Builder Form (Main Sections) ---
     with st.form("cv_builder_form"):
-        st.subheader("Personal & Contact Details")
+        st.subheader("Personal, Contact, Experience, Education, and Certification Details")
         
+        # --- PERSONAL & CONTACT DETAILS ---
         col1, col2, col3 = st.columns(3)
         with col1:
             st.session_state.cv_form_data['name'] = st.text_input(
                 "Full Name", 
                 value=st.session_state.cv_form_data['name'], 
-                key="cv_name_input" # Changed key
+                key="cv_name_input"
             )
         with col2:
             st.session_state.cv_form_data['email'] = st.text_input(
                 "Email Address", 
                 value=st.session_state.cv_form_data['email'], 
-                key="cv_email_input" # Changed key
+                key="cv_email_input"
             )
         with col3:
             st.session_state.cv_form_data['phone'] = st.text_input(
                 "Phone Number", 
                 value=st.session_state.cv_form_data['phone'], 
-                key="cv_phone_input" # Changed key
+                key="cv_phone_input"
             )
         
         col4, col5 = st.columns(2)
@@ -321,24 +325,64 @@ def cv_management_tab_content():
             st.session_state.cv_form_data['linkedin'] = st.text_input(
                 "LinkedIn Profile URL", 
                 value=st.session_state.cv_form_data.get('linkedin', ''), 
-                key="cv_linkedin_input" # Changed key
+                key="cv_linkedin_input"
             )
         with col5:
             st.session_state.cv_form_data['github'] = st.text_input(
                 "GitHub Profile URL", 
                 value=st.session_state.cv_form_data.get('github', ''), 
-                key="cv_github_input" # Changed key
+                key="cv_github_input"
             )
         
         st.markdown("---")
         st.subheader("Summary / Personal Details")
         st.session_state.cv_form_data['personal_details'] = st.text_area(
-            "Professional Summary or Personal Details (e.g., date of birth, address, nationality)", 
+            "Professional Summary (A brief pitch about yourself)", 
             value=st.session_state.cv_form_data.get('personal_details', ''), 
             height=100,
-            key="cv_personal_details_input" # Changed key
+            key="cv_personal_details_input"
         )
         
+        # --- EXPERIENCE DETAILS (TEXT AREA) ---
+        st.markdown("---")
+        st.subheader("💼 Professional Experience (One role/company entry per line)")
+        experience_text = "\n".join(st.session_state.cv_form_data.get('experience', []))
+        new_experience_text = st.text_area(
+            "List your work experience entries (e.g., Role at Company, Dates, Key Achievements...)", 
+            value=experience_text,
+            height=150,
+            key="cv_experience_input"
+        )
+        # Update session state with the list of strings (one per line)
+        st.session_state.cv_form_data['experience'] = [e.strip() for e in new_experience_text.split('\n') if e.strip()]
+
+        # --- EDUCATION DETAILS (TEXT AREA) ---
+        st.markdown("---")
+        st.subheader("🎓 Education (One degree/institution entry per line)")
+        education_text = "\n".join(st.session_state.cv_form_data.get('education', []))
+        new_education_text = st.text_area(
+            "List your education entries (e.g., Degree, Institution, Years...)", 
+            value=education_text,
+            height=150,
+            key="cv_education_input"
+        )
+        # Update session state with the list of strings (one per line)
+        st.session_state.cv_form_data['education'] = [e.strip() for e in new_education_text.split('\n') if e.strip()]
+        
+        # --- CERTIFICATIONS DETAILS (TEXT AREA) ---
+        st.markdown("---")
+        st.subheader("🏅 Certifications (One certification entry per line)")
+        certifications_text = "\n".join(st.session_state.cv_form_data.get('certifications', []))
+        new_certifications_text = st.text_area(
+            "List your certifications (e.g., Certification Name, Issuing Body, Date...)", 
+            value=certifications_text,
+            height=100,
+            key="cv_certifications_input"
+        )
+        # Update session state with the list of strings (one per line)
+        st.session_state.cv_form_data['certifications'] = [c.strip() for c in new_certifications_text.split('\n') if c.strip()]
+        
+        # --- SKILLS & PROJECTS ---
         st.markdown("---")
         st.subheader("Skills & Projects (One Item per Line)")
 
@@ -347,7 +391,7 @@ def cv_management_tab_content():
             "Key Skills (Technical and Soft)", 
             value=skills_text,
             height=100,
-            key="cv_skills_input" # Changed key
+            key="cv_skills_input"
         )
         st.session_state.cv_form_data['skills'] = [s.strip() for s in new_skills_text.split('\n') if s.strip()]
         
@@ -356,7 +400,7 @@ def cv_management_tab_content():
             "Projects (Name, Description, Technologies)", 
             value=projects_text,
             height=100,
-            key="cv_projects_input" # Changed key
+            key="cv_projects_input"
         )
         st.session_state.cv_form_data['projects'] = [p.strip() for p in new_projects_text.split('\n') if p.strip()]
         
@@ -365,7 +409,7 @@ def cv_management_tab_content():
             "Strengths / Key Personal Qualities (One per line)", 
             value=strength_text,
             height=70,
-            key="cv_strength_input" # Changed key
+            key="cv_strength_input"
         )
         st.session_state.cv_form_data['strength'] = [s.strip() for s in new_strength_text.split('\n') if s.strip()]
 
@@ -373,231 +417,6 @@ def cv_management_tab_content():
         submit_form_button = st.form_submit_button("Generate and Load ALL CV Data", type="primary", use_container_width=True)
 
     
-    # --- Certifications Input Form (New Structured Input) ---
-    st.markdown("---")
-    st.subheader("🏅 Certifications (Structured Input)")
-    
-    # Display existing certification entries
-    if st.session_state.cv_form_data.get('certifications'):
-        st.markdown("##### Current Certification Entries:")
-        # Display newest first
-        for i, entry in enumerate(reversed(st.session_state.cv_form_data['certifications'])):
-            original_index = len(st.session_state.cv_form_data['certifications']) - 1 - i
-            
-            col_entry, col_delete = st.columns([10, 1])
-            with col_entry:
-                st.markdown(f"**{i+1}.** {entry}")
-            with col_delete:
-                if st.button("🗑️", key=f"delete_cert_{original_index}_cvmgmt"):
-                    st.session_state.cv_form_data['certifications'].pop(original_index)
-                    st.success("Entry deleted. Click 'Generate and Load ALL CV Data' to save changes.")
-                    st.rerun() 
-        st.markdown("---")
-
-    
-    with st.form("certifications_add_form"):
-        col_t, col_b = st.columns(2)
-        with col_t:
-            # FIX: Added _form suffix to distinguish keys from potential main form inputs
-            title = st.text_input("Certification Title (e.g., PMP, AWS Certified)", key="cert_title_form")
-        with col_b:
-            # FIX: Added _form suffix
-            issuing_body = st.text_input("Issuing Body (e.g., PMI, Amazon Web Services)", key="cert_issuing_body_form")
-            
-        col_d, _ = st.columns(2)
-        with col_d:
-            # FIX: Added _form suffix
-            issue_date_st = st.date_input(
-                "Date Issued", 
-                value=None, 
-                key="cert_date_issued_form", # FIX: Renamed key to avoid conflict with initial state if any
-                max_value=date.today(),
-                help="Select the date the certification was issued."
-            )
-            issue_date = issue_date_st.strftime("%Y-%m-%d") if issue_date_st else ""
-            
-            
-        # Button logic executed AFTER the form submission
-        add_cert_button = st.form_submit_button("➕ Add Certification Entry", use_container_width=True)
-        
-        if add_cert_button:
-            if title and issuing_body and issue_date:
-                
-                new_entry_dict = {
-                    'title': title,
-                    'issuing_body': issuing_body,
-                    'issue_date': issue_date,
-                }
-                
-                # Format the entry into the required string format
-                new_entry_string = generate_certification_string(new_entry_dict)
-                
-                # Append to the list (newest first)
-                st.session_state.cv_form_data['certifications'].append(new_entry_string)
-                st.success(f"Certification entry added: {title}. Click 'Generate and Load ALL CV Data' above to use it for AI tools.")
-                
-                # Clear the form fields explicitly by referencing the form widget keys
-                st.session_state.cert_title_form = ""
-                st.session_state.cert_issuing_body_form = ""
-                # Streamlit often retains date input state unless specifically handled or on a full rerun
-                # Rerunning is the simplest way to clear the form visually after success
-                st.rerun() 
-            else:
-                st.error("Please fill in **Certification Title**, **Issuing Body**, and **Date Issued**.")
-
-    
-    # --- Professional Experience Input Form (Existing Structured Input) ---
-    st.markdown("---")
-    st.subheader("💼 Professional Experience (Structured Input)")
-    
-    # Display existing experience entries
-    if st.session_state.cv_form_data.get('experience'):
-        st.markdown("##### Current Experience Entries (Oldest to Newest):")
-        # Reverse display order for better reading (newest first) but keep internal list normal
-        for i, entry in enumerate(reversed(st.session_state.cv_form_data['experience'])):
-            original_index = len(st.session_state.cv_form_data['experience']) - 1 - i
-            
-            col_entry, col_delete = st.columns([10, 1])
-            with col_entry:
-                st.markdown(f"**{i+1}.** {entry}")
-            with col_delete:
-                if st.button("🗑️", key=f"delete_exp_{original_index}_cvmgmt"):
-                    st.session_state.cv_form_data['experience'].pop(original_index)
-                    st.success("Entry deleted. Click 'Generate and Load ALL CV Data' to save changes.")
-                    st.rerun() 
-        st.markdown("---")
-
-    
-    with st.form("experience_add_form"):
-        col_c, col_r = st.columns(2)
-        with col_c:
-            # FIX: Added _form suffix to experience keys
-            company = st.text_input("Company Name", key="exp_company_form")
-        with col_r:
-            role = st.text_input("Role / Job Title", key="exp_role_form")
-            
-        col_f, col_t, col_ctc = st.columns(3)
-        with col_f:
-            from_year = st.text_input("From Year (e.g., 2020)", key="exp_from_year_form", max_chars=4)
-        with col_t:
-            to_year = st.text_input("To Year (e.g., 2024 or Present)", key="exp_to_year_form", max_chars=7)
-        with col_ctc:
-            ctc = st.text_input("Current/Last CTC (e.g., $120k or 15 LPA)", key="exp_ctc_form")
-            
-        responsibilities = st.text_area(
-            "Key Responsibilities (3-5 bullet points recommended, separate by semicolon ';' or just one line)",
-            key="exp_responsibilities_form",
-            height=100
-        )
-            
-        # Button logic executed AFTER the form submission
-        add_exp_button = st.form_submit_button("➕ Add Professional Experience Entry", use_container_width=True)
-        
-        if add_exp_button:
-            if company and role and from_year and responsibilities:
-                # Basic check for year format
-                if len(from_year) != 4 or (to_year and to_year.lower() != 'present' and len(to_year) != 4):
-                    st.error("Please ensure 'From Year' and 'To Year' (if not 'Present') are 4-digit years.")
-                    return
-
-                new_entry_dict = {
-                    'company': company,
-                    'role': role,
-                    'from_year': from_year,
-                    'to_year': to_year if to_year else "Present",
-                    'ctc': ctc if ctc else "Confidential",
-                    'responsibilities': responsibilities.strip().replace('\n', ' | ') # Clean up newlines for better string output
-                }
-                
-                # Format the entry into the required string format
-                new_entry_string = generate_experience_string(new_entry_dict)
-                
-                # Append to the list
-                st.session_state.cv_form_data['experience'].append(new_entry_string)
-                st.success(f"Experience entry added: {new_entry_string}. Click 'Generate and Load ALL CV Data' above to use it for AI tools.")
-                
-                # Clear the experience form fields by referencing the form widget keys
-                st.session_state.exp_company_form = ""
-                st.session_state.exp_role_form = ""
-                st.session_state.exp_from_year_form = ""
-                st.session_state.exp_to_year_form = ""
-                st.session_state.exp_ctc_form = ""
-                st.session_state.exp_responsibilities_form = ""
-                st.rerun() 
-            else:
-                st.error("Please fill in at least **Company Name**, **Role**, **From Year**, and **Key Responsibilities**.")
-    
-    # --- Education Input Form (Existing Structured Input) ---
-    st.markdown("---")
-    st.subheader("🎓 Education (Structured Input)")
-    
-    # Display existing education entries
-    if st.session_state.cv_form_data.get('education'):
-        st.markdown("##### Current Education Entries:")
-        for i, entry in enumerate(st.session_state.cv_form_data['education']):
-            col_entry, col_delete = st.columns([10, 1])
-            with col_entry:
-                st.markdown(f"**{i+1}.** {entry}")
-            with col_delete:
-                if st.button("🗑️", key=f"delete_edu_{i}_cvmgmt"):
-                    st.session_state.cv_form_data['education'].pop(i)
-                    st.success("Entry deleted. Click 'Generate and Load ALL CV Data' to save changes.")
-                    st.rerun() 
-        st.markdown("---")
-
-    
-    with st.form("education_add_form"):
-        col_d, col_c = st.columns(2)
-        with col_d:
-            # FIX: Added _form suffix to education keys
-            degree = st.text_input("Degree / Qualification", key="edu_degree_form")
-        with col_c:
-            college = st.text_input("College / Institution Name", key="edu_college_form")
-            
-        col_u, col_f, col_t = st.columns(3)
-        with col_u:
-            university = st.text_input("University / Board", key="edu_university_form")
-        with col_f:
-            from_year = st.text_input("From Year (e.g., 2014)", key="edu_from_year_form", max_chars=4)
-        with col_t:
-            to_year = st.text_input("To Year (e.g., 2018 or Present)", key="edu_to_year_form", max_chars=7)
-            
-        # Button logic executed AFTER the form submission
-        add_edu_button = st.form_submit_button("➕ Add Education Entry", use_container_width=True)
-        
-        if add_edu_button:
-            if degree and college and from_year:
-                 # Basic check for year format
-                if len(from_year) != 4 or (to_year and to_year.lower() != 'present' and len(to_year) != 4):
-                    st.error("Please ensure 'From Year' and 'To Year' (if not 'Present') are 4-digit years.")
-                    return
-                    
-                new_entry_dict = {
-                    'degree': degree,
-                    'college': college,
-                    'university': university if university else "N/A",
-                    'from_year': from_year,
-                    'to_year': to_year if to_year else "Present"
-                }
-                
-                # Format the entry into the required string format
-                new_entry_string = generate_education_string(new_entry_dict)
-                
-                # Append to the list and clear inputs by rerunning
-                st.session_state.cv_form_data['education'].append(new_entry_string)
-                st.success(f"Education entry added: {new_entry_string}. Click 'Generate and Load ALL CV Data' above to use it for AI tools.")
-                
-                # Clear the education form fields by referencing the form widget keys
-                st.session_state.edu_degree_form = ""
-                st.session_state.edu_college_form = ""
-                st.session_state.edu_university_form = ""
-                st.session_state.edu_from_year_form = ""
-                st.session_state.edu_to_year_form = ""
-                st.rerun() 
-            else:
-                st.error("Please fill in at least Degree, College/Institution, and From Year for the education entry.")
-
-
     # --- FINAL SUBMISSION LOGIC (for the main form) ---
     if submit_form_button:
         if not st.session_state.cv_form_data['name'] or not st.session_state.cv_form_data['email']:
@@ -617,6 +436,7 @@ def cv_management_tab_content():
                     compiled_text += str(v) + "\n\n"
         st.session_state.full_text = compiled_text
         
+        # Reset matching/interview state
         st.session_state.candidate_match_results = []
         st.session_state.interview_qa = []
         st.session_state.evaluation_report = ""
@@ -858,12 +678,6 @@ def candidate_dashboard():
             "projects": [], "strength": [], "personal_details": ""
         }
         
-    # FIX: Clean up/remove unnecessary state initializations 
-    # The form keys (e.g., edu_degree_form) are used directly by the widgets and don't need 
-    # to be initialized here unless they need an initial value outside of the form.
-    # The simple st.session_state.edu_degree = "" type entries from the previous code 
-    # are removed to prevent key conflicts with the new form keys.
-    
     if "candidate_filter_skills_multiselect" not in st.session_state:
         st.session_state.candidate_filter_skills_multiselect = []
     if "filtered_jds_display" not in st.session_state:
@@ -956,7 +770,7 @@ def candidate_dashboard():
             st.markdown("### 2. Parse Uploaded File")
             
             if file_to_parse:
-                if st.button(f"Parse and Load: **{file_to_parse.name}**", key="parse_file_btn", use_container_width=True): # FIX: Added key
+                if st.button(f"Parse and Load: **{file_to_parse.name}**", key="parse_file_btn", use_container_width=True): 
                     with st.spinner(f"Parsing {file_to_parse.name}..."):
                         result = parse_and_store_resume(file_to_parse, file_name_key='single_resume_candidate', source_type='file')
                         
@@ -965,6 +779,8 @@ def candidate_dashboard():
                             st.session_state.full_text = result['full_text']
                             st.session_state.excel_data = result['excel_data'] 
                             st.session_state.parsed['name'] = result['name'] 
+                            # Also update the cv_form_data for immediate editing
+                            st.session_state.cv_form_data = st.session_state.parsed.copy() 
                             clear_interview_state()
                             st.success(f"✅ Successfully loaded and parsed **{result['name']}**.")
                             st.info("View, edit, and download the parsed data in the **CV Management** tab.") 
@@ -990,7 +806,7 @@ def candidate_dashboard():
             st.markdown("### 2. Parse Pasted Text")
             
             if pasted_text.strip():
-                if st.button("Parse and Load Pasted Text", key="parse_text_btn", use_container_width=True): # FIX: Added key
+                if st.button("Parse and Load Pasted Text", key="parse_text_btn", use_container_width=True): 
                     with st.spinner("Parsing pasted text..."):
                         st.session_state.candidate_uploaded_resumes = []
                         
@@ -1001,6 +817,8 @@ def candidate_dashboard():
                             st.session_state.full_text = result['full_text']
                             st.session_state.excel_data = result['excel_data'] 
                             st.session_state.parsed['name'] = result['name'] 
+                            # Also update the cv_form_data for immediate editing
+                            st.session_state.cv_form_data = st.session_state.parsed.copy() 
                             clear_interview_state()
                             st.success(f"✅ Successfully loaded and parsed **{result['name']}**.")
                             st.info("View, edit, and download the parsed data in the **CV Management** tab.") 
@@ -1115,7 +933,7 @@ def candidate_dashboard():
         else:
             st.info("No Job Descriptions added yet.")
 
-    # --- TAB 3: Batch JD Match ---
+    # --- TAB 4: Batch JD Match ---
     with tab_batch_match:
         st.header("🎯 Batch JD Match: Best Matches")
         st.markdown("Compare your current resume against all saved job descriptions.")
@@ -1144,7 +962,7 @@ def candidate_dashboard():
                 if jd_item['name'] in selected_jd_names
             ]
             
-            if st.button(f"Run Match Analysis on {len(jds_to_match)} Selected JD(s)", key='run_match_analysis_btn'): # FIX: Added key
+            if st.button(f"Run Match Analysis on {len(jds_to_match)} Selected JD(s)", key='run_match_analysis_btn'): 
                 st.session_state.candidate_match_results = []
                 
                 if not jds_to_match:
@@ -1225,11 +1043,11 @@ def candidate_dashboard():
                     with st.expander(header_text):
                         st.markdown(item['full_analysis'])
 
-    # --- TAB 4: Filter JD ---
+    # --- TAB 5: Filter JD ---
     with tab_filter_jd:
         filter_jd_tab_content()
 
-    # --- TAB 5: Resume/JD Chatbot (Q&A) ---
+    # --- TAB 6: Resume/JD Chatbot (Q&A) ---
     with tab_chatbot:
         st.header("Resume/JD Chatbot (Q&A) 💬")
         
@@ -1303,7 +1121,7 @@ def candidate_dashboard():
                     st.text_area("Answer (JD)", st.session_state.qa_answer_jd, height=150, key='jd_qa_answer_display')
 
 
-    # --- TAB 6: Interview Prep ---
+    # --- TAB 7: Interview Prep ---
     with tab_interview_prep:
         st.header("Interview Preparation Tools")
         if not is_resume_parsed or "error" in st.session_state.parsed:
