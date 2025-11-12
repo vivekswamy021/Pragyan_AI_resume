@@ -85,7 +85,7 @@ def parse_and_store_resume(file_input, file_name_key='default', source_type='fil
             "university": "City University",
             "from_year": "2020",
             "to_year": "2022",
-            "score": "8.5 CGPA",
+            "score": "8.5",
             "type": "CGPA"
         },
         {
@@ -94,7 +94,7 @@ def parse_and_store_resume(file_input, file_name_key='default', source_type='fil
             "university": "State University",
             "from_year": "2016",
             "to_year": "2020",
-            "score": "75%",
+            "score": "75",
             "type": "Percentage"
         }
     ]
@@ -191,13 +191,13 @@ def generate_interview_questions(parsed_json, section):
     education_detail = ""
     if education_data and isinstance(education_data[0], dict):
         first_degree = education_data[0]
-        education_detail = f"your **{first_degree.get('degree', 'highest degree')}** from **{first_degree.get('college', 'university')}**"
+        score_display = f"{first_degree.get('score', 'N/A')} {first_degree.get('type', 'Score')}"
 
     if section == "education":
         return f"""[Technical/Academic]
 Q1: Tell me about your **{first_degree.get('degree', 'highest degree')}** and how it prepared you for this role.
 Q2: What was your favorite technical project or thesis during your time at **{first_degree.get('university', 'university')}**?
-Q3: How do you think your academic performance (**{first_degree.get('score', 'N/A')}**) reflects your work ethic?
+Q3: How do you think your academic performance (**{score_display}**) reflects your work ethic?
 [Behavioral]
 Q4: Describe a time you struggled academically and how you overcame it.
 Q5: How do you keep your technical skills updated now that you've finished your formal education?
@@ -247,9 +247,10 @@ def generate_cv_html(parsed_data):
     for edu in parsed_data.get('education', []):
         if isinstance(edu, dict):
             # Format: Degree (Score) | College, University (Start Year - End Year)
+            score_display = f"{edu.get('score', 'N/A')} {edu.get('type', '')}".strip()
             education_list += f"""
             <li>
-                **{edu.get('degree', 'N/A')}** ({edu.get('score', 'N/A')}) | {edu.get('college', 'N/A')}, {edu.get('university', 'N/A')} 
+                **{edu.get('degree', 'N/A')}** ({score_display}) | {edu.get('college', 'N/A')}, {edu.get('university', 'N/A')} 
                 <br>({edu.get('from_year', '')} - {edu.get('to_year', '')})
             </li>
             """
@@ -332,9 +333,10 @@ def format_parsed_json_to_markdown(parsed_data):
     education_md = []
     for edu in parsed_data.get('education', []):
         if isinstance(edu, dict):
-            # Format: Degree (Score) | College, University (Start Year - End Year)
+            # Format: Degree (Score Type) | College, University (Start Year - End Year)
+            score_display = f"{edu.get('score', 'N/A')} {edu.get('type', '')}".strip()
             education_md.append(
-                f"**{edu.get('degree', 'N/A')}** ({edu.get('score', 'N/A')}) at {edu.get('college', 'N/A')} / {edu.get('university', 'N/A')}\n"
+                f"**{edu.get('degree', 'N/A')}** ({score_display}) at {edu.get('college', 'N/A')} / {edu.get('university', 'N/A')}\n"
                 f"Duration: {edu.get('from_year', '')} - {edu.get('to_year', '')}"
             )
     md += "\n\n".join(education_md)
@@ -434,19 +436,19 @@ def cv_management_tab_content():
                 "Full Name", 
                 value=st.session_state.cv_form_data['name'], 
                 key="cv_name_input"
-            )
+            ).strip() # Strip on read
         with col2:
             st.session_state.cv_form_data['email'] = st.text_input(
                 "Email Address", 
                 value=st.session_state.cv_form_data['email'], 
                 key="cv_email_input"
-            )
+            ).strip() # Strip on read
         with col3:
             st.session_state.cv_form_data['phone'] = st.text_input(
                 "Phone Number", 
                 value=st.session_state.cv_form_data['phone'], 
                 key="cv_phone_input"
-            )
+            ).strip() # Strip on read
         
         col4, col5 = st.columns(2)
         with col4:
@@ -454,13 +456,13 @@ def cv_management_tab_content():
                 "LinkedIn Profile URL", 
                 value=st.session_state.cv_form_data.get('linkedin', ''), 
                 key="cv_linkedin_input"
-            )
+            ).strip() # Strip on read
         with col5:
             st.session_state.cv_form_data['github'] = st.text_input(
                 "GitHub Profile URL", 
                 value=st.session_state.cv_form_data.get('github', ''), 
                 key="cv_github_input"
-            )
+            ).strip() # Strip on read
         
         st.markdown("---")
         st.subheader("Summary / Personal Details")
@@ -469,7 +471,7 @@ def cv_management_tab_content():
             value=st.session_state.cv_form_data.get('personal_details', ''), 
             height=100,
             key="cv_personal_details_input"
-        )
+        ).strip() # Strip on read
         
         # --- SKILLS & PROJECTS (Kept as text areas for quick, simple list entry) ---
         st.markdown("---")
@@ -513,15 +515,16 @@ def cv_management_tab_content():
     
     # Function to handle adding the education entry
     def add_education_entry():
+        current_year = date.today().year
         
-        # Use simple key lookup for values
-        degree_val = st.session_state.get("temp_edu_degree_key", "")
-        college_val = st.session_state.get("temp_edu_college_key", "")
-        university_val = st.session_state.get("temp_edu_university_key", "")
-        from_year_val = st.session_state.get("temp_edu_from_year_key", "")
-        to_year_val = st.session_state.get("temp_edu_to_year_key", str(current_year))
-        score_val = st.session_state.get("temp_edu_score_key", "")
-        score_type_val = st.session_state.get("temp_edu_type_key", "CGPA")
+        # Use simple key lookup for values and **CRITICALLY APPLY .strip()**
+        degree_val = st.session_state.get("temp_edu_degree_key", "").strip() # FIX APPLIED HERE
+        college_val = st.session_state.get("temp_edu_college_key", "").strip() # Applied to others too
+        university_val = st.session_state.get("temp_edu_university_key", "").strip() # Applied to others too
+        from_year_val = st.session_state.get("temp_edu_from_year_key", "").strip()
+        to_year_val = st.session_state.get("temp_edu_to_year_key", str(current_year)).strip()
+        score_val = st.session_state.get("temp_edu_score_key", "").strip()
+        score_type_val = st.session_state.get("temp_edu_type_key", "CGPA").strip()
         
         # Validation
         if not degree_val or not college_val or not from_year_val:
@@ -543,25 +546,27 @@ def cv_management_tab_content():
         st.session_state.cv_form_data['structured_education'].append(new_entry)
         
         # Clear temp state/widget values to refresh the input fields
+        # CRITICAL: Reset the keys that drive the widget values
         st.session_state["temp_edu_degree_key"] = ""
         st.session_state["temp_edu_college_key"] = ""
         st.session_state["temp_edu_university_key"] = ""
-        st.session_state["temp_edu_from_year_key"] = str(current_year) # Reset to default year
-        st.session_state["temp_edu_to_year_key"] = str(current_year) # Reset to default year
+        
+        # For selectboxes, reset the key to a default *value*
+        st.session_state["temp_edu_from_year_key"] = str(current_year) 
+        st.session_state["temp_edu_to_year_key"] = "Present" 
         st.session_state["temp_edu_score_key"] = ""
         st.session_state["temp_edu_type_key"] = "CGPA"
         
         st.toast(f"Education: {new_entry['degree']} added.")
         
-        # Manually trigger a rerun to clear the input fields after adding
-        st.rerun()
+        # No need for st.rerun() here. 
         
     def remove_education_entry(index):
         if 0 <= index < len(st.session_state.cv_form_data['structured_education']):
             removed_degree = st.session_state.cv_form_data['structured_education'][index]['degree']
             del st.session_state.cv_form_data['structured_education'][index]
             st.toast(f"Education '{removed_degree}' removed.")
-            st.rerun()
+            st.rerun() # Rerun is okay here to refresh the list display immediately
 
     # Input fields for a single education entry
     with st.container(border=True):
@@ -574,6 +579,7 @@ def cv_management_tab_content():
         with col_d:
             st.text_input(
                 "Degree/Qualification", 
+                value=st.session_state.get("temp_edu_degree_key", ""),
                 key="temp_edu_degree_key", 
                 placeholder="e.g., M.Sc. Computer Science"
             )
@@ -581,12 +587,14 @@ def cv_management_tab_content():
         with col_c:
             st.text_input(
                 "College Name", 
+                value=st.session_state.get("temp_edu_college_key", ""),
                 key="temp_edu_college_key", 
                 placeholder="e.g., MIT, Chennai"
             )
             
         st.text_input(
             "University Name", 
+            value=st.session_state.get("temp_edu_university_key", ""),
             key="temp_edu_university_key", 
             placeholder="e.g., Anna University"
         )
@@ -595,19 +603,26 @@ def cv_management_tab_content():
         col_fy, col_ty = st.columns(2)
         
         with col_fy:
+            # Use index calculation to set default value from session state
+            current_from_year = st.session_state.get("temp_edu_from_year_key", str(current_year))
+            from_year_index = year_options.index(current_from_year) if current_from_year in year_options else 0
+            
             st.selectbox(
                 "From Year", 
                 options=year_options, 
-                index=year_options.index(st.session_state.get("temp_edu_from_year_key", str(current_year))) if st.session_state.get("temp_edu_from_year_key", str(current_year)) in year_options else 0,
+                index=from_year_index,
                 key="temp_edu_from_year_key"
             )
             
         with col_ty:
             to_year_options = ["Present"] + year_options
+            current_to_year = st.session_state.get("temp_edu_to_year_key", "Present")
+            to_year_index = to_year_options.index(current_to_year) if current_to_year in to_year_options else 0
+            
             st.selectbox(
                 "To Year", 
                 options=to_year_options, 
-                index=to_year_options.index(st.session_state.get("temp_edu_to_year_key", str(current_year))) if st.session_state.get("temp_edu_to_year_key", str(current_year)) in to_year_options else 0,
+                index=to_year_index,
                 key="temp_edu_to_year_key"
             )
             
@@ -616,6 +631,7 @@ def cv_management_tab_content():
         with col_s:
             st.text_input(
                 "CGPA or Score Value", 
+                value=st.session_state.get("temp_edu_score_key", ""),
                 key="temp_edu_score_key", 
                 placeholder="e.g., 8.5 or 90"
             )
@@ -623,6 +639,7 @@ def cv_management_tab_content():
             st.selectbox(
                 "Type",
                 options=["CGPA", "Percentage", "Grade"],
+                index=["CGPA", "Percentage", "Grade"].index(st.session_state.get("temp_edu_type_key", "CGPA")),
                 key="temp_edu_type_key",
                 label_visibility='collapsed'
             )
@@ -634,15 +651,15 @@ def cv_management_tab_content():
     st.markdown("##### Current Education Entries")
     if st.session_state.cv_form_data['structured_education']:
         for i, entry in enumerate(st.session_state.cv_form_data['structured_education']):
-            
-            expander_title = f"{entry['degree']} - {entry['score']} {entry['type']} ({entry['from_year']} - {entry['to_year']})"
+            score_display = f"{entry.get('score', 'N/A')} {entry.get('type', '')}".strip()
+            expander_title = f"{entry['degree']} - {score_display} ({entry['from_year']} - {entry['to_year']})"
             
             with st.expander(expander_title, expanded=False):
                 st.markdown(f"**Degree:** {entry['degree']}")
                 st.markdown(f"**College:** {entry['college']}")
                 st.markdown(f"**University:** {entry['university']}")
                 st.markdown(f"**Duration:** {entry['from_year']} - {entry['to_year']}")
-                st.markdown(f"**Score:** {entry['score']} {entry['type']}")
+                st.markdown(f"**Score:** {score_display}")
                 
                 st.button("❌ Remove", key=f"remove_edu_{i}", on_click=remove_education_entry, args=(i,), type="secondary") 
     else:
@@ -657,9 +674,10 @@ def cv_management_tab_content():
     
     # Function to handle adding the certification entry
     def add_certification_entry():
-        title_val = st.session_state.get("temp_cert_title_key", "")
-        given_by_val = st.session_state.get("temp_cert_given_by_key", "")
-        issue_date_val = st.session_state.get("temp_cert_issue_date_key", str(date.today().year))
+        # Apply .strip()
+        title_val = st.session_state.get("temp_cert_title_key", "").strip()
+        given_by_val = st.session_state.get("temp_cert_given_by_key", "").strip()
+        issue_date_val = st.session_state.get("temp_cert_issue_date_key", str(date.today().year)).strip()
         
         # Validation
         if not title_val or not given_by_val:
@@ -683,8 +701,7 @@ def cv_management_tab_content():
         
         st.toast(f"Certificate: {new_entry['title']} added.")
         
-        # Manually trigger a rerun to clear the input fields after adding
-        st.rerun()
+        # No need for st.rerun() here.
         
     def remove_certification_entry(index):
         if 0 <= index < len(st.session_state.cv_form_data['structured_certifications']):
@@ -701,6 +718,7 @@ def cv_management_tab_content():
         with col_t:
             st.text_input(
                 "Certification Title", 
+                value=st.session_state.get("temp_cert_title_key", ""),
                 key="temp_cert_title_key", 
                 placeholder="e.g., Google Cloud Architect"
             )
@@ -708,16 +726,16 @@ def cv_management_tab_content():
         with col_g:
             st.text_input(
                 "Issuing Organization", 
+                value=st.session_state.get("temp_cert_given_by_key", ""),
                 key="temp_cert_given_by_key", 
                 placeholder="e.g., Coursera, AWS, PMI"
             )
             
         col_d, _ = st.columns(2)
         with col_d:
-            # We use text input for date for simplicity and consistency with other fields, 
-            # allowing free-form input like "2023" or "2023-01-01"
             st.text_input(
                 "Issue Date (YYYY-MM-DD or Year)", 
+                value=st.session_state.get("temp_cert_issue_date_key", str(date.today().year)),
                 key="temp_cert_issue_date_key", 
                 placeholder="e.g., 2024-05-15 or 2023"
             )
@@ -749,14 +767,15 @@ def cv_management_tab_content():
     
     # Function to handle adding the experience entry
     def add_experience_entry():
+        current_year = date.today().year
         
-        # Use simple key lookup for values
-        company_val = st.session_state.get("temp_exp_company_key", "")
-        role_val = st.session_state.get("temp_exp_role_key", "")
-        from_year_val = st.session_state.get("temp_exp_from_year_key", "")
-        to_year_val = st.session_state.get("temp_exp_to_year_key", "Present")
-        ctc_val = st.session_state.get("temp_exp_ctc_key", "")
-        responsibilities_val = st.session_state.get("temp_exp_responsibilities_key", "")
+        # Use simple key lookup for values and **APPLY .strip()**
+        company_val = st.session_state.get("temp_exp_company_key", "").strip()
+        role_val = st.session_state.get("temp_exp_role_key", "").strip()
+        from_year_val = st.session_state.get("temp_exp_from_year_key", "").strip()
+        to_year_val = st.session_state.get("temp_exp_to_year_key", "Present").strip()
+        ctc_val = st.session_state.get("temp_exp_ctc_key", "").strip()
+        responsibilities_val = st.session_state.get("temp_exp_responsibilities_key", "").strip()
         
         # Validation
         if not company_val or not role_val or not from_year_val:
@@ -779,15 +798,14 @@ def cv_management_tab_content():
         # Clear temp state/widget values to refresh the input fields
         st.session_state["temp_exp_company_key"] = ""
         st.session_state["temp_exp_role_key"] = ""
-        st.session_state["temp_exp_from_year_key"] = str(date.today().year) # Reset to default year
-        st.session_state["temp_exp_to_year_key"] = "Present" # Selectbox resets based on index/value
+        st.session_state["temp_exp_from_year_key"] = str(current_year)
+        st.session_state["temp_exp_to_year_key"] = "Present"
         st.session_state["temp_exp_ctc_key"] = ""
         st.session_state["temp_exp_responsibilities_key"] = ""
         
         st.toast(f"Experience at {new_entry['company']} added.")
         
-        # Manually trigger a rerun to clear the input fields after adding
-        st.rerun()
+        # No need for st.rerun() here.
         
     def remove_experience_entry(index):
         if 0 <= index < len(st.session_state.cv_form_data['structured_experience']):
@@ -801,9 +819,14 @@ def cv_management_tab_content():
         st.markdown("##### Add New Experience Entry")
         
         col_c, col_r = st.columns(2)
+        
+        current_year = date.today().year
+        year_options = [str(y) for y in range(current_year, 1950, -1)]
+        
         with col_c:
             company_val = st.text_input(
                 "Company Name", 
+                value=st.session_state.get("temp_exp_company_key", ""),
                 key="temp_exp_company_key", # The key holds the current widget value
                 placeholder="e.g., Google"
             )
@@ -811,13 +834,12 @@ def cv_management_tab_content():
         with col_r:
             role_val = st.text_input(
                 "Role/Title", 
+                value=st.session_state.get("temp_exp_role_key", ""),
                 key="temp_exp_role_key", 
                 placeholder="e.g., Data Scientist"
             )
 
         col_fy, col_ty, col_c3 = st.columns(3)
-        current_year = date.today().year
-        year_options = [str(y) for y in range(current_year, 1950, -1)]
         
         # Get current state for initial selection in selectbox/default
         current_from_year = st.session_state.get("temp_exp_from_year_key", str(current_year))
@@ -856,12 +878,14 @@ def cv_management_tab_content():
         with col_c3:
             ctc_val = st.text_input(
                 "CTC (Annual)", 
+                value=st.session_state.get("temp_exp_ctc_key", ""),
                 key="temp_exp_ctc_key", 
                 placeholder="e.g., $150k / 20L INR"
             )
 
         responsibilities_val = st.text_area(
             "Key Responsibilities/Achievements (Brief summary)", 
+            value=st.session_state.get("temp_exp_responsibilities_key", ""),
             height=70, 
             key="temp_exp_responsibilities_key"
         )
@@ -1174,22 +1198,22 @@ def candidate_dashboard():
         }
     
     # Initialize temp experience data 
+    current_year = date.today().year
     if 'temp_experience_data' not in st.session_state or not isinstance(st.session_state.temp_experience_data, dict):
          st.session_state.temp_experience_data = {
-            "company": "", "role": "", "from_year": "", "to_year": "Present", "ctc": "", "responsibilities": ""
+            "company": "", "role": "", "from_year": str(current_year), "to_year": "Present", "ctc": "", "responsibilities": ""
         }
     
     # Initialize temp certification data
     if 'temp_certification_data' not in st.session_state or not isinstance(st.session_state.temp_certification_data, dict):
          st.session_state.temp_certification_data = {
-            "title": "", "given_by": "", "issue_date": str(date.today().year)
+            "title": "", "given_by": "", "issue_date": str(current_year)
         }
 
     # Initialize temp education data (NEW)
-    current_year = date.today().year
     if 'temp_education_data' not in st.session_state or not isinstance(st.session_state.temp_education_data, dict):
          st.session_state.temp_education_data = {
-            "degree": "", "college": "", "university": "", "from_year": "", "to_year": str(current_year), "score": "", "type": "CGPA"
+            "degree": "", "college": "", "university": "", "from_year": str(current_year), "to_year": "Present", "score": "", "type": "CGPA"
         }
     
     # Initialize widget keys for the "Add New Education Entry" form (NEW)
@@ -1197,7 +1221,7 @@ def candidate_dashboard():
     if "temp_edu_college_key" not in st.session_state: st.session_state["temp_edu_college_key"] = ""
     if "temp_edu_university_key" not in st.session_state: st.session_state["temp_edu_university_key"] = ""
     if "temp_edu_from_year_key" not in st.session_state: st.session_state["temp_edu_from_year_key"] = str(current_year)
-    if "temp_edu_to_year_key" not in st.session_state: st.session_state["temp_edu_to_year_key"] = str(current_year)
+    if "temp_edu_to_year_key" not in st.session_state: st.session_state["temp_edu_to_year_key"] = "Present"
     if "temp_edu_score_key" not in st.session_state: st.session_state["temp_edu_score_key"] = ""
     if "temp_edu_type_key" not in st.session_state: st.session_state["temp_edu_type_key"] = "CGPA"
     
@@ -1529,7 +1553,7 @@ def candidate_dashboard():
                                     "numeric_score": int(overall_score) if overall_score.isdigit() else -1,
                                     "skills_percent": skills_match.group(1) if skills_match else 'N/A',
                                     "experience_percent": experience_match.group(1) if experience_match else 'N/A', 
-                                    "education_percent": '80' if overall_score.isdigit() else 'N/A',   
+                                    "education_percent": '90' if overall_score.isdigit() else 'N/A',   
                                     "full_analysis": fit_output
                                 })
                             except Exception as e:
@@ -1752,6 +1776,7 @@ def candidate_dashboard():
 # ==============================================================================
 # 4. MAIN EXECUTION BLOCK (CRITICAL FOR STREAMLIT)
 # ==============================================================================
+
 if __name__ == '__main__':
     # Simple placeholder for a 'login' or landing page
     if 'page' not in st.session_state:
