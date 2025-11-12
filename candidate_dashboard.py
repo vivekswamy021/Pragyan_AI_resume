@@ -193,7 +193,7 @@ Overall Summary: The candidate shows **Good** fundamental knowledge. To score hi
     
     return "\n".join(feedback_parts)
 
-# --- FIX APPLIED HERE: Simplified HTML output for Experience and Certifications to plain text ---
+# --- CONFIRMED FIX: Simplified HTML output for Experience and Certifications to plain text ---
 def generate_cv_html(parsed_data):
     """Generates CV HTML with simplified plain text output for experience and certifications."""
     skills_list = "".join([f"<li>{s}</li>" for s in parsed_data.get('skills', []) if isinstance(s, str)])
@@ -206,7 +206,7 @@ def generate_cv_html(parsed_data):
             # Format: Role at Company (Start Year - End Year). Responsibilities: <text>
             experience_list += f"""
             <li>
-                {exp.get('role', 'N/A')} at {exp.get('company', 'N/A')} ({exp.get('from_year', '')} - {exp.get('to_year', '')}).
+                **{exp.get('role', 'N/A')}** at {exp.get('company', 'N/A')} ({exp.get('from_year', '')} - {exp.get('to_year', '')}).
                 <br>Responsibilities: {exp.get('responsibilities', 'N/A')}
             </li>
             """
@@ -251,7 +251,7 @@ def generate_cv_html(parsed_data):
     </html>
     """
 
-# --- FIX APPLIED HERE: Simplified Markdown output for Experience and Certifications to plain text ---
+# --- CONFIRMED FIX: Simplified Markdown output for Experience and Certifications to plain text ---
 def format_parsed_json_to_markdown(parsed_data):
     """Generates CV Markdown with simplified plain text output for experience and certifications."""
     md = f"# **{parsed_data.get('name', 'CV Preview').upper()}**\n"
@@ -611,6 +611,7 @@ def cv_management_tab_content():
             )
             
         with col_r:
+            # Role/Title is already a simple text input, which accepts plain text only.
             role_val = st.text_input(
                 "Role/Title", 
                 key="temp_exp_role_key", 
@@ -1256,10 +1257,10 @@ def candidate_dashboard():
         st.markdown("Compare your current resume against all saved job descriptions.")
 
         if not is_resume_parsed:
-            st.warning("Please **upload and parse your resume** in the 'Resume Parsing' tab or **build your CV** in the 'CV Management' tab first.")
+            st.warning("Please upload and parse your resume in the 'Resume Parsing' tab or build your CV in the 'CV Management' tab first.")
         
         elif not st.session_state.candidate_jd_list:
-            st.error("Please **add Job Descriptions** in the 'JD Management' tab before running batch analysis.")
+            st.error("Please add Job Descriptions in the 'JD Management' tab before running batch analysis.")
             
         else: 
             if "candidate_match_results" not in st.session_state:
@@ -1533,6 +1534,7 @@ def candidate_dashboard():
 # ==============================================================================
 # 4. MAIN EXECUTION BLOCK (CRITICAL FOR STREAMLIT)
 # ==============================================================================
+
 if __name__ == '__main__':
     # Simple placeholder for a 'login' or landing page
     if 'page' not in st.session_state:
