@@ -34,15 +34,34 @@ def generate_education_string(entry: Dict[str, str]) -> str:
     
     if from_year == to_year:
         duration = f"({from_year})"
-    elif from_year != 'N/A' and to_year != 'N/A':
+    elif from_year and to_year and from_year != 'N/A' and to_year != 'N/A':
         duration = f"({from_year} - {to_year})"
     else:
         duration = ""
 
-    # Example format: "M.Sc. Computer Science from University of Excellence, 2018"
-    # Example format: "B.Tech. in Electrical Engg. (2014-2018) | College of Technology | University of Example"
+    # Example format: "M.Sc. Computer Science (2016 - 2018) | University of Excellence | City University"
     return f"{degree} {duration} | {college} | {university}"
 
+def generate_experience_string(entry: Dict[str, Any]) -> str:
+    """Formats a structured experience entry into a single string for storage."""
+    company = entry.get('company', 'N/A')
+    role = entry.get('role', 'N/A')
+    from_year = entry.get('from_year', 'N/A')
+    to_year = entry.get('to_year', 'Present')
+    ctc = entry.get('ctc', 'Confidential')
+    responsibilities = entry.get('responsibilities', 'Key Responsibilities not listed.')
+
+    if from_year and to_year:
+        duration = f"({from_year} - {to_year})"
+    else:
+        duration = ""
+
+    # Example format: "Senior Engineer at TechCorp (2020 - Present) | Key Responsibilities: Managed 5-person team, led migration to AWS. CTC: $120k"
+    return (
+        f"**{role}** at **{company}** {duration}. "
+        f"**CTC:** {ctc}. "
+        f"**Responsibilities:** {responsibilities.replace('\n', ' ')}"
+    )
 
 # --- External LLM/File Logic (Simplified or Stubbed for standalone copy) ---
 question_section_options = ["skills","experience", "certifications", "projects", "education"]
@@ -81,7 +100,10 @@ def parse_and_store_resume(file_input, file_name_key='default', source_type='fil
         "linkedin": "linkedin.com/in/candidate", 
         "github": "github.com/candidate",
         "skills": ["Python", "SQL", "Streamlit", "Data Analysis", "Git"], 
-        "experience": ["5 years at TechCorp as a Data Analyst, focusing on ETL and reporting."], 
+        "experience": [
+            "**Senior Engineer** at **TechCorp** (2020 - Present). **CTC:** $120k. **Responsibilities:** Managed 5-person team, led migration to AWS.",
+            "**Junior Developer** at **DataStart** (2018 - 2020). **CTC:** $60k. **Responsibilities:** Developed ETL pipelines using Python and SQL."
+        ], 
         "education": [
             "M.Sc. Computer Science (2016 - 2018) | University of Excellence | City University",
             "B.Tech. Information Technology (2012 - 2016) | College of Engineering | State University"
@@ -179,6 +201,8 @@ def generate_cv_html(parsed_data):
     """Stub: Simulates CV HTML generation."""
     skills_list = "".join([f"<li>{s}</li>" for s in parsed_data.get('skills', [])])
     education_list = "".join([f"<li>{e}</li>" for e in parsed_data.get('education', [])])
+    experience_list = "".join([f"<li>{e}</li>" for e in parsed_data.get('experience', [])])
+    
     return f"""
     <html>
     <head>
@@ -194,7 +218,7 @@ def generate_cv_html(parsed_data):
         <ul>{skills_list}</ul>
         
         <h2>Experience</h2>
-        <p>{' | '.join(parsed_data.get('experience', ['No experience listed']))}</p>
+        <ul>{experience_list}</ul>
         
         <h2>Education</h2>
         <ul>{education_list}</ul>
@@ -242,9 +266,12 @@ def cv_management_tab_content():
         else:
             st.session_state.cv_form_data = default_parsed
             
-    # CRITICAL: Ensure education is a list of strings for compatibility
+    # CRITICAL: Ensure education and experience are lists of strings
     if not isinstance(st.session_state.cv_form_data.get('education'), list):
          st.session_state.cv_form_data['education'] = []
+    if not isinstance(st.session_state.cv_form_data.get('experience'), list):
+         st.session_state.cv_form_data['experience'] = []
+
 
     
     # --- CV Builder Form (Main Sections) ---
@@ -295,7 +322,7 @@ def cv_management_tab_content():
         )
         
         st.markdown("---")
-        st.subheader("Technical Sections (One Item per Line)")
+        st.subheader("Skills & Certifications (One Item per Line)")
 
         skills_text = "\n".join(st.session_state.cv_form_data.get('skills', []))
         new_skills_text = st.text_area(
@@ -305,15 +332,6 @@ def cv_management_tab_content():
             key="cv_skills"
         )
         st.session_state.cv_form_data['skills'] = [s.strip() for s in new_skills_text.split('\n') if s.strip()]
-        
-        experience_text = "\n".join(st.session_state.cv_form_data.get('experience', []))
-        new_experience_text = st.text_area(
-            "Professional Experience (Job Roles, Companies, Dates, Key Responsibilities)", 
-            value=experience_text,
-            height=150,
-            key="cv_experience"
-        )
-        st.session_state.cv_form_data['experience'] = [e.strip() for e in new_experience_text.split('\n') if e.strip()]
         
         certifications_text = "\n".join(st.session_state.cv_form_data.get('certifications', []))
         new_certifications_text = st.text_area(
@@ -345,9 +363,90 @@ def cv_management_tab_content():
 
         submit_form_button = st.form_submit_button("Generate and Load ALL CV Data", type="primary", use_container_width=True)
 
-    # --- Education Input Form (New Structured Input) ---
+    # --- Professional Experience Input Form (New Structured Input) ---
     st.markdown("---")
-    st.subheader("Education (Structured Input)")
+    st.subheader("💼 Professional Experience (Structured Input)")
+    
+    # Display existing experience entries
+    if st.session_state.cv_form_data.get('experience'):
+        st.markdown("##### Current Experience Entries (Oldest to Newest):")
+        # Reverse display order for better reading (newest first) but keep internal list normal
+        for i, entry in enumerate(reversed(st.session_state.cv_form_data['experience'])):
+            original_index = len(st.session_state.cv_form_data['experience']) - 1 - i
+            
+            col_entry, col_delete = st.columns([10, 1])
+            with col_entry:
+                st.markdown(f"**{i+1}.** {entry}")
+            with col_delete:
+                if st.button("🗑️", key=f"delete_exp_{original_index}"):
+                    st.session_state.cv_form_data['experience'].pop(original_index)
+                    st.success("Entry deleted. Click 'Generate and Load ALL CV Data' to save changes.")
+                    st.rerun() 
+        st.markdown("---")
+
+    
+    with st.form("experience_add_form"):
+        col_c, col_r = st.columns(2)
+        with col_c:
+            company = st.text_input("Company Name", key="exp_company")
+        with col_r:
+            role = st.text_input("Role / Job Title", key="exp_role")
+            
+        col_f, col_t, col_ctc = st.columns(3)
+        with col_f:
+            from_year = st.text_input("From Year (e.g., 2020)", key="exp_from_year", max_chars=4)
+        with col_t:
+            to_year = st.text_input("To Year (e.g., 2024 or Present)", key="exp_to_year", max_chars=7)
+        with col_ctc:
+            # Removed "Year of experience" as it's derivable from the duration/list.
+            ctc = st.text_input("Current/Last CTC (e.g., $120k or 15 LPA)", key="exp_ctc")
+            
+        responsibilities = st.text_area(
+            "Key Responsibilities (3-5 bullet points recommended, separate by semicolon ';' or just one line)",
+            key="exp_responsibilities",
+            height=100
+        )
+            
+        # Button logic executed AFTER the form submission
+        add_exp_button = st.form_submit_button("➕ Add Professional Experience Entry", use_container_width=True)
+        
+        if add_exp_button:
+            if company and role and from_year and responsibilities:
+                # Basic check for year format
+                if len(from_year) != 4 or (to_year and to_year.lower() != 'present' and len(to_year) != 4):
+                    st.error("Please ensure 'From Year' and 'To Year' (if not 'Present') are 4-digit years.")
+                    return
+
+                new_entry_dict = {
+                    'company': company,
+                    'role': role,
+                    'from_year': from_year,
+                    'to_year': to_year if to_year else "Present",
+                    'ctc': ctc if ctc else "Confidential",
+                    'responsibilities': responsibilities.strip().replace('\n', ' | ') # Clean up newlines for better string output
+                }
+                
+                # Format the entry into the required string format
+                new_entry_string = generate_experience_string(new_entry_dict)
+                
+                # Append to the list
+                st.session_state.cv_form_data['experience'].append(new_entry_string)
+                st.success(f"Experience entry added: {new_entry_string}. Click 'Generate and Load ALL CV Data' above to use it for AI tools.")
+                
+                # Clear the experience form fields by using a temporary state update and rerun
+                st.session_state.exp_company = ""
+                st.session_state.exp_role = ""
+                st.session_state.exp_from_year = ""
+                st.session_state.exp_to_year = ""
+                st.session_state.exp_ctc = ""
+                st.session_state.exp_responsibilities = ""
+                st.rerun() 
+            else:
+                st.error("Please fill in at least **Company Name**, **Role**, **From Year**, and **Key Responsibilities**.")
+    
+    # --- Education Input Form (Existing Structured Input) ---
+    st.markdown("---")
+    st.subheader("🎓 Education (Structured Input)")
     
     # Display existing education entries
     if st.session_state.cv_form_data.get('education'):
@@ -355,7 +454,7 @@ def cv_management_tab_content():
         for i, entry in enumerate(st.session_state.cv_form_data['education']):
             col_entry, col_delete = st.columns([10, 1])
             with col_entry:
-                st.write(f"**{i+1}.** {entry}")
+                st.markdown(f"**{i+1}.** {entry}")
             with col_delete:
                 if st.button("🗑️", key=f"delete_edu_{i}"):
                     st.session_state.cv_form_data['education'].pop(i)
@@ -384,6 +483,11 @@ def cv_management_tab_content():
         
         if add_edu_button:
             if degree and college and from_year:
+                 # Basic check for year format
+                if len(from_year) != 4 or (to_year and to_year.lower() != 'present' and len(to_year) != 4):
+                    st.error("Please ensure 'From Year' and 'To Year' (if not 'Present') are 4-digit years.")
+                    return
+                    
                 new_entry_dict = {
                     'degree': degree,
                     'college': college,
@@ -408,6 +512,7 @@ def cv_management_tab_content():
                 st.rerun() 
             else:
                 st.error("Please fill in at least Degree, College/Institution, and From Year for the education entry.")
+
 
     # --- FINAL SUBMISSION LOGIC (for the main form) ---
     if submit_form_button:
@@ -679,6 +784,14 @@ def candidate_dashboard():
     if "edu_university" not in st.session_state: st.session_state.edu_university = ""
     if "edu_from_year" not in st.session_state: st.session_state.edu_from_year = ""
     if "edu_to_year" not in st.session_state: st.session_state.edu_to_year = ""
+    
+    # Initialize fields for the dynamic experience form to prevent Rerun errors
+    if "exp_company" not in st.session_state: st.session_state.exp_company = ""
+    if "exp_role" not in st.session_state: st.session_state.exp_role = ""
+    if "exp_from_year" not in st.session_state: st.session_state.exp_from_year = ""
+    if "exp_to_year" not in st.session_state: st.session_state.exp_to_year = ""
+    if "exp_ctc" not in st.session_state: st.session_state.exp_ctc = ""
+    if "exp_responsibilities" not in st.session_state: st.session_state.exp_responsibilities = ""
     # --- END Session State Initialization ---
 
     # --- NAVIGATION BLOCK (Sidebar) ---
