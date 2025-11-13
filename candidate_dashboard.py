@@ -447,10 +447,21 @@ def cv_management_tab_content():
         st.markdown("---")
         st.subheader("3. Dynamic Education Management")
         st.info("Use the dedicated mini-form below to add each Education entry.")
-
-        # --- 5. PROJECTS (Static inside the single form) ---
+        
+        # --- 4. DYNAMIC PROFESSIONAL EXPERIENCE MANAGEMENT (Placeholder & Mini-Form) ---
+        # MOVED HERE (after Education) as requested
         st.markdown("---")
-        st.subheader("5. Projects (One Item per Line)")
+        st.subheader("4. Dynamic Professional Experience Management")
+        st.info("Use the dedicated mini-form below to add each Experience entry.")
+        
+        # --- 5. DYNAMIC CERTIFICATIONS MANAGEMENT (Placeholder & Mini-Form) ---
+        st.markdown("---")
+        st.subheader("5. Dynamic Certifications Management")
+        st.info("Use the dedicated mini-form below to add each Certificate entry.")
+
+        # --- 6. PROJECTS (Static inside the single form) ---
+        st.markdown("---")
+        st.subheader("6. Projects (One Item per Line)")
         projects_text = "\n".join(st.session_state.cv_form_data.get('projects', []) if all(isinstance(p, str) for p in st.session_state.cv_form_data.get('projects', [])) else [])
         new_projects_text = st.text_area(
             "Projects (Name, Description, Technologies)", 
@@ -460,9 +471,9 @@ def cv_management_tab_content():
         )
         st.session_state.cv_form_data['projects'] = [p.strip() for p in new_projects_text.split('\n') if p.strip()]
 
-        # --- 6. STRENGTHS (Static inside the single form) ---
+        # --- 7. STRENGTHS (Static inside the single form) ---
         st.markdown("---")
-        st.subheader("6. Strengths (One Item per Line)")
+        st.subheader("7. Strengths (One Item per Line)")
         strength_text = "\n".join(st.session_state.cv_form_data.get('strength', []) if all(isinstance(s, str) for s in st.session_state.cv_form_data.get('strength', [])) else [])
         new_strength_text = st.text_area(
             "Key Personal Qualities", 
@@ -472,11 +483,6 @@ def cv_management_tab_content():
         )
         st.session_state.cv_form_data['strength'] = [s.strip() for s in new_strength_text.split('\n') if s.strip()]
 
-        # --- 7. DYNAMIC PROFESSIONAL EXPERIENCE MANAGEMENT (Placeholder & Mini-Form) ---
-        st.markdown("---")
-        st.subheader("7. Dynamic Professional Experience Management")
-        st.info("Use the dedicated mini-form below to add each Experience entry.")
-        
         # CRITICAL: The submit button is ONLY placed here, inside the one form block.
         st.markdown("---")
         st.subheader("8. Generate or Load ALL CV Data")
@@ -575,6 +581,8 @@ def cv_management_tab_content():
             st.toast(f"Education '{removed_degree}' removed.")
             st.rerun() 
 
+    # Find the Education header from the main form and place the mini-form right after it.
+    st.markdown("<h5 style='color: #4CAF50;'>Education Entry Form</h5>", unsafe_allow_html=True)
     with st.form("add_education_form"):
         st.markdown("##### New Education Entry")
         
@@ -615,84 +623,13 @@ def cv_management_tab_content():
                 st.button("❌ Remove", key=f"remove_edu_{i}", on_click=remove_education_entry, args=(i,), type="secondary") 
     else:
         st.info("No education entries added yet.")
-
+        
+        
+    # ==============================================================
+    # --- 4A. DYNAMIC EXPERIENCE MANAGEMENT MINI-FORM (MOVED HERE) ---
+    # ==============================================================
+    st.markdown("<h5 style='color: #4CAF50;'>Professional Experience Entry Form</h5>", unsafe_allow_html=True)
     
-    # ==============================================================
-    # --- 4A. DYNAMIC CERTIFICATIONS MANAGEMENT MINI-FORM ---
-    # ==============================================================
-    st.markdown("---")
-    st.subheader("4. Dynamic Certifications Management")
-    st.info("Use the dedicated mini-form below to add each Certificate entry.")
-
-    # Function to handle adding the certification entry
-    def add_certification_entry():
-        title_val = st.session_state.get("mini_cert_title_key", "").strip()
-        given_by_val = st.session_state.get("mini_cert_given_by_key", "").strip()
-        issue_date_val = st.session_state.get("mini_cert_issue_date_key", str(date.today().year)).strip()
-        
-        if not title_val or not given_by_val:
-            st.error("Please fill in **Certification Title** and **Issuing Organization** before adding.")
-            return
-
-        new_entry = {
-            "title": title_val,
-            "given_by": given_by_val,
-            "issue_date": issue_date_val
-        }
-        
-        st.session_state.cv_form_data['structured_certifications'].append(new_entry)
-        
-        # Clear form input fields
-        st.session_state["mini_cert_title_key"] = ""
-        st.session_state["mini_cert_given_by_key"] = ""
-        st.session_state["mini_cert_issue_date_key"] = str(date.today().year)
-        
-        st.toast(f"Certificate: {new_entry['title']} added.")
-        st.rerun() 
-        
-    def remove_certification_entry(index):
-        if 0 <= index < len(st.session_state.cv_form_data['structured_certifications']):
-            removed_title = st.session_state.cv_form_data['structured_certifications'][index]['title']
-            del st.session_state.cv_form_data['structured_certifications'][index]
-            st.toast(f"Certificate '{removed_title}' removed.")
-            st.rerun()
-
-    with st.form("add_cert_form"):
-        st.markdown("##### New Certification Entry")
-        
-        col_t, col_g = st.columns(2)
-        with col_t:
-            st.text_input("Certification Title", key="mini_cert_title_key", placeholder="e.g., Google Cloud Architect")
-        with col_g:
-            st.text_input("Issuing Organization", key="mini_cert_given_by_key", placeholder="e.g., Coursera, AWS, PMI")
-            
-        col_d, _ = st.columns(2)
-        with col_d:
-            st.text_input("Issue Date (YYYY-MM-DD or Year)", key="mini_cert_issue_date_key", placeholder="e.g., 2024-05-15 or 2023")
-            
-        st.form_submit_button("➕ Add This Certificate", on_click=add_certification_entry, use_container_width=True, type="secondary")
-
-    st.markdown("##### Current Certifications")
-    if st.session_state.cv_form_data['structured_certifications']:
-        for i, entry in enumerate(st.session_state.cv_form_data['structured_certifications']):
-            expander_title = f"{entry['title']} by {entry['given_by']} (Issued: {entry['issue_date']})"
-            
-            with st.expander(expander_title, expanded=False):
-                st.markdown(f"**Title:** {entry['title']}")
-                st.markdown(f"**Issued By:** {entry['given_by']}")
-                st.markdown(f"**Issue Date:** {entry['issue_date']}")
-                st.button("❌ Remove", key=f"remove_cert_{i}", on_click=remove_certification_entry, args=(i,), type="secondary") 
-    else:
-        st.info("No certifications added yet.")
-
-
-    # ==============================================================
-    # --- 7A. DYNAMIC EXPERIENCE MANAGEMENT MINI-FORM ---
-    # ==============================================================
-    st.markdown("---")
-    st.subheader("7. Dynamic Professional Experience Management")
-    st.info("Use the dedicated mini-form below to add each Experience entry.")
-
     # Function to handle adding the experience entry
     def add_experience_entry():
         company_val = st.session_state.get("mini_exp_company_key", "").strip()
@@ -770,7 +707,76 @@ def cv_management_tab_content():
                 st.button("❌ Remove", key=f"remove_exp_{i}", on_click=remove_experience_entry, args=(i,), type="secondary") 
     else:
         st.info("No experience entries added yet.")
+        
     
+    # ==============================================================
+    # --- 5A. DYNAMIC CERTIFICATIONS MANAGEMENT MINI-FORM (Order 3) ---
+    # ==============================================================
+    
+    st.markdown("<h5 style='color: #4CAF50;'>Certification Entry Form</h5>", unsafe_allow_html=True)
+
+    # Function to handle adding the certification entry
+    def add_certification_entry():
+        title_val = st.session_state.get("mini_cert_title_key", "").strip()
+        given_by_val = st.session_state.get("mini_cert_given_by_key", "").strip()
+        issue_date_val = st.session_state.get("mini_cert_issue_date_key", str(date.today().year)).strip()
+        
+        if not title_val or not given_by_val:
+            st.error("Please fill in **Certification Title** and **Issuing Organization** before adding.")
+            return
+
+        new_entry = {
+            "title": title_val,
+            "given_by": given_by_val,
+            "issue_date": issue_date_val
+        }
+        
+        st.session_state.cv_form_data['structured_certifications'].append(new_entry)
+        
+        # Clear form input fields
+        st.session_state["mini_cert_title_key"] = ""
+        st.session_state["mini_cert_given_by_key"] = ""
+        st.session_state["mini_cert_issue_date_key"] = str(date.today().year)
+        
+        st.toast(f"Certificate: {new_entry['title']} added.")
+        st.rerun() 
+        
+    def remove_certification_entry(index):
+        if 0 <= index < len(st.session_state.cv_form_data['structured_certifications']):
+            removed_title = st.session_state.cv_form_data['structured_certifications'][index]['title']
+            del st.session_state.cv_form_data['structured_certifications'][index]
+            st.toast(f"Certificate '{removed_title}' removed.")
+            st.rerun()
+
+    with st.form("add_cert_form"):
+        st.markdown("##### New Certification Entry")
+        
+        col_t, col_g = st.columns(2)
+        with col_t:
+            st.text_input("Certification Title", key="mini_cert_title_key", placeholder="e.g., Google Cloud Architect")
+        with col_g:
+            st.text_input("Issuing Organization", key="mini_cert_given_by_key", placeholder="e.g., Coursera, AWS, PMI")
+            
+        col_d, _ = st.columns(2)
+        with col_d:
+            st.text_input("Issue Date (YYYY-MM-DD or Year)", key="mini_cert_issue_date_key", placeholder="e.g., 2024-05-15 or 2023")
+            
+        st.form_submit_button("➕ Add This Certificate", on_click=add_certification_entry, use_container_width=True, type="secondary")
+
+    st.markdown("##### Current Certifications")
+    if st.session_state.cv_form_data['structured_certifications']:
+        for i, entry in enumerate(st.session_state.cv_form_data['structured_certifications']):
+            expander_title = f"{entry['title']} by {entry['given_by']} (Issued: {entry['issue_date']})"
+            
+            with st.expander(expander_title, expanded=False):
+                st.markdown(f"**Title:** {entry['title']}")
+                st.markdown(f"**Issued By:** {entry['given_by']}")
+                st.markdown(f"**Issue Date:** {entry['issue_date']}")
+                st.button("❌ Remove", key=f"remove_cert_{i}", on_click=remove_certification_entry, args=(i,), type="secondary") 
+    else:
+        st.info("No certifications added yet.")
+
+
     # --- CV Preview and Download ---
     st.markdown("---")
     st.subheader("9. Loaded CV Data Preview and Download")
