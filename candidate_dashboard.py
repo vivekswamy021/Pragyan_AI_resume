@@ -1248,4 +1248,8 @@ def main_candidate_test():
     candidate_dashboard()
 
 if __name__ == '__main__':
+    # This block allows you to run the file directly for testing the dashboard.
+    # To run, ensure you have Streamlit installed (`pip install streamlit`)
+    # and run the file using `streamlit run your_file_name.py`
+    # Also, ensure you have a .env file with GROQ_API_KEY for AI features.
     main_candidate_test()
