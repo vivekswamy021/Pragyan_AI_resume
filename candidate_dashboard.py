@@ -4,9 +4,8 @@ import json
 import base64
 
 # --- Helper Functions (CRITICAL for Streamlit Session State Management) ---
-
 # These functions are called by the button's 'on_click' callback. 
-# They update the data and set 'force_rerun_for_add' to True.
+# They update the data and set 'force_rerun_for_add' to True to trigger a form reset.
 
 def add_education_entry_handler():
     """Adds a new education entry from temporary form inputs."""
@@ -101,13 +100,15 @@ def format_parsed_json_to_markdown(data):
                 title = item.get('title') or item.get('role') or item.get('name') or item.get('degree')
                 markdown_text += f"### {title}\n"
                 for sub_key, sub_value in item.items():
-                    if sub_key not in ["title", "role", "name", "degree", "description", "technologies"]:
+                    if sub_key not in ["title", "role", "name", "degree", "description", "technologies", "responsibilities"]:
                         markdown_text += f"- **{sub_key.replace('_', ' ').title()}**: {sub_value}\n"
                 
                 if item.get('technologies'):
                     markdown_text += f"- **Technologies**: {', '.join(item['technologies'])}\n"
-
-                if item.get('description'):
+                
+                if item.get('responsibilities'):
+                    markdown_text += f"**Responsibilities**:\n{item['responsibilities']}\n"
+                elif item.get('description'):
                      markdown_text += f"**Description/Details**:\n{item['description']}\n"
                 markdown_text += "\n"
         elif value:
@@ -473,11 +474,6 @@ def cv_management_tab_content():
                         
             st.session_state.full_text = compiled_text
             
-            # 4. Reset matching/interview state placeholders (commented out as they likely belong to other tabs)
-            # st.session_state.candidate_match_results = []
-            # st.session_state.interview_qa = []
-            # st.session_state.evaluation_report = ""
-
             st.success(f"✅ CV data for **{st.session_state.parsed['name']}** successfully generated and loaded!")
 
     
@@ -630,6 +626,7 @@ def cv_management_tab_content():
             
             st.markdown("---")
             st.markdown("### Raw Text Data Download (for utility)")
+            # The indentation here is verified and correct
             st.download_button(
                 label="⬇️ Download All CV Data as Raw Text (.txt)",
                 data=st.session_state.full_text,
@@ -656,12 +653,3 @@ if __name__ == '__main__':
         st.sidebar.json({k: v for k, v in st.session_state.items() if k not in ['cv_form_data', 'parsed']})
         st.sidebar.markdown("---")
         st.sidebar.json(st.session_state.get('cv_form_data', {}))
-                label="⬇️ Download All CV Data as Raw Text (.txt)",
-                data=st.session_state.full_text,
-                file_name=f"{st.session_state.parsed.get('name', 'Generated_CV').replace(' ', '_')}_Raw_Data.txt",
-                mime="text/plain",
-                key="download_cv_txt_final"
-            )
-            
-    else:
-        st.info("Please fill out the form above and click 'Generate and Load ALL CV Data' or parse a resume in the 'Resume Parsing' tab to see the preview and download options.")
