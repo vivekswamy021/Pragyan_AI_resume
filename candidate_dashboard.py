@@ -392,7 +392,7 @@ def parse_and_store_resume(file_input, file_name_key='default', source_type='fil
     parsed = parse_with_llm(text, return_type='json')
     
     if not parsed or "error" in parsed:
-        return {"error": parsed.get('error', 'Unknown parsing error'), "full_text": text, "name": file_name}
+        return {"error": parsed.get('error', 'Unknown parsing error'), "raw_output": content, "full_text": text, "name": file_name}
 
     excel_data = None
     if file_name_key == 'single_resume_candidate':
@@ -468,13 +468,13 @@ def generate_cv_html(parsed_data):
 
 
 def add_education_entry():
-    """Adds a new education entry to the session state."""
-    # Retrieve data from temporary session state keys used for the inputs
-    degree = st.session_state.new_edu_degree.strip()
-    college = st.session_state.new_edu_college.strip()
-    university = st.session_state.new_edu_university.strip()
-    year_from = st.session_state.new_edu_year_from
-    year_to = st.session_state.new_edu_year_to
+    """Adds a new education entry to the session state (called by a button *outside* the form)."""
+    # Retrieve data from session state keys used for the inputs inside the form
+    degree = st.session_state.new_edu_degree_in_form.strip()
+    college = st.session_state.new_edu_college_in_form.strip()
+    university = st.session_state.new_edu_university_in_form.strip()
+    year_from = st.session_state.new_edu_year_from_in_form
+    year_to = st.session_state.new_edu_year_to_in_form
 
     if not degree or not college or not university:
         st.warning("Please enter the Degree, College Name, and University.")
@@ -492,18 +492,15 @@ def add_education_entry():
         st.session_state.cv_form_data['education'].append(new_entry)
         
         # Clear input fields by resetting their session state keys
-        # This triggers a rerun, but the inputs are outside the main form, so it's safe.
-        st.session_state.new_edu_degree = ""
-        st.session_state.new_edu_college = ""
-        st.session_state.new_edu_university = ""
-        # Reset year pickers only if we want them to jump back to default
-        # st.session_state.new_edu_year_from = date.today().year - 4 
-        # st.session_state.new_edu_year_to = date.today().year 
+        # This is CRITICAL for the "Add" functionality to work after a rerun
+        st.session_state.new_edu_degree_in_form = ""
+        st.session_state.new_edu_college_in_form = ""
+        st.session_state.new_edu_university_in_form = ""
         st.toast("Education entry added!")
         st.rerun() # Rerun to update the display of education entries
         
 def remove_education_entry(index):
-    """Removes an education entry by index."""
+    """Removes an education entry by index (called by a button *outside* the form)."""
     if 'education' in st.session_state.cv_form_data and index < len(st.session_state.cv_form_data['education']):
         st.session_state.cv_form_data['education'].pop(index)
         st.toast("Education entry removed.")
@@ -527,14 +524,14 @@ def cv_management_tab_content():
         else:
             st.session_state.cv_form_data = default_parsed
             
-    # Initialize keys for the new structured inputs if they don't exist
-    if 'new_edu_degree' not in st.session_state: st.session_state.new_edu_degree = ""
-    if 'new_edu_college' not in st.session_state: st.session_state.new_edu_college = ""
-    if 'new_edu_university' not in st.session_state: st.session_state.new_edu_university = ""
-    if 'new_edu_year_from' not in st.session_state: st.session_state.new_edu_year_from = date.today().year - 4
-    if 'new_edu_year_to' not in st.session_state: st.session_state.new_edu_year_to = date.today().year
+    # Initialize keys for the new structured inputs inside the form
+    if 'new_edu_degree_in_form' not in st.session_state: st.session_state.new_edu_degree_in_form = ""
+    if 'new_edu_college_in_form' not in st.session_state: st.session_state.new_edu_college_in_form = ""
+    if 'new_edu_university_in_form' not in st.session_state: st.session_state.new_edu_university_in_form = ""
+    if 'new_edu_year_from_in_form' not in st.session_state: st.session_state.new_edu_year_from_in_form = date.today().year - 4
+    if 'new_edu_year_to_in_form' not in st.session_state: st.session_state.new_edu_year_to_in_form = date.today().year
 
-    # --- MAIN CV FORM (No callbacks inside except st.form_submit_button) ---
+    # --- MAIN CV FORM (Education inputs are now inside) ---
     with st.form("cv_builder_form"):
         # Personal & Contact Details
         col1, col2, col3 = st.columns(3)
@@ -550,7 +547,26 @@ def cv_management_tab_content():
         st.session_state.cv_form_data['personal_details'] = st.text_area("Professional Summary or Personal Details", value=st.session_state.cv_form_data.get('personal_details', ''), height=100, key="cv_personal_details")
         
         st.markdown("---")
-        st.subheader("Technical Sections (One Item per Line - except Education)")
+        st.subheader("Education (Degrees, Institutions, Dates)")
+        st.info("Enter a new education entry below, then click **Add Education** (outside this form) to save it before generating the CV.")
+
+        # Input fields for a new education entry (INSIDE the form)
+        col_d, col_c, col_u = st.columns(3)
+        with col_d:
+            st.text_input("Degree/Qualification", key="new_edu_degree_in_form", placeholder="B.Tech, M.S., Ph.D.")
+        with col_c:
+            st.text_input("College/Institution", key="new_edu_college_in_form", placeholder="IIT Delhi, Stanford")
+        with col_u:
+            st.text_input("University", key="new_edu_university_in_form", placeholder="University of XYZ")
+
+        col_from, col_to = st.columns(2)
+        with col_from:
+            st.number_input("Year From", min_value=1950, max_value=date.today().year, value=st.session_state.new_edu_year_from_in_form, step=1, key="new_edu_year_from_in_form")
+        with col_to:
+            st.number_input("Year To (or Expected)", min_value=1950, max_value=date.today().year + 5, value=st.session_state.new_edu_year_to_in_form, step=1, key="new_edu_year_to_in_form")
+        
+        st.markdown("---")
+        st.subheader("Technical Sections (One Item per Line)")
 
         # Skills
         skills_text = "\n".join([str(s) for s in st.session_state.cv_form_data.get('skills', []) if s is not None])
@@ -577,8 +593,31 @@ def cv_management_tab_content():
         new_strength_text = st.text_area("Strengths / Key Personal Qualities (One per line)", value=strength_text, height=100, key="cv_strength")
         st.session_state.cv_form_data['strength'] = [s.strip() for s in new_strength_text.split('\n') if s.strip()]
 
-
+        # The only button with a callback allowed inside the form:
         submit_form_button = st.form_submit_button("Generate and Load CV Data", type="primary", use_container_width=True)
+
+    # --- EDUCATION MANAGEMENT BUTTONS (OUTSIDE THE FORM) ---
+    
+    # Standard st.button with callback (Allowed outside a form)
+    st.button("➕ Add Education Entry", key="add_edu_btn_final", on_click=add_education_entry, use_container_width=False, help="Click to save the new entry above into your CV data.")
+    st.markdown("---") 
+
+    # Display existing entries with a remove button
+    st.subheader("Current Education Entries")
+    if st.session_state.cv_form_data.get('education'):
+        for i, edu_entry in enumerate(st.session_state.cv_form_data['education']):
+            col_disp, col_rem = st.columns([5, 1])
+            with col_disp:
+                # Use st.markdown to display the formatted entry
+                st.markdown(f"**{edu_entry}**")
+            with col_rem:
+                # Use a standard st.button with callback (Allowed outside a form)
+                st.button("Remove", key=f"remove_edu_{i}_final", on_click=remove_education_entry, args=(i,), use_container_width=True, help="Removes this entry immediately.")
+        st.markdown("---")
+    else:
+        st.info("No education entries added yet.")
+    # --- END EDUCATION MANAGEMENT BUTTONS ---
+
 
     if submit_form_button:
         if not st.session_state.cv_form_data['name'] or not st.session_state.cv_form_data['email']:
@@ -602,43 +641,6 @@ def cv_management_tab_content():
 
         st.success(f"✅ CV data for **{st.session_state.parsed['name']}** successfully generated and loaded!")
 
-    # --- EDUCATION SECTION (OUTSIDE THE MAIN FORM) ---
-    st.markdown("---") 
-    st.subheader("Education (Degrees, Institutions, Dates)")
-
-    # Display existing entries with a remove button
-    if st.session_state.cv_form_data.get('education'):
-        for i, edu_entry in enumerate(st.session_state.cv_form_data['education']):
-            col_disp, col_rem = st.columns([5, 1])
-            with col_disp:
-                # Use st.markdown to display the formatted entry
-                st.markdown(f"**{edu_entry}**")
-            with col_rem:
-                # Use a standard st.button with callback (Allowed outside a form)
-                st.button("Remove", key=f"remove_edu_{i}", on_click=remove_education_entry, args=(i,), use_container_width=True)
-        st.markdown("---")
-
-    # Input fields for a new entry (using the temporary session state keys)
-    col_d, col_c, col_u = st.columns(3)
-    with col_d:
-        st.text_input("Degree/Qualification", key="new_edu_degree", placeholder="B.Tech, M.S., Ph.D.")
-    with col_c:
-        st.text_input("College/Institution", key="new_edu_college", placeholder="IIT Delhi, Stanford")
-    with col_u:
-        st.text_input("University", key="new_edu_university", placeholder="University of XYZ")
-
-    col_from, col_to, col_add_btn = st.columns([1, 1, 2])
-    with col_from:
-        st.number_input("Year From", min_value=1950, max_value=date.today().year, value=st.session_state.new_edu_year_from, step=1, key="new_edu_year_from")
-    with col_to:
-        st.number_input("Year To (or Expected)", min_value=1950, max_value=date.today().year + 5, value=st.session_state.new_edu_year_to, step=1, key="new_edu_year_to")
-    with col_add_btn:
-        st.markdown("<br>", unsafe_allow_html=True) # Spacer for alignment
-        # Standard st.button with callback (Allowed outside a form)
-        st.button("Add Education", key="add_edu_btn", on_click=add_education_entry, use_container_width=True)
-
-    st.markdown("---") # End of Education section
-        
     st.subheader("2. Loaded CV Data Preview and Download")
     
     if st.session_state.get('parsed', {}).get('name'):
@@ -1304,12 +1306,12 @@ def main_candidate_test():
     if "filtered_jds_display" not in st.session_state: st.session_state.filtered_jds_display = []
     if "last_selected_skills" not in st.session_state: st.session_state.last_selected_skills = []
     
-    # Initialize keys for the new structured inputs if they don't exist
-    if 'new_edu_degree' not in st.session_state: st.session_state.new_edu_degree = ""
-    if 'new_edu_college' not in st.session_state: st.session_state.new_edu_college = ""
-    if 'new_edu_university' not in st.session_state: st.session_state.new_edu_university = ""
-    if 'new_edu_year_from' not in st.session_state: st.session_state.new_edu_year_from = date.today().year - 4
-    if 'new_edu_year_to' not in st.session_state: st.session_state.new_edu_year_to = date.today().year
+    # Initialize keys for the new structured inputs INSIDE the form
+    if 'new_edu_degree_in_form' not in st.session_state: st.session_state.new_edu_degree_in_form = ""
+    if 'new_edu_college_in_form' not in st.session_state: st.session_state.new_edu_college_in_form = ""
+    if 'new_edu_university_in_form' not in st.session_state: st.session_state.new_edu_university_in_form = ""
+    if 'new_edu_year_from_in_form' not in st.session_state: st.session_state.new_edu_year_from_in_form = date.today().year - 4
+    if 'new_edu_year_to_in_form' not in st.session_state: st.session_state.new_edu_year_to_in_form = date.today().year
 
 
     # Injecting sample data for testing purposes if session state is empty
@@ -1330,6 +1332,13 @@ def main_candidate_test():
         }
          st.session_state.full_text = json.dumps(st.session_state.parsed, indent=2)
          st.session_state.cv_form_data = st.session_state.parsed.copy()
+         # Also set the initial values for the inputs inside the form
+         st.session_state.new_edu_degree_in_form = ""
+         st.session_state.new_edu_college_in_form = ""
+         st.session_state.new_edu_university_in_form = ""
+         st.session_state.new_edu_year_from_in_form = date.today().year - 4
+         st.session_state.new_edu_year_to_in_form = date.today().year
+
 
     candidate_dashboard()
 
