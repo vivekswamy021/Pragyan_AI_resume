@@ -409,11 +409,12 @@ def add_education_entry_handler():
 def add_certification_entry_handler():
     # Retrieve values using the widget keys
     title_val = st.session_state.get("temp_cert_title_key", "").strip()
-    given_by_val = st.session_state.get("temp_cert_given_by_key", "").strip()
+    # Updated to use the new key 'temp_cert_given_by_name_key'
+    given_by_val = st.session_state.get("temp_cert_given_by_name_key", "").strip() 
     issue_date_val = st.session_state.get("temp_cert_issue_date_key", str(date.today().year)).strip()
     
     if not title_val or not given_by_val:
-        st.error("Error: Please fill in Certification Title and Issuing Organization fields before clicking 'Add Certificate'.")
+        st.error("Error: Please fill in Certification Title and Issue By Name fields before clicking 'Add Certificate'.")
         st.session_state.force_rerun_for_add = True 
         return False
 
@@ -428,7 +429,7 @@ def add_certification_entry_handler():
     
     # Reset temp state/widget values
     st.session_state["temp_cert_title_key"] = ""
-    st.session_state["temp_cert_given_by_key"] = ""
+    st.session_state["temp_cert_given_by_name_key"] = "" # Resetting the new key
     st.session_state["temp_cert_issue_date_key"] = str(date.today().year)
     
     st.session_state.force_rerun_for_add = True 
@@ -693,8 +694,13 @@ def cv_management_tab_content():
             st.text_input("Certification Title", key="temp_cert_title_key", placeholder="e.g., Google Cloud Architect")
             
         with col_g:
-            st.text_input("Issuing Organization", key="temp_cert_given_by_key", placeholder="e.g., Coursera, AWS, PMI")
-            
+            # *** MODIFICATION HERE ***
+            st.text_input(
+                "Issue By Name (Sir/Mam)", # Updated Label
+                key="temp_cert_given_by_name_key", # Updated Key
+                placeholder="e.g., Coursera, AWS, PMI"
+            )
+
         col_d, _ = st.columns(2)
         with col_d:
             st.text_input("Issue Date (YYYY-MM-DD or Year)", key="temp_cert_issue_date_key", placeholder="e.g., 2024-05-15 or 2023")
@@ -1118,9 +1124,9 @@ def candidate_dashboard():
     if "temp_exp_ctc_key" not in st.session_state: st.session_state["temp_exp_ctc_key"] = ""
     if "temp_exp_responsibilities_key" not in st.session_state: st.session_state["temp_exp_responsibilities_key"] = ""
 
-    # Initialize widget keys for the "Add New Certification Entry" form
+    # Initialize widget keys for the "Add New Certification Entry" form (Updated key for "Issue By Name")
     if "temp_cert_title_key" not in st.session_state: st.session_state["temp_cert_title_key"] = ""
-    if "temp_cert_given_by_key" not in st.session_state: st.session_state["temp_cert_given_by_key"] = ""
+    if "temp_cert_given_by_name_key" not in st.session_state: st.session_state["temp_cert_given_by_name_key"] = "" # UPDATED KEY
     if "temp_cert_issue_date_key" not in st.session_state: st.session_state["temp_cert_issue_date_key"] = str(date.today().year)
         
     if "candidate_filter_skills_multiselect" not in st.session_state:
