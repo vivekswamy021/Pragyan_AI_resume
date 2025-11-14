@@ -703,6 +703,7 @@ def cv_management_tab_content():
     # Function to handle adding the certification entry
     def add_certification_entry():
         title_val = st.session_state.get("mini_cert_title_key", "").strip()
+        # Changed from selectbox to text_input for dynamic entry:
         given_by_val = st.session_state.get("mini_cert_given_by_key", "").strip()
         issue_date_val = st.session_state.get("mini_cert_issue_date_key", str(date.today().year)).strip()
         
@@ -720,7 +721,7 @@ def cv_management_tab_content():
         
         # Clear form input fields
         st.session_state["mini_cert_title_key"] = ""
-        st.session_state["mini_cert_given_by_key"] = ""
+        st.session_state["mini_cert_given_by_key"] = "" # Clear the new text input
         st.session_state["mini_cert_issue_date_key"] = str(date.today().year) # Reset to default year
         
         st.toast(f"Certificate: {new_entry['title']} added.")
@@ -740,7 +741,8 @@ def cv_management_tab_content():
         with col_t:
             st.text_input("Certification Title", key="mini_cert_title_key", placeholder="e.g., Google Cloud Architect", value=st.session_state.get("mini_cert_title_key", ""))
         with col_g:
-            st.text_input("Issuing Organization", key="mini_cert_given_by_key", placeholder="e.g., Coursera, AWS, PMI", value=st.session_state.get("mini_cert_given_by_key", ""))
+            # UPDATED: Text input for dynamic entry of 'Given By' name
+            st.text_input("Issuing Organization (Given By)", key="mini_cert_given_by_key", placeholder="e.g., Coursera, AWS, PMI", value=st.session_state.get("mini_cert_given_by_key", ""))
             
         col_d, _ = st.columns(2)
         with col_d:
@@ -1054,9 +1056,9 @@ def candidate_dashboard():
     if "mini_edu_score_key" not in st.session_state: st.session_state["mini_edu_score_key"] = ""
     if "mini_edu_type_key" not in st.session_state: st.session_state["mini_edu_type_key"] = "CGPA"
     
-    # Certification form keys
+    # Certification form keys (Updated to reflect text input for 'given_by')
     if "mini_cert_title_key" not in st.session_state: st.session_state["mini_cert_title_key"] = ""
-    if "mini_cert_given_by_key" not in st.session_state: st.session_state["mini_cert_given_by_key"] = ""
+    if "mini_cert_given_by_key" not in st.session_state: st.session_state["mini_cert_given_by_key"] = "" # Use empty string for text input
     if "mini_cert_issue_date_key" not in st.session_state: st.session_state["mini_cert_issue_date_key"] = str(date.today().year)
     
     # Experience form keys
