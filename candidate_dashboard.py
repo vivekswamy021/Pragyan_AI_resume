@@ -24,6 +24,7 @@ def generate_pdf_mock(cv_data, cv_name):
         from fpdf import FPDF
     except ImportError:
         # Fallback if fpdf is not installed (common in restricted environments)
+        # Note: This requires 'fpdf' to be installed. If not installed, it will return the string error.
         return f"PDF generation library (e.g., fpdf) not installed. Cannot generate PDF for {cv_name}."
 
     pdf = FPDF()
@@ -518,7 +519,8 @@ def generate_and_display_cv(cv_name):
             data=json.dumps(cv_data, indent=4),
             file_name=f"{cv_name}_data.json",
             mime="application/json",
-            key="download_json_btn"
+            # FIX: Made the key dynamic using the CV name
+            key=f"download_json_btn_{cv_name}" 
         )
         
     # --- PDF View ---
@@ -533,7 +535,8 @@ def generate_and_display_cv(cv_name):
                 data=pdf_bytes,
                 file_name=f"{cv_name}.pdf",
                 mime="application/pdf",
-                key="download_pdf_btn"
+                # FIX: Made the key dynamic using the CV name
+                key=f"download_pdf_btn_{cv_name}"
             )
             
             # Optional: Display PDF (requires Streamlit component or embedding)
