@@ -11,6 +11,7 @@ import re
 from dotenv import load_dotenv 
 from datetime import date 
 from streamlit.runtime.uploaded_file_manager import UploadedFile
+from datetime import datetime
 
 # --- PDF Generation Mock (required for 'pdf' output format) ---
 def generate_pdf_mock(cv_data, cv_name):
@@ -152,20 +153,26 @@ def parse_with_llm(text):
 
 def save_form_cv():
     """
-    Callback function to compile the structured CV data from form states and save it 
-    to managed_cvs under the key 'form_cv_key_name'.
+    Callback function to compile the structured CV data from form states and save it.
+    It automatically determines a key name based on current state or uses a dated default.
     """
-    cv_key_name = st.session_state.get('form_cv_key_name', '').strip()
     current_form_name = st.session_state.get('form_name_value', '').strip()
     
-    if not cv_key_name:
-        st.error("Please provide a name for this new CV to save.")
-        return
-    elif not current_form_name:
+    if not current_form_name:
          st.error("Please enter your Full Name to save the CV.") 
          return
     
-    # Compile the structured data using session state values
+    # 1. Determine the CV key name
+    # Use the current active CV name if it exists and wasn't uploaded/parsed.
+    # Otherwise, create a new one based on the current full name and timestamp.
+    
+    cv_key_name = st.session_state.get('current_resume_name')
+    if not cv_key_name or cv_key_name not in st.session_state.managed_cvs:
+         # Create a unique, dated key name
+         timestamp = datetime.now().strftime("%Y%m%d-%H%M")
+         cv_key_name = f"{current_form_name.replace(' ', '_')}_{timestamp}"
+
+    # 2. Compile the structured data using session state values
     final_cv_data = {
         "name": current_form_name,
         "email": st.session_state.get('form_email_value', '').strip(),
@@ -185,7 +192,7 @@ def save_form_cv():
     st.session_state.current_resume_name = cv_key_name
     st.session_state.show_cv_output = cv_key_name # Set to show the generated CV
     
-    st.success(f"🎉 CV **'{cv_key_name}'** created/updated from form and saved!")
+    st.success(f"🎉 CV for **'{current_form_name}'** saved/updated as **'{cv_key_name}'**!")
 
 def add_education_entry(degree, college, university, date_from, date_to, state_key='form_education'):
     """
@@ -493,16 +500,8 @@ def tab_cv_management():
 
     with tab_form:
         st.markdown("### Prepare your CV (Form-Based)")
-        st.caption("Manually enter your CV details. This will be saved as a structured JSON CV.")
+        st.caption("Manually enter your CV details. Click 'Save Details' to save/update your structured CV.")
         
-        # Renamed CV name input
-        st.text_input(
-            "**Name this new CV (e.g., 'Manual 2025 CV'):**", 
-            key="form_cv_key_name", 
-            on_change=save_form_cv, # Auto-save on changing CV Name
-            help="Changing this name will save the current form data under the new name."
-        )
-
         # --- 1. Personal Details Form ---
         st.markdown("#### 1. Personal & Summary Details")
         
@@ -523,7 +522,7 @@ def tab_cv_management():
         st.text_area("Career Summary / Objective (3-4 sentences)", height=100, key="form_summary_value")
         
         # --- Simplified Save Button for changes in Personal/Summary ---
-        st.button("💾 Save Details", type="primary", use_container_width=True, help="Save the current form data to the CV name specified above.", on_click=save_form_cv)
+        st.button("💾 Save Details", type="primary", use_container_width=True, help="Save the current form data to the CV.", on_click=save_form_cv)
         
         st.markdown("---")
 
@@ -758,7 +757,7 @@ def tab_cv_management():
             
             if selected_cv:
                 data = st.session_state.managed_cvs[selected_cv]
-                st.markdown(f"**Current Active CV:** `{st.session_state.get('current_resume_name', 'None')}`")
+                st.markdown(f"**Currently Active CV (from form/upload):** `{st.session_state.get('current_resume_name', 'None')}`")
                 st.markdown(f"**Name:** {data.get('name', 'N/A')}")
                 st.markdown(f"**Summary:** *{data.get('summary', 'N/A')}*")
                 
@@ -814,7 +813,7 @@ def candidate_dashboard():
     if "show_cv_output" not in st.session_state: st.session_state.show_cv_output = None 
     
     # Initialize keys for personal details to ensure stability
-    if "form_cv_key_name" not in st.session_state: st.session_state.form_cv_key_name = ""
+    # The 'form_cv_key_name' key is no longer needed but kept for cleanup in logout
     if "form_name_value" not in st.session_state: st.session_state.form_name_value = ""
     if "form_email_value" not in st.session_state: st.session_state.form_email_value = ""
     if "form_phone_value" not in st.session_state: st.session_state.form_phone_value = ""
@@ -823,6 +822,8 @@ def candidate_dashboard():
     if "form_summary_value" not in st.session_state: st.session_state.form_summary_value = ""
     if "form_skills_value" not in st.session_state: st.session_state.form_skills_value = ""
     if "form_strengths_input" not in st.session_state: st.session_state.form_strengths_input = ""
+    # Removing the redundant initialization logic for the removed key
+    # if "form_cv_key_name" not in st.session_state: st.session_state.form_cv_key_name = ""
 
 
     # --- Main Tabs ---
