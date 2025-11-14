@@ -652,7 +652,17 @@ def tab_cv_management():
                     )
         else:
             projects_list = []
+        
         # -----------------------------
+        # 7. STRENGTHS SECTION (New Addition)
+        # -----------------------------
+        st.markdown("#### 7. Strengths")
+        form_strengths = st.text_area(
+            "Your Key Strengths (Enter one strength or attribute per line)", 
+            height=100, 
+            key="form_strengths_input",
+            help="E.g., Problem-Solving, Team Leadership, Adaptability, Communication"
+        )
         
         # --- Final Save Button ---
         st.markdown("---")
@@ -674,15 +684,19 @@ def tab_cv_management():
                     "education": education_list, 
                     "experience": experience_list, 
                     "certifications": certifications_list, 
-                    "projects": projects_list 
+                    "projects": projects_list,
+                    "strength": [s.strip() for s in form_strengths.split('\n') if s.strip()] # Added Strengths
                 }
                 
                 st.session_state.managed_cvs[cv_key_name] = final_cv_data
                 st.session_state.current_resume_name = cv_key_name
-                st.session_state.form_education = [] # Clear the temporary states
+                
+                # Clear the temporary states
+                st.session_state.form_education = [] 
                 st.session_state.form_experience = [] 
                 st.session_state.form_certifications = []
                 st.session_state.form_projects = [] 
+                
                 st.success(f"🎉 CV **'{cv_key_name}'** created from form and saved!")
                 st.rerun()
 
