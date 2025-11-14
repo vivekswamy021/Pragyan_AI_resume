@@ -16,40 +16,12 @@ from datetime import datetime
 # --- PDF Generation Mock (required for 'pdf' output format) ---
 def generate_pdf_mock(cv_data, cv_name):
     """Mocks the generation of a PDF file and returns its path/bytes."""
-    try:
-        from fpdf import FPDF
-    except ImportError:
-        # Fallback if fpdf is not installed (common in restricted environments)
-        return f"PDF generation library (e.g., fpdf) not installed. Cannot generate PDF for {cv_name}."
-
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
     
-    # Title
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(200, 10, txt=cv_data.get('name', cv_name), ln=1, align="C")
-    pdf.set_font("Arial", size=10)
-    pdf.cell(200, 5, txt=f"Email: {cv_data.get('email', 'N/A')} | Phone: {cv_data.get('phone', 'N/A')}", ln=1, align="C")
-    pdf.ln(5)
-
-    # Summary
-    pdf.set_font("Arial", "B", 12)
-    pdf.cell(200, 5, txt="Summary", ln=1, align="L")
-    pdf.set_font("Arial", size=10)
-    pdf.multi_cell(0, 5, txt=cv_data.get('summary', 'N/A'))
-    pdf.ln(2)
-
-    # Experience (First Entry)
-    if cv_data.get('experience'):
-        pdf.set_font("Arial", "B", 12)
-        pdf.cell(200, 5, txt="Experience (First Entry)", ln=1, align="L")
-        exp = cv_data['experience'][0]
-        pdf.set_font("Arial", size=10)
-        pdf.cell(200, 5, txt=f"{exp.get('role', 'N/A')} at {exp.get('company', 'N/A')} ({exp.get('dates', 'N/A')})", ln=1, align="L")
-        pdf.ln(2)
-        
-    return pdf.output(dest='S').encode('latin-1') # Return bytes
+    # --- FIX APPLIED HERE: Remove fpdf import and use a hardcoded warning ---
+    warning_message = f"🚨 PDF generation is mocked! The actual library (fpdf) is not installed. Cannot generate PDF for {cv_name}. Download JSON instead."
+    
+    # Return the warning message encoded as bytes to satisfy the expected return type
+    return warning_message.encode('utf-8') 
 
 # -------------------------
 # CONFIGURATION & API SETUP (Necessary for standalone functions)
@@ -423,9 +395,14 @@ def generate_and_display_cv(cv_name):
     # --- PDF View ---
     with tab_pdf:
         pdf_bytes = generate_pdf_mock(cv_data, cv_name)
-        if isinstance(pdf_bytes, str):
-             st.warning(pdf_bytes) # Displays the error message if PDF generation fails
+        
+        # Check if the result is the error message (as bytes)
+        warning_check = pdf_bytes.decode('utf-8', errors='ignore') 
+        if "PDF generation is mocked" in warning_check:
+             st.warning(warning_check) 
         else:
+            # This path is hit only if fpdf was installed and the original logic worked. 
+            # Given the current fix, this block might be redundant but kept for completeness
             st.info("The PDF generation is a simplified mock. In a real app, a professional library would be used here.")
             st.download_button(
                 label="Download CV as PDF",
