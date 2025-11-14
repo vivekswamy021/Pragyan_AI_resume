@@ -12,6 +12,49 @@ from dotenv import load_dotenv
 from datetime import date 
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
+# --- PDF Generation Mock (required for 'pdf' output format) ---
+# Since Streamlit doesn't natively handle server-side PDF generation easily
+# without external libraries (like ReportLab or WeasyPrint), we will
+# create a simple **mock function** that returns a placeholder PDF file
+# (a blank PDF or a simple text file renamed to PDF for demonstration).
+# In a real application, you'd replace this with actual PDF generation code.
+def generate_pdf_mock(cv_data, cv_name):
+    """Mocks the generation of a PDF file and returns its path/bytes."""
+    try:
+        from fpdf import FPDF
+    except ImportError:
+        # Fallback if fpdf is not installed (common in restricted environments)
+        return f"PDF generation library (e.g., fpdf) not installed. Cannot generate PDF for {cv_name}."
+
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # Title
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(200, 10, txt=cv_data.get('name', cv_name), ln=1, align="C")
+    pdf.set_font("Arial", size=10)
+    pdf.cell(200, 5, txt=f"Email: {cv_data.get('email', 'N/A')} | Phone: {cv_data.get('phone', 'N/A')}", ln=1, align="C")
+    pdf.ln(5)
+
+    # Summary
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(200, 5, txt="Summary", ln=1, align="L")
+    pdf.set_font("Arial", size=10)
+    pdf.multi_cell(0, 5, txt=cv_data.get('summary', 'N/A'))
+    pdf.ln(2)
+
+    # Experience (First Entry)
+    if cv_data.get('experience'):
+        pdf.set_font("Arial", "B", 12)
+        pdf.cell(200, 5, txt="Experience (First Entry)", ln=1, align="L")
+        exp = cv_data['experience'][0]
+        pdf.set_font("Arial", size=10)
+        pdf.cell(200, 5, txt=f"{exp.get('role', 'N/A')} at {exp.get('company', 'N/A')} ({exp.get('dates', 'N/A')})", ln=1, align="L")
+        pdf.ln(2)
+        
+    return pdf.output(dest='S').encode('latin-1') # Return bytes
+
 # -------------------------
 # CONFIGURATION & API SETUP (Necessary for standalone functions)
 # -------------------------
@@ -361,6 +404,142 @@ def remove_entry(index, state_key, entry_type='Item'):
         del st.session_state[state_key][index]
         st.toast(f"Removed {entry_type}: {removed_name}")
 
+# --- CV Generation/Display Logic ---
+
+def format_cv_to_markdown(cv_data, cv_name):
+    """Formats the structured CV data into a viewable Markdown string."""
+    md = f"""
+# {cv_data.get('name', cv_name)}
+### Contact & Links
+* **Email:** {cv_data.get('email', 'N/A')}
+* **Phone:** {cv_data.get('phone', 'N/A')}
+* **LinkedIn:** [{cv_data.get('linkedin', 'N/A')}]({cv_data.get('linkedin', '#')})
+* **GitHub:** [{cv_data.get('github', 'N/A')}]({cv_data.get('github', '#')})
+
+---
+## Summary
+> {cv_data.get('summary', 'N/A')}
+
+---
+## Skills
+* {', '.join(cv_data.get('skills', ['N/A']))}
+
+---
+## Experience
+"""
+    if cv_data.get('experience'):
+        for exp in cv_data['experience']:
+            md += f"""
+### **{exp.get('role', 'N/A')}**
+* **Company:** {exp.get('company', 'N/A')}
+* **Dates:** {exp.get('dates', 'N/A')}
+* **Key Project/Focus:** {exp.get('project', 'General Duties')}
+"""
+    else:
+        md += "* No experience entries found."
+
+    md += """
+---
+## Education
+"""
+    if cv_data.get('education'):
+        for edu in cv_data['education']:
+            md += f"""
+### **{edu.get('degree', 'N/A')}**
+* **Institution:** {edu.get('college', 'N/A')} ({edu.get('university', 'N/A')})
+* **Dates:** {edu.get('dates', 'N/A')}
+"""
+    else:
+        md += "* No education entries found."
+    
+    md += """
+---
+## Certifications
+"""
+    if cv_data.get('certifications'):
+        for cert in cv_data['certifications']:
+            md += f"""
+* **{cert.get('name', 'N/A')}** - {cert.get('title', 'N/A')}
+    * *Issued by:* {cert.get('given_by', 'N/A')}
+    * *Date:* {cert.get('date_received', 'N/A')}
+"""
+    else:
+        md += "* No certification entries found."
+        
+    md += """
+---
+## Projects
+"""
+    if cv_data.get('projects'):
+        for proj in cv_data['projects']:
+            tech_str = ', '.join(proj.get('technologies', []))
+            md += f"""
+### **{proj.get('name', 'N/A')}**
+* *Description:* {proj.get('description', 'N/A')}
+* *Technologies:* {tech_str}
+"""
+    else:
+        md += "* No project entries found."
+        
+    md += """
+---
+## Strengths
+"""
+    if cv_data.get('strength'):
+        md += "* " + "\n* ".join(cv_data.get('strength', ['N/A']))
+    else:
+        md += "* No strengths listed."
+
+    return md
+
+def generate_and_display_cv(cv_name):
+    """Generates the final structured CV data from form states and displays it."""
+    
+    if cv_name not in st.session_state.managed_cvs:
+        st.error(f"Error: CV '{cv_name}' not found in managed CVs.")
+        return
+        
+    cv_data = st.session_state.managed_cvs[cv_name]
+    
+    st.markdown(f"### 📄 CV View: **{cv_name}**")
+    
+    tab_md, tab_json, tab_pdf = st.tabs(["Markdown View", "JSON Data", "PDF Download (Mock)"])
+
+    # --- Markdown View ---
+    with tab_md:
+        md_output = format_cv_to_markdown(cv_data, cv_name)
+        st.markdown(md_output)
+
+    # --- JSON View ---
+    with tab_json:
+        st.code(json.dumps(cv_data, indent=4), language="json")
+        st.download_button(
+            label="Download JSON",
+            data=json.dumps(cv_data, indent=4),
+            file_name=f"{cv_name}_data.json",
+            mime="application/json",
+            key="download_json_btn"
+        )
+        
+    # --- PDF View ---
+    with tab_pdf:
+        pdf_bytes = generate_pdf_mock(cv_data, cv_name)
+        if isinstance(pdf_bytes, str):
+             st.warning(pdf_bytes) # Displays the error message if PDF generation fails
+        else:
+            st.info("The PDF generation is a simplified mock. In a real app, a professional library would be used here.")
+            st.download_button(
+                label="Download CV as PDF",
+                data=pdf_bytes,
+                file_name=f"{cv_name}.pdf",
+                mime="application/pdf",
+                key="download_pdf_btn"
+            )
+            
+            # Optional: Display PDF (requires Streamlit component or embedding)
+            # st.markdown("##### PDF Preview (Simplified)")
+            # st.image("https://via.placeholder.com/600x400.png?text=PDF+Generation+Preview+Mock", caption="Placeholder for generated PDF")
+
 
 # -------------------------
 # TAB FUNCTIONS
@@ -379,6 +558,8 @@ def tab_cv_management():
         st.session_state.form_certifications = []
     if "form_projects" not in st.session_state: 
         st.session_state.form_projects = []
+    if "show_cv_output" not in st.session_state:
+        st.session_state.show_cv_output = None # Stores the name of the CV to display
 
     tab_upload, tab_form, tab_view = st.tabs(["Upload & Parse Resume", "Prepare your CV (Form-Based)", "View Saved CVs"])
 
@@ -654,7 +835,7 @@ def tab_cv_management():
             projects_list = []
         
         # -----------------------------
-        # 7. STRENGTHS SECTION (New Addition)
+        # 7. STRENGTHS SECTION
         # -----------------------------
         st.markdown("#### 7. Strengths")
         form_strengths = st.text_area(
@@ -664,41 +845,69 @@ def tab_cv_management():
             help="E.g., Problem-Solving, Team Leadership, Adaptability, Communication"
         )
         
-        # --- Final Save Button ---
+        # --- Final Save and View Buttons ---
         st.markdown("---")
-        if st.button("💾 **Save Form-Based CV**", type="primary", use_container_width=True):
-            if not cv_key_name.strip():
-                st.error("Please provide a name for this new CV.")
-            elif not form_name.strip():
-                 st.error("Please enter your Full Name.")
-            else:
-                # Compile the structured data
-                final_cv_data = {
-                    "name": form_name.strip(),
-                    "email": form_email.strip(),
-                    "phone": form_phone.strip(),
-                    "linkedin": form_linkedin.strip(),
-                    "github": form_github.strip(),
-                    "summary": form_summary.strip(),
-                    "skills": [s.strip() for s in form_skills.split('\n') if s.strip()],
-                    "education": education_list, 
-                    "experience": experience_list, 
-                    "certifications": certifications_list, 
-                    "projects": projects_list,
-                    "strength": [s.strip() for s in form_strengths.split('\n') if s.strip()] # Added Strengths
-                }
-                
-                st.session_state.managed_cvs[cv_key_name] = final_cv_data
-                st.session_state.current_resume_name = cv_key_name
-                
-                # Clear the temporary states
-                st.session_state.form_education = [] 
-                st.session_state.form_experience = [] 
-                st.session_state.form_certifications = []
-                st.session_state.form_projects = [] 
-                
-                st.success(f"🎉 CV **'{cv_key_name}'** created from form and saved!")
-                st.rerun()
+        
+        col_generate, col_view = st.columns(2)
+        
+        with col_generate:
+            if st.button("💾 **Generate & Save CV**", type="primary", use_container_width=True):
+                if not cv_key_name.strip():
+                    st.error("Please provide a name for this new CV.")
+                elif not form_name.strip():
+                     st.error("Please enter your Full Name.")
+                else:
+                    # Compile the structured data
+                    final_cv_data = {
+                        "name": form_name.strip(),
+                        "email": form_email.strip(),
+                        "phone": form_phone.strip(),
+                        "linkedin": form_linkedin.strip(),
+                        "github": form_github.strip(),
+                        "summary": form_summary.strip(),
+                        "skills": [s.strip() for s in form_skills.split('\n') if s.strip()],
+                        "education": education_list, 
+                        "experience": experience_list, 
+                        "certifications": certifications_list, 
+                        "projects": projects_list,
+                        "strength": [s.strip() for s in form_strengths.split('\n') if s.strip()] 
+                    }
+                    
+                    st.session_state.managed_cvs[cv_key_name] = final_cv_data
+                    st.session_state.current_resume_name = cv_key_name
+                    st.session_state.show_cv_output = cv_key_name # Set to show the generated CV
+                    
+                    # Clear the temporary form states
+                    # Note: We keep the input field values until the next form is used, but clear the list builders
+                    # st.session_state.form_education = [] 
+                    # st.session_state.form_experience = [] 
+                    # st.session_state.form_certifications = []
+                    # st.session_state.form_projects = [] 
+                    
+                    st.success(f"🎉 CV **'{cv_key_name}'** created from form and saved!")
+                    # Rerun to clear any list builder forms that rely on state and display the view
+                    st.rerun() 
+        
+        with col_view:
+            # Load view button is only clickable if a CV name is set in session state
+            view_disabled = not st.session_state.current_resume_name and not cv_key_name
+            
+            # The click action updates the state to show the last generated CV
+            if st.button("👀 Load CV View", type="secondary", use_container_width=True, disabled=view_disabled):
+                 # Use the last generated/active CV name
+                 cv_to_view = st.session_state.current_resume_name if st.session_state.current_resume_name else cv_key_name
+                 if cv_to_view and cv_to_view in st.session_state.managed_cvs:
+                     st.session_state.show_cv_output = cv_to_view
+                     st.rerun()
+                 else:
+                     st.warning("Please Generate & Save the CV first.")
+        
+        st.markdown("---")
+        
+        # --- CV Output Display Section ---
+        if st.session_state.show_cv_output:
+            generate_and_display_cv(st.session_state.show_cv_output)
+            st.markdown("---")
 
 
     with tab_view:
@@ -718,23 +927,35 @@ def tab_cv_management():
                 st.markdown(f"**Name:** {data.get('name', 'N/A')}")
                 st.markdown(f"**Summary:** *{data.get('summary', 'N/A')}*")
                 
-                col_actions_1, col_actions_2, _ = st.columns([1, 1, 4])
+                col_actions_1, col_actions_2, col_actions_3 = st.columns([1, 1, 1])
                 with col_actions_1:
                     if st.button("Set as Active CV", key="set_active_cv"):
                         st.session_state.current_resume_name = selected_cv
+                        st.session_state.show_cv_output = None # Clear view on set active
                         st.success(f"**'{selected_cv}'** set as the active CV for analysis.")
                         st.rerun()
                 with col_actions_2:
+                    if st.button("View/Download", key="view_cv_from_list"):
+                        st.session_state.show_cv_output = selected_cv
+                        st.rerun()
+                with col_actions_3:
                     if st.button("Delete CV", key="delete_cv"):
                         del st.session_state.managed_cvs[selected_cv]
                         if 'current_resume_name' in st.session_state and st.session_state.current_resume_name == selected_cv:
                             del st.session_state.current_resume_name
+                        if 'show_cv_output' in st.session_state and st.session_state.show_cv_output == selected_cv:
+                            del st.session_state.show_cv_output
                         st.warning(f"CV **'{selected_cv}'** deleted.")
                         st.rerun()
                 
                 st.markdown("---")
-                with st.expander(f"View Full Parsed/Structured Data for '{selected_cv}'"):
-                    st.json(data)
+                
+                # Dynamic View when clicking 'View/Download' from this tab
+                if st.session_state.show_cv_output == selected_cv:
+                    generate_and_display_cv(selected_cv)
+                else:
+                    with st.expander(f"View Raw JSON Data for '{selected_cv}'"):
+                        st.json(data)
 
 
 def tab_resume_analyzer():
@@ -1016,7 +1237,8 @@ def candidate_dashboard():
     col_header, col_logout = st.columns([4, 1])
     with col_logout:
         if st.button("🚪 Log Out", use_container_width=True):
-            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects']
+            # Keys to delete to fully reset the candidate session
+            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output']
             for key in keys_to_delete:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -1035,6 +1257,7 @@ def candidate_dashboard():
     if "form_projects" not in st.session_state: st.session_state.form_projects = [] # Temp for CV Form Builder Projects
     if "managed_cvs" not in st.session_state: st.session_state.managed_cvs = {} 
     if "current_resume_name" not in st.session_state: st.session_state.current_resume_name = None 
+    if "show_cv_output" not in st.session_state: st.session_state.show_cv_output = None 
 
     # --- Main Tabs ---
     tab_cv, tab_analyzer, tab_history = st.tabs(["📊 CV Management", "🚀 Resume Analyzer", "📝 Application History"])
