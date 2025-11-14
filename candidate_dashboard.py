@@ -13,15 +13,150 @@ from datetime import date
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from datetime import datetime
 
-# --- PDF Generation Mock (required for 'pdf' output format) ---
+# --- PDF Generation Mock (DEPRECATED: Now generating HTML) ---
 def generate_pdf_mock(cv_data, cv_name):
     """Mocks the generation of a PDF file and returns its path/bytes."""
     
-    # Returning a mock PDF that contains a warning message.
-    warning_message = f"🚨 PDF generation is mocked! The actual library (fpdf) is not installed. Cannot generate PDF for {cv_name}. Download JSON or Markdown instead."
+    # This mock function is kept but returns a generic message, though it's no longer used
+    # for the download button data in the final tab.
+    warning_message = f"🚨 PDF generation is disabled! Use the 'Download CV as HTML (Print-to-PDF)' button instead. The actual library (fpdf) is not installed."
     
-    # We return the warning message encoded as bytes. Streamlit can download this as a file.
+    # We return the warning message encoded as bytes.
     return warning_message.encode('utf-8') 
+
+# --- NEW HTML Generation for Print-to-PDF ---
+def format_cv_to_html(cv_data, cv_name):
+    """Formats the structured CV data into a clean HTML string for printing."""
+    
+    # Function to safely create HTML lists
+    def list_to_html(items, tag='li'):
+        if not items:
+            return ""
+        return f"<ul>{''.join(f'<{tag}>{item}</{tag}>' for item in items)}</ul>"
+
+    # Function to format experience/education sections
+    def format_section(title, items, keys, format_func):
+        html = f'<h2>{title}</h2>'
+        if not items:
+            return html + '<p>No entries found.</p>'
+        
+        for item in items:
+            html += format_func(item)
+        return html
+
+    # Specific formatters
+    def format_experience(exp):
+        return f"""
+        <div class="entry">
+            <h3>{exp.get('role', 'N/A')}</h3>
+            <p><strong>Company:</strong> {exp.get('company', 'N/A')}</p>
+            <p><strong>Dates:</strong> {exp.get('dates', 'N/A')}</p>
+            <p><strong>Focus:</strong> {exp.get('project', 'General Duties')}</p>
+        </div>
+        """
+    
+    def format_education(edu):
+        return f"""
+        <div class="entry">
+            <h3>{edu.get('degree', 'N/A')}</h3>
+            <p><strong>Institution:</strong> {edu.get('college', 'N/A')} ({edu.get('university', 'N/A')})</p>
+            <p><strong>Dates:</strong> {edu.get('dates', 'N/A')}</p>
+        </div>
+        """
+
+    def format_certifications(cert):
+        return f"""
+        <div class="entry">
+            <p><strong>{cert.get('name', 'N/A')}</strong> - {cert.get('title', 'N/A')}</p>
+            <p><em>Issued by:</em> {cert.get('given_by', 'N/A')}</p>
+            <p><em>Date:</em> {cert.get('date_received', 'N/A')}</p>
+        </div>
+        """
+
+    def format_projects(proj):
+        tech_str = ', '.join(proj.get('technologies', []))
+        link = f' | <a href="{proj["app_link"]}">Link</a>' if proj.get("app_link") and proj.get("app_link") != "N/A" else ""
+        return f"""
+        <div class="entry">
+            <h3>{proj.get('name', 'N/A')}</h3>
+            <p><em>Description:</em> {proj.get('description', 'N/A')}</p>
+            <p><em>Technologies:</em> {tech_str} {link}</p>
+        </div>
+        """
+        
+    # --- Main HTML Structure ---
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>CV: {cv_data.get('name', cv_name)}</title>
+        <style>
+            body {{ font-family: Arial, sans-serif; line-height: 1.6; margin: 20px; }}
+            h1, h2, h3 {{ color: #333; }}
+            h1 {{ border-bottom: 2px solid #555; padding-bottom: 5px; }}
+            h2 {{ border-bottom: 1px solid #ccc; padding-bottom: 2px; margin-top: 20px; }}
+            .header, .contact, .section {{ margin-bottom: 15px; }}
+            .contact p {{ margin: 0; }}
+            .entry {{ margin-bottom: 10px; padding-left: 10px; border-left: 3px solid #eee; }}
+            .summary {{ font-style: italic; background-color: #f9f9f9; padding: 10px; border-radius: 5px; }}
+            ul {{ list-style-type: disc; margin-left: 20px; padding-left: 0; }}
+            /* Print-specific styles */
+            @media print {{
+                body {{ margin: 0; padding: 0; }}
+                h1 {{ border-bottom: 2px solid black; }}
+                h2 {{ border-bottom: 1px solid black; }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>{cv_data.get('name', cv_name)}</h1>
+        </div>
+        
+        <div class="contact">
+            <p><strong>Email:</strong> {cv_data.get('email', 'N/A')}</p>
+            <p><strong>Phone:</strong> {cv_data.get('phone', 'N/A')}</p>
+            <p><strong>LinkedIn:</strong> <a href="{cv_data.get('linkedin', '#')}">{cv_data.get('linkedin', 'N/A')}</a></p>
+            <p><strong>GitHub:</strong> <a href="{cv_data.get('github', '#')}">{cv_data.get('github', 'N/A')}</a></p>
+        </div>
+
+        <div class="section summary">
+            <h2>Summary</h2>
+            <p>{cv_data.get('summary', 'N/A')}</p>
+        </div>
+
+        <div class="section">
+            <h2>Skills</h2>
+            {list_to_html(cv_data.get('skills', []))}
+        </div>
+
+        <div class="section">
+            {format_section('Experience', cv_data.get('experience', []), ['role', 'company', 'dates', 'project'], format_experience)}
+        </div>
+
+        <div class="section">
+            {format_section('Education', cv_data.get('education', []), ['degree', 'college', 'dates'], format_education)}
+        </div>
+
+        <div class="section">
+            {format_section('Certifications', cv_data.get('certifications', []), ['name', 'title'], format_certifications)}
+        </div>
+
+        <div class="section">
+            {format_section('Projects', cv_data.get('projects', []), ['name', 'description'], format_projects)}
+        </div>
+        
+        <div class="section">
+            <h2>Strengths</h2>
+            {list_to_html(cv_data.get('strength', []))}
+        </div>
+
+    </body>
+    </html>
+    """
+    return html_content.strip()
+
 
 # -------------------------
 # CONFIGURATION & API SETUP (Necessary for standalone functions)
@@ -374,14 +509,13 @@ def generate_and_display_cv(cv_name):
     
     st.markdown(f"### 📄 CV View: **{cv_name}**")
     
-    tab_md, tab_json, tab_pdf = st.tabs(["Markdown View", "JSON Data", "PDF Download (Mock)"])
+    tab_md, tab_json, tab_pdf = st.tabs(["Markdown View", "JSON Data", "HTML/PDF Download"])
 
     # --- Markdown View ---
     with tab_md:
         md_output = format_cv_to_markdown(cv_data, cv_name)
         st.markdown(md_output)
         
-        # ADDED: Download button for Markdown file
         st.download_button(
             label="Download Markdown (.md)",
             data=md_output.encode('utf-8'),
@@ -402,25 +536,19 @@ def generate_and_display_cv(cv_name):
             key=f"download_json_btn_{cv_name}" 
         )
         
-    # --- PDF View ---
+    # --- HTML/PDF View ---
     with tab_pdf:
-        pdf_bytes = generate_pdf_mock(cv_data, cv_name)
+        html_output = format_cv_to_html(cv_data, cv_name)
         
-        # Check if the result is the error message (as bytes)
-        warning_check = pdf_bytes.decode('utf-8', errors='ignore') 
-        if "PDF generation is mocked" in warning_check:
-             st.warning(warning_check) 
-        else:
-            # Fallback for when a real library might be present (removed fpdf import but kept generic structure)
-            st.info("The PDF generation is a simplified mock. In a real app, a professional library would be used here.")
+        st.info("To get a PDF, download the HTML file, open it in your browser, and use the browser's 'Print' function (Ctrl+P or Cmd+P), selecting 'Save as PDF' as the destination.")
         
-        # Ensure download button is always present, even if content is just a warning message
+        # FIX APPLIED: Changed to download HTML for Print-to-PDF
         st.download_button(
-            label="Download CV as PDF (Mock)",
-            data=pdf_bytes,
-            file_name=f"{cv_name}.pdf",
-            mime="application/pdf",
-            key=f"download_pdf_btn_{cv_name}"
+            label="Download CV as HTML (Print-to-PDF)",
+            data=html_output.encode('utf-8'),
+            file_name=f"{cv_name}.html",
+            mime="text/html",
+            key=f"download_html_btn_{cv_name}"
         )
 
 
