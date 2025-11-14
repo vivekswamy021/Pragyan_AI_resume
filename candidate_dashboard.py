@@ -619,25 +619,41 @@ def tab_cv_management():
         # --- 1. Personal Details Form ---
         st.markdown("#### 1. Personal & Summary Details")
         
+        # Use st.session_state to hold the values explicitly if they need to be accessed
+        # outside the button click scope or across reruns. 
+        # Standard input widgets *should* persist state by key, but we ensure it.
+        if "form_name_value" not in st.session_state: st.session_state.form_name_value = ""
+        if "form_email_value" not in st.session_state: st.session_state.form_email_value = ""
+        # ... (initialize other personal detail values if needed)
+        
         col_name, col_email = st.columns(2)
         with col_name:
-            form_name = st.text_input("Full Name", key="form_name")
+            # We link the input directly to the session state key here
+            st.text_input("Full Name", key="form_name_value")
+            # The actual value used in the logic must be read from the session state
+            form_name = st.session_state.form_name_value 
         with col_email:
-            form_email = st.text_input("Email", key="form_email")
+            st.text_input("Email", key="form_email_value")
+            form_email = st.session_state.form_email_value
             
         col_phone, col_linkedin, col_github = st.columns(3)
         with col_phone:
-            form_phone = st.text_input("Phone Number", key="form_phone")
+            st.text_input("Phone Number", key="form_phone_value")
+            form_phone = st.session_state.form_phone_value
         with col_linkedin:
-            form_linkedin = st.text_input("LinkedIn Link", key="form_linkedin")
+            st.text_input("LinkedIn Link", key="form_linkedin_value")
+            form_linkedin = st.session_state.form_linkedin_value
         with col_github:
-            form_github = st.text_input("GitHub Link", key="form_github")
+            st.text_input("GitHub Link", key="form_github_value")
+            form_github = st.session_state.form_github_value
             
-        form_summary = st.text_area("Career Summary / Objective (3-4 sentences)", height=100, key="form_summary")
+        st.text_area("Career Summary / Objective (3-4 sentences)", height=100, key="form_summary_value")
+        form_summary = st.session_state.form_summary_value
 
         # --- 2. Skills ---
         st.markdown("#### 2. Skills")
-        form_skills = st.text_area("Skills (Enter one skill per line)", height=100, key="form_skills")
+        st.text_area("Skills (Enter one skill per line)", height=100, key="form_skills_value")
+        form_skills = st.session_state.form_skills_value
         
         # --- 3. Experience ---
         st.markdown("#### 3. Experience")
@@ -841,12 +857,13 @@ def tab_cv_management():
         # 7. STRENGTHS SECTION
         # -----------------------------
         st.markdown("#### 7. Strengths")
-        form_strengths = st.text_area(
+        st.text_area(
             "Your Key Strengths (Enter one strength or attribute per line)", 
             height=100, 
             key="form_strengths_input",
             help="E.g., Problem-Solving, Team Leadership, Adaptability, Communication"
         )
+        form_strengths = st.session_state.form_strengths_input
         
         # --- Final Save and View Buttons ---
         st.markdown("---")
@@ -855,20 +872,24 @@ def tab_cv_management():
         
         with col_generate:
             if st.button("💾 **Generate & Save CV**", type="primary", use_container_width=True):
+                # FIX: Read the form_name value directly from st.session_state
+                # This ensures the value persists even if the input variable itself is re-evaluated.
+                current_form_name = st.session_state.get('form_name_value', '').strip()
+                
                 if not cv_key_name.strip():
                     st.error("Please provide a name for this new CV.")
-                elif not form_name.strip():
-                     st.error("Please enter your Full Name.")
+                elif not current_form_name:
+                     st.error("Please enter your Full Name.") # This is the validation check
                 else:
                     # Compile the structured data
                     final_cv_data = {
-                        "name": form_name.strip(),
-                        "email": form_email.strip(),
-                        "phone": form_phone.strip(),
-                        "linkedin": form_linkedin.strip(),
-                        "github": form_github.strip(),
-                        "summary": form_summary.strip(),
-                        "skills": [s.strip() for s in form_skills.split('\n') if s.strip()],
+                        "name": current_form_name,
+                        "email": st.session_state.get('form_email_value', '').strip(),
+                        "phone": st.session_state.get('form_phone_value', '').strip(),
+                        "linkedin": st.session_state.get('form_linkedin_value', '').strip(),
+                        "github": st.session_state.get('form_github_value', '').strip(),
+                        "summary": st.session_state.get('form_summary_value', '').strip(),
+                        "skills": [s.strip() for s in st.session_state.get('form_skills_value', '').split('\n') if s.strip()],
                         "education": education_list, 
                         "experience": experience_list, 
                         "certifications": certifications_list, 
@@ -881,7 +902,6 @@ def tab_cv_management():
                     st.session_state.show_cv_output = cv_key_name # Set to show the generated CV
                     
                     # Clear the temporary form states
-                    # Note: We keep the input field values until the next form is used, but clear the list builders
                     # st.session_state.form_education = [] 
                     # st.session_state.form_experience = [] 
                     # st.session_state.form_certifications = []
@@ -1241,7 +1261,7 @@ def candidate_dashboard():
     with col_logout:
         if st.button("🚪 Log Out", use_container_width=True):
             # Keys to delete to fully reset the candidate session
-            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output']
+            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output', 'form_name_value', 'form_email_value', 'form_phone_value', 'form_linkedin_value', 'form_github_value', 'form_summary_value', 'form_skills_value', 'form_strengths_input']
             for key in keys_to_delete:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -1261,6 +1281,17 @@ def candidate_dashboard():
     if "managed_cvs" not in st.session_state: st.session_state.managed_cvs = {} 
     if "current_resume_name" not in st.session_state: st.session_state.current_resume_name = None 
     if "show_cv_output" not in st.session_state: st.session_state.show_cv_output = None 
+    
+    # Initialize keys for personal details to ensure stability
+    if "form_name_value" not in st.session_state: st.session_state.form_name_value = ""
+    if "form_email_value" not in st.session_state: st.session_state.form_email_value = ""
+    if "form_phone_value" not in st.session_state: st.session_state.form_phone_value = ""
+    if "form_linkedin_value" not in st.session_state: st.session_state.form_linkedin_value = ""
+    if "form_github_value" not in st.session_state: st.session_state.form_github_value = ""
+    if "form_summary_value" not in st.session_state: st.session_state.form_summary_value = ""
+    if "form_skills_value" not in st.session_state: st.session_state.form_skills_value = ""
+    if "form_strengths_input" not in st.session_state: st.session_state.form_strengths_input = ""
+
 
     # --- Main Tabs ---
     tab_cv, tab_analyzer, tab_history = st.tabs(["📊 CV Management", "🚀 Resume Analyzer", "📝 Application History"])
