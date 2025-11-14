@@ -710,19 +710,11 @@ def cv_management_tab_content():
     def add_certification_entry():
         title_val = st.session_state.get("mini_cert_title_key", "").strip()
         
-        # 1. Given By (Issuing Organization) - Now a simple text input
+        # 1. Given By (Issuing Organization) - Text input
         given_by_val = st.session_state.get("mini_cert_given_by_text_key", "").strip()
         
-        # 2. Taken By - Logic for selectbox/text input combo
-        taken_by_select_val = st.session_state.get("mini_cert_taken_by_select_key", "").strip()
-        taken_by_other_val = st.session_state.get("mini_cert_taken_by_other_key", "").strip()
-        
-        # Determine final taken_by value
-        final_taken_by = ""
-        if taken_by_select_val == "Other (Specify Below)":
-            final_taken_by = taken_by_other_val
-        else:
-            final_taken_by = taken_by_select_val
+        # 2. Taken By - NOW A SIMPLE TEXT INPUT
+        taken_by_val = st.session_state.get("mini_cert_taken_by_text_key", "").strip()
         
         issue_date_val = st.session_state.get("mini_cert_issue_date_key", str(date.today().year)).strip()
         
@@ -735,17 +727,15 @@ def cv_management_tab_content():
             "title": title_val,
             "given_by": given_by_val,
             "issue_date": issue_date_val,
-            "taken_by": final_taken_by # New Field
+            "taken_by": taken_by_val # Simple Text Input Value
         }
         
         st.session_state.cv_form_data['structured_certifications'].append(new_entry)
         
         # Clear form input fields
         st.session_state["mini_cert_title_key"] = ""
-        st.session_state["mini_cert_given_by_text_key"] = "" # Clear new text input
-        # Reset selectbox to default
-        st.session_state["mini_cert_taken_by_select_key"] = "Self-Study" 
-        st.session_state["mini_cert_taken_by_other_key"] = ""
+        st.session_state["mini_cert_given_by_text_key"] = "" 
+        st.session_state["mini_cert_taken_by_text_key"] = "" # Clear new simple text input
         st.session_state["mini_cert_issue_date_key"] = str(date.today().year) # Reset to default year
         
         st.toast(f"Certificate: {new_entry['title']} added.")
@@ -757,22 +747,13 @@ def cv_management_tab_content():
             del st.session_state.cv_form_data['structured_certifications'][index]
             st.toast(f"Certificate '{removed_title}' removed.")
             st.rerun()
-
-    
-    common_taken_by_options = [
-        "Self-Study", 
-        "Company Sponsored Training", 
-        "University Coursework", 
-        "Online Bootcamp (Specific Vendor)", 
-        "Other (Specify Below)"
-    ]
-
+            
     with st.form("add_cert_form"):
         st.markdown("##### New Certification Entry")
         
         st.text_input("Certification Title", key="mini_cert_title_key", placeholder="e.g., Google Cloud Architect", value=st.session_state.get("mini_cert_title_key", ""))
 
-        # Issuing Organization (given_by) - Now a simple text input
+        # Issuing Organization (given_by)
         st.text_input(
             "Issuing Organization (e.g., Amazon Web Services, CompTIA, Coursera)", 
             key="mini_cert_given_by_text_key", 
@@ -783,19 +764,16 @@ def cv_management_tab_content():
         col_taken_by, col_date = st.columns(2)
         
         with col_taken_by:
-            # Taken By (New Field) - Selectbox/Text input combo
-            selected_taken_by = st.selectbox(
+            # Taken By (New Field) - SIMPLE TEXT INPUT
+            st.text_input(
                 "Taken By (Method of attainment)",
-                options=common_taken_by_options,
-                key="mini_cert_taken_by_select_key"
+                key="mini_cert_taken_by_text_key", 
+                placeholder="e.g., Self-Study, Company Sponsored, University Coursework",
+                value=st.session_state.get("mini_cert_taken_by_text_key", "")
             )
             
         with col_date:
             st.text_input("Issue Date (YYYY-MM-DD or Year)", key="mini_cert_issue_date_key", placeholder="e.g., 2024-05-15 or 2023", value=st.session_state.get("mini_cert_issue_date_key", str(date.today().year)))
-
-        # Conditional Text Input for "Other" taken_by
-        if selected_taken_by == "Other (Specify Below)":
-            st.text_input("Enter Taken By Method", key="mini_cert_taken_by_other_key", placeholder="e.g., Government Skill Program", value=st.session_state.get("mini_cert_taken_by_other_key", ""))
             
         st.form_submit_button("➕ Add This Certificate", on_click=add_certification_entry, use_container_width=True, type="secondary")
 
@@ -1108,13 +1086,12 @@ def candidate_dashboard():
     if "mini_edu_score_key" not in st.session_state: st.session_state["mini_edu_score_key"] = ""
     if "mini_edu_type_key" not in st.session_state: st.session_state["mini_edu_type_key"] = "CGPA"
     
-    # Certification form keys (UPDATED)
+    # Certification form keys (UPDATED - Simplified)
     if "mini_cert_title_key" not in st.session_state: st.session_state["mini_cert_title_key"] = ""
-    # Issuing Organization (given_by) - Now a text input
+    # Issuing Organization (given_by)
     if "mini_cert_given_by_text_key" not in st.session_state: st.session_state["mini_cert_given_by_text_key"] = ""
-    # Taken By (New Field) - Selectbox/Other pattern
-    if "mini_cert_taken_by_select_key" not in st.session_state: st.session_state["mini_cert_taken_by_select_key"] = "Self-Study" # Default value
-    if "mini_cert_taken_by_other_key" not in st.session_state: st.session_state["mini_cert_taken_by_other_key"] = ""
+    # Taken By (New Field - Now simple text input)
+    if "mini_cert_taken_by_text_key" not in st.session_state: st.session_state["mini_cert_taken_by_text_key"] = "" 
     if "mini_cert_issue_date_key" not in st.session_state: st.session_state["mini_cert_issue_date_key"] = str(date.today().year)
     
     # Experience form keys
