@@ -1,3 +1,308 @@
+import streamlit as st
+import os
+import tempfile
+import json
+import re
+import traceback
+import pandas as pd
+from datetime import date
+
+# --- 1. GLOBAL CONFIGURATION AND INITIAL STATE ---
+
+# NOTE: Replace with your actual Groq API Key setup.
+# In a real deployment, you would use st.secrets or os.environ
+GROQ_API_KEY = os.environ.get('GROQ_API_KEY') or st.secrets.get('GROQ_API_KEY', 'YOUR_PLACEHOLDER_KEY')
+
+# Global Session State Initializer
+def initialize_session_state():
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = "login" # Start at login
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'user_role' not in st.session_state:
+        st.session_state.user_role = None
+    if 'parsed' not in st.session_state:
+        st.session_state.parsed = {}  # Parsed resume data (JSON-like)
+    if 'full_text' not in st.session_state:
+        st.session_state.full_text = "" # Full resume text
+    if 'excel_data' not in st.session_state:
+        st.session_state.excel_data = {} # Data extracted for Excel/CSV
+    if 'candidate_uploaded_resumes' not in st.session_state:
+        st.session_state.candidate_uploaded_resumes = [] # For uploader files
+    if 'candidate_jd_list' not in st.session_state:
+        st.session_state.candidate_jd_list = [] # List of JDs for candidate matching
+    if 'candidate_match_results' not in st.session_state:
+        st.session_state.candidate_match_results = [] # Results of batch matching
+    if 'pasted_cv_text' not in st.session_state:
+        st.session_state.pasted_cv_text = ""
+    if 'filtered_jds_display' not in st.session_state:
+        st.session_state.filtered_jds_display = [] # For Filter JD tab
+
+# Utility for navigation
+def go_to(page):
+    st.session_state.current_page = page
+
+# Utility for interview prep state reset
+def clear_interview_state():
+    st.session_state.iq_output = ""
+    st.session_state.interview_qa = []
+    st.session_state.evaluation_report = ""
+
+# Dropdown options for Interview Prep tab
+question_section_options = [
+    "Overall Experience & Summary", 
+    "Education", 
+    "Skills", 
+    "Projects", 
+    "Specific Work Experience"
+]
+
+# --- 2. PLACEHOLDER / HELPER FUNCTIONS (MUST BE IMPLEMENTED) ---
+
+# Replace these with your actual resume parsing/data extraction logic
+def parse_and_store_resume(file_or_text, file_name_key, source_type='file'):
+    """Placeholder for the resume parsing logic."""
+    if GROQ_API_KEY == 'YOUR_PLACEHOLDER_KEY':
+        return {"error": "GROQ_API_KEY not configured. Cannot parse.", "name": "Error_File"}
+    
+    # --- YOUR ACTUAL PARSING LOGIC GOES HERE ---
+    
+    # Simulated successful output structure:
+    if source_type == 'file' and file_or_text.name.endswith('.pdf'):
+        full_text = f"This is the full text of {file_or_text.name}."
+        parsed_data = {"name": file_or_text.name, "email": "test@example.com", "skills": ["Python", "Streamlit"]}
+        excel_data = {"Name": [file_or_text.name], "Email": ["test@example.com"], "Skills": ["Python, Streamlit"]}
+        return {"parsed": parsed_data, "full_text": full_text, "excel_data": excel_data, "name": file_or_text.name}
+    elif source_type == 'text':
+        name = "Pasted CV"
+        full_text = file_or_text[:100] + "..."
+        parsed_data = {"name": name, "email": "pasted@example.com", "skills": ["PlaceholderSkill1", "PlaceholderSkill2"]}
+        excel_data = {"Name": [name], "Email": ["pasted@example.com"], "Skills": ["PlaceholderSkill1, PlaceholderSkill2"]}
+        return {"parsed": parsed_data, "full_text": full_text, "excel_data": excel_data, "name": name}
+    
+    # Simulated failed output
+    return {"error": "Parsing failed for unknown reason. Check logs.", "name": "Simulated_Failure"}
+
+def get_file_type(path):
+    return os.path.splitext(path)[1].lower().strip('.')
+
+def extract_content(file_type, path):
+    """Placeholder for file content extraction (PDF, DOCX, TXT)."""
+    if file_type in ['pdf', 'docx', 'txt']:
+        return f"Simulated content extracted from {path}. This is where the JD text would be."
+    return "Error: Unsupported file type"
+
+def extract_jd_from_linkedin_url(url):
+    """Placeholder for LinkedIn JD scraper/extractor."""
+    return f"--- Simulated JD for: {url} ---\nRole: AI Engineer\nRequirements: 5+ years experience, Python, Groq."
+
+def extract_jd_metadata(jd_text):
+    """Placeholder for extracting structured data from JD text."""
+    return {
+        "role": "Software Developer (Simulated)",
+        "job_type": "Full-time (Simulated)",
+        "key_skills": ["Python", "SQL", "Cloud"]
+    }
+
+def evaluate_jd_fit(jd_content, parsed_json):
+    """Placeholder for the Groq-based JD fit analysis."""
+    return f"""
+    --- JD Fit Analysis for {parsed_json.get('name', 'CV')} ---
+    Overall Fit Score: 7/10
+    
+    --- Section Match Analysis ---
+    Skills Match: 80%
+    Experience Match: 60%
+    Education Match: 90%
+    
+    Strengths/Matches: Found Python, SQL, and 3 years experience.
+    Weaknesses/Gaps: Missing specific Cloud certification.
+    """
+
+def qa_on_resume(question):
+    """Placeholder for Groq-based Q&A on resume data."""
+    return f"Based on the parsed resume data (skills: {st.session_state.parsed.get('skills')}), the answer to '{question}' is: Placeholder Response."
+    
+def qa_on_jd(question, selected_jd_name):
+    """Placeholder for Groq-based Q&A on JD content."""
+    jd_item = next(jd for jd in st.session_state.candidate_jd_list if jd['name'] == selected_jd_name)
+    return f"Based on the JD for '{selected_jd_name}' (Role: {jd_item.get('role')}), the answer to '{question}' is: Placeholder JD Response."
+
+def generate_interview_questions(parsed_json, section_choice):
+    """Placeholder for Groq-based interview question generation."""
+    return f"""
+    [Behavioral]
+    Q1: Tell me about a time you faced a difficult technical challenge related to your {section_choice}.
+    [Technical]
+    Q2: Explain the difference between Python lists and tuples.
+    """
+
+def evaluate_interview_answers(qa_list, parsed_json):
+    """Placeholder for Groq-based answer evaluation."""
+    total_q = len(qa_list)
+    return f"""
+    ## 📝 Interview Evaluation Report ({total_q} Questions)
+    
+    **Candidate:** {parsed_json.get('name', 'N/A')}
+    **Evaluation Focus:** {st.session_state.iq_section_c}
+    
+    ### Overall Score: 8.5/10
+    
+    ### Key Feedback:
+    * **Strengths:** Answers to technical questions (Q2) were clear and demonstrated solid foundational knowledge.
+    * **Areas for Improvement:** The behavioral response (Q1) lacked specific details (STAR format). Use stronger, quantifiable achievements.
+    
+    ### Detail Breakdown:
+    * **Q1 (Behavioral):** Good attempt, but needs more structure. (Score: 7/10)
+    * **Q2 (Technical):** Excellent, precise answer. (Score: 10/10)
+    """
+
+# --- 3. TAB CONTENT PLACEHOLDER FUNCTIONS ---
+
+def login_page():
+    # This page is required to start the application
+    st.title("🔐 Login")
+    
+    username = st.text_input("Username", value="candidate")
+    password = st.text_input("Password", type="password", value="password")
+    
+    if st.button("Login"):
+        if username == "candidate" and password == "password":
+            st.session_state.logged_in = True
+            st.session_state.user_role = "candidate"
+            st.success("Logged in successfully!")
+            go_to("candidate_dashboard")
+            st.rerun()
+        else:
+            st.error("Invalid username or password.")
+            
+def cv_management_tab_content():
+    """Placeholder for the CV Management tab logic."""
+    st.header("✍️ CV Management")
+    if not st.session_state.parsed:
+        st.warning("No resume data loaded. Please upload and parse your CV in the 'Resume Parsing' tab.")
+        return
+
+    st.subheader(f"Data for: **{st.session_state.parsed.get('name', 'N/A')}**")
+    
+    # Display Parsed Data (as JSON)
+    with st.expander("View/Edit Parsed Data (JSON format)"):
+        st.json(st.session_state.parsed)
+    
+    # Display Full Text
+    with st.expander("View Extracted Full Text"):
+        st.text_area("Raw Text", st.session_state.full_text, height=200)
+
+    # Download Buttons
+    st.subheader("Download Data")
+    col1, col2 = st.columns(2)
+    
+    # Download Parsed Data as JSON
+    parsed_json_str = json.dumps(st.session_state.parsed, indent=4)
+    col1.download_button(
+        label="Download Parsed JSON",
+        data=parsed_json_str,
+        file_name=f"parsed_data_{date.today()}.json",
+        mime="application/json",
+        use_container_width=True
+    )
+    
+    # Download Excel Data
+    if st.session_state.excel_data:
+        df = pd.DataFrame(st.session_state.excel_data)
+        
+        # Convert DataFrame to Excel bytes
+        excel_buffer = io.BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='ParsedData')
+        excel_buffer.seek(0)
+        
+        col2.download_button(
+            label="Download Parsed Excel/CSV",
+            data=excel_buffer,
+            file_name=f"parsed_data_{date.today()}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+    else:
+        col2.info("No structured data for Excel/CSV.")
+
+# Note: Added io import at top if needed for the excel download button
+import io
+
+def filter_jd_tab_content():
+    """Placeholder for the Filter JD tab logic."""
+    st.header("🔍 Filter Job Descriptions")
+    st.markdown("Use this to quickly filter saved JDs based on metadata and your resume.")
+
+    if not st.session_state.candidate_jd_list:
+        st.error("Please add Job Descriptions in the 'JD Management' tab first.")
+        return
+
+    if not st.session_state.parsed:
+        st.warning("No resume loaded. The relevance filter will be less effective.")
+        
+    jd_df = pd.DataFrame(st.session_state.candidate_jd_list)
+    
+    # --- Filter Controls ---
+    col_filters, col_skill = st.columns([1, 1.5])
+
+    with col_filters:
+        unique_roles = jd_df['role'].unique().tolist()
+        selected_roles = st.multiselect("Filter by Role:", options=unique_roles, default=unique_roles)
+
+        unique_types = jd_df['job_type'].unique().tolist()
+        selected_types = st.multiselect("Filter by Job Type:", options=unique_types, default=unique_types)
+        
+    with col_skill:
+        # Get all unique skills from all JDs
+        all_skills = set()
+        for skill_list in jd_df['key_skills'].tolist():
+            if isinstance(skill_list, list):
+                for skill in skill_list:
+                    all_skills.add(skill)
+        
+        sorted_skills = sorted(list(all_skills))
+        selected_skills = st.multiselect("Filter by Required Key Skills (AND logic):", options=sorted_skills)
+
+
+    # --- Application of Filters ---
+    filtered_df = jd_df[jd_df['role'].isin(selected_roles) & jd_df['job_type'].isin(selected_types)]
+
+    # Apply Skill Filter (AND logic: JD must have ALL selected skills)
+    if selected_skills:
+        skill_mask = filtered_df['key_skills'].apply(lambda skills: all(skill in skills for skill in selected_skills))
+        filtered_df = filtered_df[skill_mask]
+
+    # --- Display Results ---
+    st.markdown("---")
+    st.subheader(f"Displaying {len(filtered_df)} of {len(jd_df)} JDs")
+
+    if not filtered_df.empty:
+        # Columns to display in the result table
+        display_cols = ['name', 'role', 'job_type', 'key_skills']
+        display_df = filtered_df[display_cols].copy()
+        
+        # Format for better display
+        display_df.rename(columns={'name': 'JD Name', 'role': 'Role', 'job_type': 'Job Type', 'key_skills': 'Key Skills'}, inplace=True)
+        display_df['Key Skills'] = display_df['Key Skills'].apply(lambda x: ', '.join(x) if isinstance(x, list) else 'N/A')
+        
+        st.dataframe(display_df, use_container_width=True)
+        
+        # Optional: Detailed View
+        with st.expander("View Full Content of Filtered JDs"):
+            for index, row in filtered_df.iterrows():
+                st.markdown(f"**{row['name']}** (Role: {row['role']})")
+                st.text(row['content'])
+                st.markdown("---")
+    else:
+        st.info("No Job Descriptions match the selected criteria.")
+
+
+# --- 4. THE CANDIDATE DASHBOARD FUNCTION (PROVIDED IN PREVIOUS RESPONSE) ---
+# NOTE: The provided function is included below. It relies on all the
+# placeholder functions and session state variables defined above.
+
 def candidate_dashboard():
     st.header("👩‍🎓 Candidate Dashboard")
     st.markdown("Welcome! Use the tabs below to manage your CV and access AI preparation tools.")
@@ -293,7 +598,7 @@ def candidate_dashboard():
         elif not st.session_state.candidate_jd_list:
             st.error("Please **add Job Descriptions** in the 'JD Management' tab (Tab 4) before running batch analysis.")
             
-        elif not GROQ_API_KEY:
+        elif not GROQ_API_KEY or GROQ_API_KEY == 'YOUR_PLACEHOLDER_KEY':
              st.error("Cannot use JD Match: GROQ_API_KEY is not configured.")
              
         else:
@@ -457,7 +762,7 @@ def candidate_dashboard():
                 st.warning("Please upload and parse a resume in the 'Resume Parsing' tab or use the 'CV Management' tab first.")
             elif "error" in st.session_state.parsed:
                  st.error("Cannot use Resume Chatbot: Resume data has parsing errors.")
-            elif not GROQ_API_KEY:
+            elif not GROQ_API_KEY or GROQ_API_KEY == 'YOUR_PLACEHOLDER_KEY':
                  st.error("Cannot use Chatbot: GROQ_API_KEY is not configured.")
             else:
                 if 'qa_answer_resume' not in st.session_state: st.session_state.qa_answer_resume = ""
@@ -486,7 +791,7 @@ def candidate_dashboard():
             
             if not st.session_state.candidate_jd_list:
                 st.warning("Please add Job Descriptions in the 'JD Management' tab (Tab 4) first.")
-            elif not GROQ_API_KEY:
+            elif not GROQ_API_KEY or GROQ_API_KEY == 'YOUR_PLACEHOLDER_KEY':
                  st.error("Cannot use JD Chatbot: GROQ_API_KEY is not configured.")
             else:
                 if 'qa_answer_jd' not in st.session_state: st.session_state.qa_answer_jd = ""
@@ -529,7 +834,7 @@ def candidate_dashboard():
         st.header("Interview Preparation Tools")
         if not is_resume_parsed or "error" in st.session_state.parsed:
             st.warning("Please upload and successfully parse a resume first.")
-        elif not GROQ_API_KEY:
+        elif not GROQ_API_KEY or GROQ_API_KEY == 'YOUR_PLACEHOLDER_KEY':
              st.error("Cannot use Interview Prep: GROQ_API_KEY is not configured.")
         else:
             if 'iq_output' not in st.session_state: st.session_state.iq_output = ""
@@ -619,3 +924,23 @@ def candidate_dashboard():
                     st.markdown("---")
                     st.subheader("3. AI Evaluation Report")
                     st.markdown(st.session_state.evaluation_report)
+
+# --- 5. MAIN APPLICATION ENTRY POINT ---
+if __name__ == "__main__":
+    st.set_page_config(
+        page_title="AI-Powered Career Assistant",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
+    initialize_session_state()
+
+    # Simple router based on session state
+    if not st.session_state.logged_in or st.session_state.current_page == "login":
+        login_page()
+    elif st.session_state.logged_in and st.session_state.user_role == "candidate":
+        candidate_dashboard()
+    else:
+        st.error("Unknown state. Please log in.")
+        go_to("login")
+        st.rerun()
