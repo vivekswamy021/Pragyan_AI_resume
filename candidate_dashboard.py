@@ -342,12 +342,15 @@ def add_project_entry(name, description, technologies, app_link, state_key='form
 def remove_project_entry(index, state_key='form_projects'):
     """
     Callback function to remove a project entry by index.
+    
+    FIX: Removed st.rerun() as deleting from session state triggers a re-render.
     """
     if 0 <= index < len(st.session_state.get(state_key, [])):
         removed_name = st.session_state[state_key][index]['name']
         del st.session_state[state_key][index]
         st.toast(f"Removed Project: {removed_name}")
-        st.rerun() # Rerun to update the display immediately
+        # The change to session state triggers the re-render automatically. 
+        # Calling st.rerun() here would result in the "no-op" warning.
 
 
 # -------------------------
@@ -365,7 +368,7 @@ def tab_cv_management():
         st.session_state.form_experience = []
     if "form_certifications" not in st.session_state:
         st.session_state.form_certifications = []
-    if "form_projects" not in st.session_state: # NEW State for projects builder
+    if "form_projects" not in st.session_state: 
         st.session_state.form_projects = []
 
     tab_upload, tab_form, tab_view = st.tabs(["Upload & Parse Resume", "Prepare your CV (Form-Based)", "View Saved CVs"])
@@ -562,7 +565,7 @@ def tab_cv_management():
             certifications_list = []
         
         # -----------------------------
-        # 6. PROJECTS SECTION (NEW)
+        # 6. PROJECTS SECTION 
         # -----------------------------
         st.markdown("#### 6. Projects")
         
@@ -629,7 +632,7 @@ def tab_cv_management():
                     "education": education_list, 
                     "experience": experience_list, 
                     "certifications": certifications_list, 
-                    "projects": projects_list # Include the new projects list
+                    "projects": projects_list 
                 }
                 
                 st.session_state.managed_cvs[cv_key_name] = final_cv_data
@@ -637,7 +640,7 @@ def tab_cv_management():
                 st.session_state.form_education = [] # Clear the temporary states
                 st.session_state.form_experience = [] 
                 st.session_state.form_certifications = []
-                st.session_state.form_projects = [] # Clear the new temporary state
+                st.session_state.form_projects = [] 
                 st.success(f"🎉 CV **'{cv_key_name}'** created from form and saved!")
                 st.rerun()
 
@@ -973,7 +976,7 @@ def candidate_dashboard():
     if "form_education" not in st.session_state: st.session_state.form_education = [] # Temp for CV Form Builder Education
     if "form_experience" not in st.session_state: st.session_state.form_experience = [] # Temp for CV Form Builder Experience
     if "form_certifications" not in st.session_state: st.session_state.form_certifications = [] # Temp for CV Form Builder Certifications
-    if "form_projects" not in st.session_state: st.session_state.form_projects = [] # Temp for CV Form Builder Projects (NEW)
+    if "form_projects" not in st.session_state: st.session_state.form_projects = [] # Temp for CV Form Builder Projects
     if "managed_cvs" not in st.session_state: st.session_state.managed_cvs = {} 
     if "current_resume_name" not in st.session_state: st.session_state.current_resume_name = None 
 
