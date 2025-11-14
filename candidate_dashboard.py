@@ -9,9 +9,8 @@ from typing import Dict, Any, List
 
 # ==============================================================================
 # 1. DEPENDENCIES & HELPER FUNCTIONS (Stubs for demonstration)
+# (Content remains the same as provided in previous response)
 # ==============================================================================
-
-# --- Utility Functions ---
 
 def go_to(page_name):
     """Changes the current page in Streamlit's session state."""
@@ -522,6 +521,7 @@ def cv_management_tab_content():
     if st.button("Generate and Load ALL CV Data", key="generate_all_cv_data_btn", type="primary", use_container_width=True):
         
         # 1. Capture data from static fields using their keys
+        # We read the current state of the widgets via their keys
         new_name = st.session_state.cv_name_input_key.strip()
         new_email = st.session_state.cv_email_input_key.strip()
         
@@ -576,6 +576,7 @@ def cv_management_tab_content():
             st.session_state.evaluation_report = ""
 
             st.success(f"✅ CV data for **{st.session_state.parsed['name']}** successfully generated and loaded! All sections are stored as **structured data**.")
+            st.rerun() # Trigger a rerun to update the sidebar status and ensure widget values reflect new loaded data.
         
     
     # --- DYNAMIC EDUCATION SECTION (OUTSIDE the main form - Corresponds to Section 3) ---
@@ -1224,17 +1225,11 @@ def candidate_dashboard():
     if "last_selected_skills" not in st.session_state:
         st.session_state.last_selected_skills = []
     
-    # Initialize keys for the fields that are now read outside the form
-    if 'cv_name_input_key' not in st.session_state: st.session_state['cv_name_input_key'] = st.session_state.cv_form_data['name']
-    if 'cv_email_input_key' not in st.session_state: st.session_state['cv_email_input_key'] = st.session_state.cv_form_data['email']
-    if 'cv_phone_input_key' not in st.session_state: st.session_state['cv_phone_input_key'] = st.session_state.cv_form_data['phone']
-    if 'cv_linkedin_input_key' not in st.session_state: st.session_state['cv_linkedin_input_key'] = st.session_state.cv_form_data['linkedin']
-    if 'cv_github_input_key' not in st.session_state: st.session_state['cv_github_input_key'] = st.session_state.cv_form_data['github']
-    if 'cv_personal_details_input_key' not in st.session_state: st.session_state['cv_personal_details_input_key'] = st.session_state.cv_form_data['personal_details']
-    if 'cv_skills_input_key' not in st.session_state: st.session_state['cv_skills_input_key'] = "\n".join(st.session_state.cv_form_data.get('skills', []))
-    if 'cv_projects_input_key' not in st.session_state: st.session_state['cv_projects_input_key'] = "\n".join(st.session_state.cv_form_data.get('projects', []))
-    if 'cv_strength_input_key' not in st.session_state: st.session_state['cv_strength_input_key'] = "\n".join(st.session_state.cv_form_data.get('strength', []))
-
+    # --- FIX APPLIED HERE: REMOVED CONFLICTING WIDGET KEY INITIALIZATION ---
+    # The initial values for the form fields will be read from st.session_state.cv_form_data 
+    # via the 'value' parameter when the widget is created, which is the correct way.
+    # The widget itself then manages its key's value in st.session_state.
+    
     # --- END Session State Initialization ---
 
     # --- NAVIGATION BLOCK (Sidebar) ---
@@ -1330,7 +1325,9 @@ def candidate_dashboard():
                             st.session_state.parsed['name'] = result['name'] 
                             st.session_state.cv_form_data = st.session_state.parsed.copy() 
                             
-                            # CRITICAL: Also update form keys when parsing
+                            # CRITICAL: Also update the form widget's session state keys 
+                            # directly ONLY when the underlying data is CHANGED (i.e. parsed)
+                            # to force the text areas to update on the rerun.
                             st.session_state['cv_name_input_key'] = st.session_state.cv_form_data['name']
                             st.session_state['cv_email_input_key'] = st.session_state.cv_form_data['email']
                             st.session_state['cv_phone_input_key'] = st.session_state.cv_form_data['phone']
@@ -1380,7 +1377,8 @@ def candidate_dashboard():
                             st.session_state.parsed['name'] = result['name'] 
                             st.session_state.cv_form_data = st.session_state.parsed.copy() 
                             
-                            # CRITICAL: Also update form keys when parsing
+                            # CRITICAL: Also update the form widget's session state keys 
+                            # directly ONLY when the underlying data is CHANGED (i.e. parsed)
                             st.session_state['cv_name_input_key'] = st.session_state.cv_form_data['name']
                             st.session_state['cv_email_input_key'] = st.session_state.cv_form_data['email']
                             st.session_state['cv_phone_input_key'] = st.session_state.cv_form_data['phone']
