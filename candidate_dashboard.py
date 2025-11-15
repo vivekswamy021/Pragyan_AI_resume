@@ -41,7 +41,11 @@ def format_cv_to_html(cv_data, cv_name):
             return html + '<p>No entries found.</p>'
         
         for item in items:
-            html += format_func(item)
+            # ⭐ Defensive Check: Ensure item is a dictionary
+            if isinstance(item, dict):
+                html += format_func(item)
+            else:
+                html += f'<div class="entry"><p><strong>Error:</strong> Corrupted entry: <code>{str(item)}</code></p></div>'
         return html
 
     # Specific formatters
@@ -483,13 +487,13 @@ def remove_entry(index, state_key, entry_type='Item'):
     if 0 <= index < len(st.session_state.get(state_key, [])):
         entry_data = st.session_state[state_key][index]
         if state_key == 'form_education':
-            removed_name = entry_data.get('degree', entry_type)
+            removed_name = entry_data.get('degree', entry_type) if isinstance(entry_data, dict) else entry_type
         elif state_key == 'form_experience':
-            removed_name = entry_data.get('role', entry_type)
+            removed_name = entry_data.get('role', entry_type) if isinstance(entry_data, dict) else entry_type
         elif state_key == 'form_certifications':
-            removed_name = entry_data.get('name', entry_type)
+            removed_name = entry_data.get('name', entry_type) if isinstance(entry_data, dict) else entry_type
         elif state_key == 'form_projects':
-            removed_name = entry_data.get('name', entry_type)
+            removed_name = entry_data.get('name', entry_type) if isinstance(entry_data, dict) else entry_type
         else:
             removed_name = entry_type
             
@@ -519,12 +523,16 @@ def format_cv_to_markdown(cv_data, cv_name):
 """
     if cv_data.get('experience'):
         for exp in cv_data['experience']:
-            md += f"""
+            # ⭐ FIX: Ensure item is a dictionary
+            if isinstance(exp, dict):
+                md += f"""
 ### **{exp.get('role', 'N/A')}**
 * **Company:** {exp.get('company', 'N/A')}
 * **Dates:** {exp.get('dates', 'N/A')}
 * **Key Project/Focus:** {exp.get('project', 'General Duties')}
 """
+            else:
+                md += f"* **Error:** Corrupted entry: `{str(exp)}`\n"
     else:
         md += "* No experience entries found."
 
@@ -534,11 +542,15 @@ def format_cv_to_markdown(cv_data, cv_name):
 """
     if cv_data.get('education'):
         for edu in cv_data['education']:
-            md += f"""
+            # ⭐ FIX: Ensure item is a dictionary
+            if isinstance(edu, dict):
+                md += f"""
 ### **{edu.get('degree', 'N/A')}**
 * **Institution:** {edu.get('college', 'N/A')} ({edu.get('university', 'N/A')})
 * **Dates:** {edu.get('dates', 'N/A')}
 """
+            else:
+                md += f"* **Error:** Corrupted entry: `{str(edu)}`\n"
     else:
         md += "* No education entries found."
     
@@ -548,11 +560,16 @@ def format_cv_to_markdown(cv_data, cv_name):
 """
     if cv_data.get('certifications'):
         for cert in cv_data['certifications']:
-            md += f"""
+            # ⭐ FIX for the requested error: Ensure item is a dictionary
+            if isinstance(cert, dict):
+                md += f"""
 * **{cert.get('name', 'N/A')}** - {cert.get('title', 'N/A')}
     * *Issued by:* {cert.get('given_by', 'N/A')}
     * *Date:* {cert.get('date_received', 'N/A')}
 """
+            else:
+                 # Safely display the string if it's not a dict
+                 md += f"* **Error:** Corrupted entry: `{str(cert)}`\n"
     else:
         md += "* No certification entries found."
         
@@ -562,20 +579,24 @@ def format_cv_to_markdown(cv_data, cv_name):
 """
     if cv_data.get('projects'):
         for proj in cv_data['projects']:
-            tech_str = ', '.join([str(t) for t in proj.get('technologies', [])])
-            app_link = proj.get('app_link', 'N/A')
-            
-            # Displaying the app link if it exists and is not 'N/A'
-            link_md = ""
-            if app_link and app_link != 'N/A':
-                link_md = f"\n* **App/Repo Link:** [{app_link}]({app_link})"
+            # ⭐ FIX: Ensure item is a dictionary
+            if isinstance(proj, dict):
+                tech_str = ', '.join([str(t) for t in proj.get('technologies', [])])
+                app_link = proj.get('app_link', 'N/A')
                 
-            md += f"""
+                # Displaying the app link if it exists and is not 'N/A'
+                link_md = ""
+                if app_link and app_link != 'N/A':
+                    link_md = f"\n* **App/Repo Link:** [{app_link}]({app_link})"
+                    
+                md += f"""
 ### **{proj.get('name', 'N/A')}**
 * *Description:* {proj.get('description', 'N/A')}
 * *Technologies:* {tech_str}
 {link_md}
 """
+            else:
+                md += f"* **Error:** Corrupted entry: `{str(proj)}`\n"
     else:
         md += "* No project entries found."
         
