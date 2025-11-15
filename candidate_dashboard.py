@@ -921,7 +921,7 @@ def tab_cv_management():
     cv_form_content()
 
 # -------------------------
-# NEW: JD MANAGEMENT TAB CONTENT
+# JD MANAGEMENT TAB CONTENT
 # -------------------------
 
 def jd_management_tab():
@@ -1003,6 +1003,80 @@ def jd_management_tab():
                 st.warning("Please enter a LinkedIn Job URL.")
 
 # -------------------------
+# NEW: BATCH JD MATCH TAB CONTENT
+# -------------------------
+
+def batch_jd_match_tab():
+    st.header("Batch JD Match: Best Matches 🎯")
+    st.caption("Compare your **current structured CV** against multiple saved job descriptions to find the best fit.")
+
+    st.markdown("---")
+
+    # Ensure st.session_state.managed_cvs has the currently edited CV
+    current_cv_name = st.session_state.get('current_resume_name')
+    if not current_cv_name or current_cv_name not in st.session_state.managed_cvs:
+        st.warning("⚠️ **No Active CV Detected.** Please parse a resume or save a CV using the 'Resume Parsing' or 'CV Management' tabs before matching.")
+        return
+        
+    st.success(f"Matching CV: **{current_cv_name}**")
+    
+    st.markdown("#### Select Job Descriptions to Match Against")
+    
+    # Mock JD data for display purposes
+    if not st.session_state.get('managed_jds'):
+        st.session_state.managed_jds = {
+            "JD_Data_Scientist_001": "Data Scientist Role - Focus on ML/NLP",
+            "JD_Python_Developer_002": "Senior Python Backend Developer",
+            "JD_Cloud_Architect_003": "AWS Cloud Architect/Engineer",
+            "JD_Frontend_React_004": "Mid-level Frontend Developer (React/Typescript)"
+        }
+        
+    available_jds = list(st.session_state.managed_jds.keys())
+
+    if not available_jds:
+        st.info("No job descriptions found. Please use the **JD Management** tab to add JDs first.")
+        return
+
+    selected_jds = st.multiselect(
+        "Choose the JDs you want to match against (Select at least one):",
+        options=available_jds,
+        key="selected_jds_for_match",
+        default=available_jds
+    )
+
+    st.markdown("---")
+
+    if st.button("🚀 Compare CV and Rank Matches", type="primary", use_container_width=True):
+        if not selected_jds:
+            st.error("Please select at least one Job Description to run the batch match.")
+        else:
+            st.info(f"Analyzing **{current_cv_name}** against {len(selected_jds)} Job Descriptions...")
+            # --- Mock Matching Results (Actual matching logic would go here) ---
+            st.success("✅ Batch Matching Complete!")
+            
+            # Mock results display
+            st.markdown("### Top Match Results (Mock)")
+            mock_results = [
+                ("JD_Python_Developer_002", "92%"),
+                ("JD_Data_Scientist_001", "78%"),
+                ("JD_Cloud_Architect_003", "65%")
+            ]
+            
+            # Filter mock results to only include selected JDs
+            filtered_results = [
+                (jd, score) for jd, score in mock_results if jd in selected_jds
+            ]
+            
+            if filtered_results:
+                st.table(
+                    data=[{"Job Description": jd, "Match Score": score} for jd, score in filtered_results],
+                    column_order=["Job Description", "Match Score"]
+                )
+            else:
+                st.warning("No matches could be generated for the selected JDs.")
+
+
+# -------------------------
 # CANDIDATE DASHBOARD FUNCTION
 # -------------------------
 
@@ -1012,7 +1086,7 @@ def candidate_dashboard():
     col_header, col_logout = st.columns([4, 1])
     with col_logout:
         if st.button("🚪 Log Out", use_container_width=True):
-            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output', 'form_name_value', 'form_email_value', 'form_phone_value', 'form_linkedin_value', 'form_github_value', 'form_summary_value', 'form_skills_value', 'form_strengths_input', 'form_cv_key_name', 'resume_uploader', 'resume_paster', 'jd_type_select', 'jd_method_select', 'jd_uploader', 'jd_paster', 'jd_linkedin_url']
+            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output', 'form_name_value', 'form_email_value', 'form_phone_value', 'form_linkedin_value', 'form_github_value', 'form_summary_value', 'form_skills_value', 'form_strengths_input', 'form_cv_key_name', 'resume_uploader', 'resume_paster', 'jd_type_select', 'jd_method_select', 'jd_uploader', 'jd_paster', 'jd_linkedin_url', 'managed_jds', 'selected_jds_for_match']
             for key in keys_to_delete:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -1023,6 +1097,7 @@ def candidate_dashboard():
 
     # --- Session State Initialization for Candidate ---
     if "managed_cvs" not in st.session_state: st.session_state.managed_cvs = {} 
+    if "managed_jds" not in st.session_state: st.session_state.managed_jds = {} 
     if "current_resume_name" not in st.session_state: st.session_state.current_resume_name = None 
     if "show_cv_output" not in st.session_state: st.session_state.show_cv_output = None 
     
@@ -1037,7 +1112,7 @@ def candidate_dashboard():
     if "form_strengths_input" not in st.session_state: st.session_state.form_strengths_input = ""
 
     # --- Main Content with New Tabs ---
-    tab_parsing, tab_management, tab_jd = st.tabs(["📄 Resume Parsing", "📝 CV Management (Form)", "💼 JD Management"])
+    tab_parsing, tab_management, tab_jd, tab_match = st.tabs(["📄 Resume Parsing", "📝 CV Management (Form)", "💼 JD Management", "🏆 Batch JD Match"])
     
     with tab_parsing:
         resume_parsing_tab()
@@ -1047,6 +1122,9 @@ def candidate_dashboard():
         
     with tab_jd:
         jd_management_tab()
+
+    with tab_match:
+        batch_jd_match_tab()
 
 
 # -------------------------
