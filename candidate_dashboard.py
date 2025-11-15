@@ -770,7 +770,13 @@ def resume_parsing_tab():
     
     st.markdown("---")
     
-    process_button = st.button("✨ Parse and Load Uploaded File", type="primary", use_container_width=True)
+    # Check if Groq API key is set before enabling the button
+    if not GROQ_API_KEY:
+        st.error("GROQ_API_KEY is missing. AI Parsing features are disabled.")
+        process_button = st.button("✨ Parse and Load Uploaded File", type="primary", use_container_width=True, disabled=True)
+    else:
+        process_button = st.button("✨ Parse and Load Uploaded File", type="primary", use_container_width=True)
+
 
     if process_button:
         extracted_text = ""
@@ -1352,7 +1358,7 @@ def jd_management_tab():
 
 
 # -------------------------
-# BATCH JD MATCH TAB CONTENT (FIXED AND UPDATED)
+# BATCH JD MATCH TAB CONTENT (MODIFIED)
 # -------------------------
 
 def batch_jd_match_tab():
@@ -1432,10 +1438,9 @@ def batch_jd_match_tab():
             # Run the mock matching function to get detailed scores
             match_data = mock_jd_match(cv_data, jd_data)
             
+            # This data is gathered but will not be displayed in this modified version
             title_display = jd_data.get('title', jd_key)
-            jd_role = title_display # Use the title as the role for simplicity
-            
-            # Create a simplified file name for display purposes
+            jd_role = title_display 
             jd_file_name = jd_key.replace('_', '-').replace("Pasted-JD-", "").replace("-", "_") + ".pdf"
 
             match_results.append({
@@ -1449,60 +1454,37 @@ def batch_jd_match_tab():
                 "Education (%)": match_data['education_percent'],
                 "Summary": match_data['summary'],
                 "JD Key": jd_key,
-                "Sortable Score": match_data['score_100'] # Use the 0-100 score for sorting
+                "Sortable Score": match_data['score_100']
             })
             
         if not match_results:
              st.warning("No valid match results were generated. Ensure all selected JDs were successfully parsed.")
              return
              
-        # Sort results by score descending and assign rank
+        # Sort results by score descending and assign rank (logic kept for data integrity)
         match_results.sort(key=lambda x: x['Sortable Score'], reverse=True)
         for i, res in enumerate(match_results):
             res['Rank'] = i + 1
 
-        st.success("✅ Batch Matching Complete! (See detailed reports below, ranked by Fit Score.)")
+        # --- MODIFIED SECTION: Only display the success message ---
         
-        # --- REMOVED THE DATAFRAME FOR Match Results for Your Resume ---
-        # st.markdown("### Match Results for Your Resume")
-        # ... [removed st.dataframe code here] ...
-        # --- END REMOVAL ---
+        # Get the top score for a brief summary
+        top_match = match_results[0]
         
-        st.markdown("---")
+        st.success(f"✅ Batch Matching Complete! You were compared against {len(selected_jd_keys)} JDs.")
         
-        # --- Detailed Reports ---
-        st.markdown("### Detailed Reports (Ranked)")
+        st.markdown("### Top Match Summary")
+        st.info(
+            f"Your highest match is **Rank {top_match['Rank']}** for the role **{top_match['Role']}** "
+            f"with a **Fit Score of {top_match['Fit Score (out of 10)']}/10**."
+        )
         
-        for res in match_results:
-            report_title = f"Rank {res['Rank']} | Report for {res['Job Description (Ranked)']} (Score: {res['Fit Score (out of 10)']}/10 | S: {res['Skills (%)']}% | E: {res['Experience (%)']}% | Edu: {res['Education (%)']}%)"
-            
-            with st.expander(report_title):
-                st.markdown(f"#### **Summary of Match**")
-                st.markdown(f"> {res['Summary']}")
-                
-                # Display individual component scores as progress bars inside the expander
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Skills Match", f"{res['Skills (%)']}%")
-                    st.progress(res['Skills (%)'] / 100)
-                with col2:
-                    st.metric("Experience Match", f"{res['Experience (%)']}%")
-                    st.progress(res['Experience (%)'] / 100)
-                with col3:
-                    st.metric("Education Match", f"{res['Education (%)']}%")
-                    st.progress(res['Education (%)'] / 100)
-                
-                st.markdown(f"#### **Job Description Details ({res['Role']})**")
-                
-                # Fetch and display the full JD data
-                jd_key = res['JD Key']
-                jd_data = st.session_state.managed_jds.get(jd_key)
-                if isinstance(jd_data, dict):
-                    st.json(jd_data)
-                else:
-                    st.error("Corrupted JD data: Cannot display JSON details.")
+        # --- END MODIFIED SECTION ---
 
-
+        # NOTE: The table display and detailed reports section have been entirely removed below this point
+        # to fulfill the user request.
+        
+        
 # -------------------------
 # CANDIDATE DASHBOARD FUNCTION
 # -------------------------
