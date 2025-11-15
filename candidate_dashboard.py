@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from datetime import date 
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 from datetime import datetime
+import random # Added for mock matching
 
 # --- PDF Generation Mock (DEPRECATED: Now generating HTML) ---
 def generate_pdf_mock(cv_data, cv_name):
@@ -234,8 +235,8 @@ def extract_content(file_type, file_content, file_name):
         return f"Fatal Extraction Error: Failed to read file content ({file_type}). Error: {e}\n{traceback.format_exc()}"
 
 
-@st.cache_data(show_spinner="Analyzing content with Groq LLM...")
-def parse_with_llm(text):
+@st.cache_data(show_spinner="Analyzing CV content with Groq LLM...")
+def parse_cv_with_llm(text):
     """Sends resume text to the LLM for structured information extraction."""
     if text.startswith("Error") or not GROQ_API_KEY:
         return {"error": "Parsing error or API key missing or file content extraction failed.", "raw_output": text}
@@ -278,7 +279,82 @@ def parse_with_llm(text):
 
     return parsed
 
-# --- Shared Manual Input Logic ---
+@st.cache_data(show_spinner="Analyzing JD content with Groq LLM...")
+def parse_jd_with_llm(text, jd_title="Job Description"):
+    """Sends JD text to the LLM for structured information extraction."""
+    if text.startswith("Error") or not GROQ_API_KEY:
+        return {"error": "Parsing error or API key missing or file content extraction failed.", "raw_output": text}
+
+    prompt = f"""Extract the following key information from the Job Description in structured JSON for a matching algorithm:
+    - **title**: The primary job title.
+    - **required_skills**: A list of essential technical and soft skills.
+    - **responsibilities**: A list of key duties/responsibilities.
+    - **qualifications**: A list of required educational background or certifications.
+    - **experience_level**: The required seniority (e.g., 'Senior', 'Mid-level', 'Entry').
+    
+    JD Text (Title: {jd_title}): {text}
+    
+    Provide the output strictly as a JSON object, without any surrounding markdown or commentary.
+    """
+    content = ""
+    parsed = {}
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1 # Lower temperature for better structure
+        )
+        content = response.choices[0].message.content.strip()
+        
+        # Robustly isolate JSON object
+        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+        if json_match:
+            json_str = json_match.group(0).strip()
+            json_str = json_str.replace('```json', '').replace('```', '').strip() 
+            parsed = json.loads(json_str)
+        else:
+            raise json.JSONDecodeError("Could not isolate a valid JSON structure.", content, 0)
+    except Exception as e:
+        parsed = {"error": f"LLM parsing error: {e}", "raw_output": content}
+
+    return parsed
+
+# --- Core Matching Logic (MOCK) ---
+def mock_jd_match(cv_data, jd_data):
+    """
+    Mocks the complex comparison of a CV (cv_data) against a structured JD (jd_data) 
+    and returns a match score and summary.
+    """
+    # Simple mock: use the length of the JD content to influence the 'base' score, 
+    # then add some randomness to simulate real matching complexity.
+    
+    jd_skills = jd_data.get('required_skills', [])
+    cv_skills = cv_data.get('skills', [])
+    
+    # Calculate skill overlap (as a simple metric)
+    overlap = len(set(jd_skills) & set(cv_skills))
+    max_skills = len(jd_skills) if jd_skills else 1
+    
+    base_score = (overlap / max_skills) * 80 if max_skills > 0 else 50
+    
+    # Add a random modifier to simulate other factors (experience, projects, education)
+    random_modifier = random.randint(-15, 15)
+    final_score = max(0, min(100, int(base_score + random_modifier)))
+    
+    # Generate a simple mock summary
+    summary = f"Match based on {overlap} required skills found. "
+    if final_score > 90:
+        summary += "Excellent match! Candidate highly qualified."
+    elif final_score > 70:
+        summary += "Strong match. Minor gaps in qualifications/experience noted."
+    else:
+        summary += "Fair match. Significant gaps in core requirements observed."
+        
+    return f"{final_score}%", summary
+
+# --- Shared Manual Input Logic (CV Form) ---
+# ... (Functions like save_form_cv, add_education_entry, etc. are omitted for brevity 
+# but are included in the full code below to keep it runnable)
 
 def save_form_cv():
     """
@@ -400,10 +476,7 @@ def remove_entry(index, state_key, entry_type='Item'):
             
         del st.session_state[state_key][index]
         st.toast(f"Removed {entry_type}: {removed_name}")
-
-
-# --- CV Generation/Display Logic ---
-
+# ... (CV Generation/Display Logic functions remain the same)
 def format_cv_to_markdown(cv_data, cv_name):
     """Formats the structured CV data into a viewable Markdown string."""
     md = f"""
@@ -550,7 +623,6 @@ def generate_and_display_cv(cv_name):
             key=f"download_html_btn_{cv_name}"
         )
 
-
 # -------------------------
 # RESUME PARSING TAB CONTENT
 # -------------------------
@@ -606,7 +678,7 @@ def resume_parsing_tab():
             
         # Proceed with LLM parsing
         with st.spinner("🧠 Sending to Groq LLM for structured parsing..."):
-            parsed_data = parse_with_llm(extracted_text)
+            parsed_data = parse_cv_with_llm(extracted_text)
         
         # Check for parsing errors
         if "error" in parsed_data:
@@ -650,7 +722,6 @@ def resume_parsing_tab():
         # Show the result in the display area
         st.session_state.show_cv_output = cv_key_name
         st.rerun() # Rerun to refresh the CV form and display with new data
-
 
 # -------------------------
 # CORE CV FORM FUNCTION 
@@ -924,9 +995,44 @@ def tab_cv_management():
 # JD MANAGEMENT TAB CONTENT
 # -------------------------
 
+def process_jd_file(file, jd_type):
+    """Handles processing a single JD file."""
+    file_name = file.name
+    file_bytes = file.getvalue()
+    file_type = get_file_type(file_name)
+    jd_key = file_name.replace('.', '_').replace(' ', '_').replace('-', '_') + "_" + datetime.now().strftime("%H%M")
+    
+    extracted_text = extract_content(file_type, file_bytes, file_name)
+    
+    if extracted_text.startswith("Error"):
+        return False, f"Extraction Failed for {file_name}: {extracted_text}"
+        
+    parsed_data = parse_jd_with_llm(extracted_text, jd_title=file_name)
+    
+    if "error" in parsed_data:
+        return False, f"AI Parsing Failed for {file_name}: {parsed_data['error']}"
+    
+    # Save the structured JD
+    st.session_state.managed_jds[jd_key] = parsed_data
+    return True, f"Successfully parsed and saved JD **{jd_key}** (Title: {parsed_data.get('title', 'N/A')})"
+
+def process_jd_text(text):
+    """Handles processing pasted JD text."""
+    jd_key = "Pasted_JD_" + datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    parsed_data = parse_jd_with_llm(text, jd_title="Pasted Text JD")
+    
+    if "error" in parsed_data:
+        return False, f"AI Parsing Failed: {parsed_data['error']}"
+        
+    # Save the structured JD
+    st.session_state.managed_jds[jd_key] = parsed_data
+    return True, f"Successfully parsed and saved JD **{jd_key}** (Title: {parsed_data.get('title', 'N/A')})"
+
+
 def jd_management_tab():
     st.header("Job Description (JD) Management")
-    st.caption("Upload or paste job descriptions for later matching and analysis.")
+    st.caption("Upload or paste job descriptions. They will be parsed and saved for matching against your CV.")
     
     st.markdown("#### 1. Select JD Type")
     jd_type = st.radio(
@@ -950,7 +1056,7 @@ def jd_management_tab():
     )
 
     st.markdown("---")
-
+    
     if jd_method == "Upload File":
         st.markdown("##### Upload JD File(s)")
         
@@ -964,8 +1070,19 @@ def jd_management_tab():
         
         if st.button("Add JD(s)", type="primary", use_container_width=True, key="upload_jd_button"):
             if uploaded_jds:
-                num_files = len(uploaded_jds) if isinstance(uploaded_jds, list) else 1
-                st.success(f"Successfully uploaded {num_files} JD file(s). (Parsing/processing logic would go here)")
+                files_to_process = uploaded_jds if isinstance(uploaded_jds, list) else [uploaded_jds]
+                
+                with st.spinner(f"Processing {len(files_to_process)} JD file(s)..."):
+                    results = [process_jd_file(f, jd_type) for f in files_to_process]
+                
+                success_count = sum(r[0] for r in results)
+                st.success(f"✅ Finished processing: {success_count} success(es).")
+                for success, message in results:
+                    if success:
+                        st.text(message)
+                    else:
+                        st.error(message)
+
             else:
                 st.warning("Please upload at least one JD file.")
         
@@ -980,12 +1097,18 @@ def jd_management_tab():
         
         if st.button("Add JD", type="primary", use_container_width=True, key="paste_jd_button"):
             if pasted_jd_text.strip():
-                st.success("Successfully added JD from pasted text. (Parsing/processing logic would go here)")
+                with st.spinner("Processing pasted JD text..."):
+                    success, message = process_jd_text(pasted_jd_text.strip())
+                
+                if success:
+                    st.success(message)
+                else:
+                    st.error(message)
             else:
                 st.warning("Please paste the JD text.")
 
     elif jd_method == "LinkedIn URL":
-        st.markdown("##### Enter LinkedIn URL")
+        st.markdown("##### Enter LinkedIn URL (Requires Web Scraping)")
         
         linkedin_url = st.text_input(
             "Enter the full LinkedIn Job URL:",
@@ -993,17 +1116,27 @@ def jd_management_tab():
             placeholder="https://www.linkedin.com/jobs/view/..."
         )
         
-        if st.button("Fetch and Add JD", type="primary", use_container_width=True, key="url_jd_button"):
+        if st.button("Fetch and Add JD (Mock)", type="primary", use_container_width=True, key="url_jd_button"):
             if linkedin_url.strip():
                 if "linkedin.com/jobs/view" in linkedin_url:
-                    st.success(f"Attempting to fetch JD from URL: {linkedin_url}. (Web scraping logic would execute here)")
+                    st.info(f"Web scraping is not implemented in this demo. Please use the **Upload File** or **Paste Text** methods for a functional test.")
                 else:
                     st.error("Please enter a valid LinkedIn Job URL.")
             else:
                 st.warning("Please enter a LinkedIn Job URL.")
 
+    st.markdown("---")
+    st.markdown("#### Saved Job Descriptions")
+    if st.session_state.managed_jds:
+        jd_keys = list(st.session_state.managed_jds.keys())
+        jd_info = [{"Key": key, "Title": st.session_state.managed_jds[key].get('title', 'N/A'), "Skills": len(st.session_state.managed_jds[key].get('required_skills', []))} for key in jd_keys]
+        st.dataframe(jd_info, use_container_width=True, hide_index=True)
+    else:
+        st.info("No JDs saved yet. Add one above to enable batch matching.")
+
+
 # -------------------------
-# NEW: BATCH JD MATCH TAB CONTENT
+# BATCH JD MATCH TAB CONTENT
 # -------------------------
 
 def batch_jd_match_tab():
@@ -1012,68 +1145,84 @@ def batch_jd_match_tab():
 
     st.markdown("---")
 
-    # Ensure st.session_state.managed_cvs has the currently edited CV
+    # 1. Check for Active CV
     current_cv_name = st.session_state.get('current_resume_name')
     if not current_cv_name or current_cv_name not in st.session_state.managed_cvs:
         st.warning("⚠️ **No Active CV Detected.** Please parse a resume or save a CV using the 'Resume Parsing' or 'CV Management' tabs before matching.")
         return
-        
-    st.success(f"Matching CV: **{current_cv_name}**")
     
-    st.markdown("#### Select Job Descriptions to Match Against")
+    cv_data = st.session_state.managed_cvs[current_cv_name]
+    st.success(f"Matching CV: **{cv_data.get('name', current_cv_name)}**")
     
-    # Mock JD data for display purposes
-    if not st.session_state.get('managed_jds'):
-        st.session_state.managed_jds = {
-            "JD_Data_Scientist_001": "Data Scientist Role - Focus on ML/NLP",
-            "JD_Python_Developer_002": "Senior Python Backend Developer",
-            "JD_Cloud_Architect_003": "AWS Cloud Architect/Engineer",
-            "JD_Frontend_React_004": "Mid-level Frontend Developer (React/Typescript)"
-        }
-        
+    # 2. Check for Saved JDs
     available_jds = list(st.session_state.managed_jds.keys())
 
     if not available_jds:
         st.info("No job descriptions found. Please use the **JD Management** tab to add JDs first.")
         return
 
-    selected_jds = st.multiselect(
+    st.markdown("#### Select Job Descriptions to Match Against")
+
+    # Use titles for display, but keys for selection logic
+    jd_titles = [st.session_state.managed_jds[key].get('title', key) for key in available_jds]
+    
+    selected_jd_titles = st.multiselect(
         "Choose the JDs you want to match against (Select at least one):",
-        options=available_jds,
+        options=jd_titles,
         key="selected_jds_for_match",
-        default=available_jds
+        default=jd_titles
     )
+
+    # Map selected titles back to their keys
+    selected_jd_keys = [key for key, title in zip(available_jds, jd_titles) if title in selected_jd_titles]
 
     st.markdown("---")
 
     if st.button("🚀 Compare CV and Rank Matches", type="primary", use_container_width=True):
-        if not selected_jds:
+        if not selected_jd_keys:
             st.error("Please select at least one Job Description to run the batch match.")
-        else:
-            st.info(f"Analyzing **{current_cv_name}** against {len(selected_jds)} Job Descriptions...")
-            # --- Mock Matching Results (Actual matching logic would go here) ---
-            st.success("✅ Batch Matching Complete!")
+            return
+
+        st.info(f"Analyzing **{current_cv_name}** against {len(selected_jd_keys)} Job Descriptions...")
+        
+        # --- Actual Batch Matching Execution (Mocked) ---
+        match_results = []
+        for jd_key in selected_jd_keys:
+            jd_data = st.session_state.managed_jds[jd_key]
             
-            # Mock results display
-            st.markdown("### Top Match Results (Mock)")
-            mock_results = [
-                ("JD_Python_Developer_002", "92%"),
-                ("JD_Data_Scientist_001", "78%"),
-                ("JD_Cloud_Architect_003", "65%")
-            ]
+            # Run the mock matching function
+            score, summary = mock_jd_match(cv_data, jd_data)
             
-            # Filter mock results to only include selected JDs
-            filtered_results = [
-                (jd, score) for jd, score in mock_results if jd in selected_jds
-            ]
+            match_results.append({
+                "Job Description": jd_data.get('title', jd_key),
+                "Match Score": score,
+                "Summary": summary,
+                "JD Key": jd_key,
+                "Sortable Score": float(score.strip('%')) 
+            })
             
-            if filtered_results:
-                st.table(
-                    data=[{"Job Description": jd, "Match Score": score} for jd, score in filtered_results],
-                    column_order=["Job Description", "Match Score"]
-                )
-            else:
-                st.warning("No matches could be generated for the selected JDs.")
+        # Sort results by score descending
+        match_results.sort(key=lambda x: x['Sortable Score'], reverse=True)
+
+        st.success("✅ Batch Matching Complete!")
+        
+        st.markdown("### Top Match Results (Ranked)")
+        
+        # Display the table of results
+        st.table([
+            {
+                "Job Description": res["Job Description"],
+                "Match Score": res["Match Score"],
+                "Match Summary": res["Summary"]
+            } 
+            for res in match_results
+        ])
+        
+        # Optional: Display details of the top match
+        st.markdown("---")
+        top_match = match_results[0]
+        st.markdown(f"#### Detail for Top Match: **{top_match['Job Description']}**")
+        st.json(st.session_state.managed_jds[top_match['JD Key']])
 
 
 # -------------------------
@@ -1097,7 +1246,7 @@ def candidate_dashboard():
 
     # --- Session State Initialization for Candidate ---
     if "managed_cvs" not in st.session_state: st.session_state.managed_cvs = {} 
-    if "managed_jds" not in st.session_state: st.session_state.managed_jds = {} 
+    if "managed_jds" not in st.session_state: st.session_state.managed_jds = {} # Initialized for JDs
     if "current_resume_name" not in st.session_state: st.session_state.current_resume_name = None 
     if "show_cv_output" not in st.session_state: st.session_state.show_cv_output = None 
     
