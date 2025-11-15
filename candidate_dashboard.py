@@ -669,7 +669,6 @@ def resume_parsing_tab():
     
     st.markdown("---")
 
-    # FIX APPLIED HERE
     process_button = st.button("✨ Parse and Load Uploaded File", type="primary", use_container_width=True)
 
     if process_button:
@@ -697,8 +696,10 @@ def resume_parsing_tab():
         if extracted_text.startswith("Error") or not extracted_text:
             st.error(f"Text Extraction Failed: {extracted_text}")
             # Store error string to prevent later attribute errors if logic fails to check
-            st.session_state.managed_cvs[f"ERROR_{file_name}_{datetime.now().strftime('%H%M')}"] = extracted_text
-            st.session_state.current_resume_name = None # Clear current resume if parsing fails
+            error_key = f"ERROR_{file_name}_{datetime.now().strftime('%H%M')}"
+            st.session_state.managed_cvs[error_key] = extracted_text
+            st.session_state.current_resume_name = error_key
+            st.session_state.show_cv_output = error_key
             return
             
         # Proceed with LLM parsing
@@ -711,13 +712,16 @@ def resume_parsing_tab():
             st.code(parsed_data.get('raw_output', 'No raw output available.'), language='text')
             # Store the error string instead of the dictionary
             error_key = f"ERROR_{file_name}_{datetime.now().strftime('%H%M')}"
-            st.session_state.managed_cvs[error_key] = "Parsing Error: " + parsed_data['error']
+            # Store the error as a string
+            st.session_state.managed_cvs[error_key] = "AI Parsing Error: " + parsed_data['error']
             st.session_state.current_resume_name = error_key # Set current resume to the error key
+            st.session_state.show_cv_output = error_key
             return
 
         # --- Success & Storage ---
         
         # Determine a unique key name for the new CV
+        # Check if parsed_data is a dictionary before using .get()
         candidate_name = parsed_data.get('name', 'Unknown_Candidate').replace(' ', '_')
         timestamp = datetime.now().strftime("%Y%m%d-%H%M")
         cv_key_name = f"{candidate_name}_{timestamp}"
@@ -729,6 +733,8 @@ def resume_parsing_tab():
         # FIXED: Ensure parsed_data is a dict before assigning to form state
         if isinstance(parsed_data, dict):
             # Set the parsed data to the manual form fields for potential editing
+            # This is where the original error occurred if parsed_data was a string.
+            # We now rely on the check above.
             st.session_state.form_name_value = parsed_data.get('name', '')
             st.session_state.form_email_value = parsed_data.get('email', '')
             st.session_state.form_phone_value = parsed_data.get('phone', '')
@@ -755,6 +761,7 @@ def resume_parsing_tab():
         
             st.success(f"✅ Successfully parsed and structured CV for **{candidate_name}**! Data loaded for editing.")
         else:
+            # Should not happen now due to error checks above, but kept as a final safety net
             st.error(f"❌ Internal Error: Parsed data for **{candidate_name}** is not a dictionary. Please check LLM output logic.")
 
         # Show the result in the display area
@@ -969,7 +976,7 @@ def cv_form_content():
                 )
     
     # -----------------------------
-    # 6. PROJECTS SECTION 
+    # 6. PROJECTS SECTION
     # -----------------------------
     st.markdown("#### 6. Projects")
     
@@ -1037,7 +1044,7 @@ def cv_form_content():
         generate_and_display_cv(st.session_state.show_cv_output)
         st.markdown("---")
 
-
+# --- CV MANAGEMENT TAB (With Guardrail Fix) ---
 def tab_cv_management():
     # Placeholder for the CV form content and display
     
