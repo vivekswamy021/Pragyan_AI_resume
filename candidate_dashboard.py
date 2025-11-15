@@ -63,7 +63,7 @@ def format_cv_to_html(cv_data, cv_name):
             <p><strong>Dates:</strong> {edu.get('dates', 'N/A')}</p>
         </div>
         """
-    
+
     def format_certifications(cert):
         return f"""
         <div class="entry">
@@ -239,6 +239,7 @@ def extract_content(file_type, file_content, file_name):
 def parse_cv_with_llm(text):
     """Sends resume text to the LLM for structured information extraction."""
     if text.startswith("Error") or not GROQ_API_KEY:
+        # Returning a dictionary with an error key is safer for subsequent checks
         return {"error": "Parsing error or API key missing or file content extraction failed.", "raw_output": text}
 
     prompt = f"""Extract the following information from the resume in structured JSON.
@@ -599,13 +600,11 @@ def generate_and_display_cv(cv_name):
         
     cv_data = st.session_state.managed_cvs[cv_name]
     
-    # FIX START: Robustly check for corrupted data/error string
+    # Check if cv_data is actually a dictionary before proceeding (FIXED: The core check)
     if not isinstance(cv_data, dict):
-        st.error(f"❌ **Error:** Stored data for CV **'{cv_name}'** is corrupted or failed to parse. Cannot display structured CV.")
-        st.markdown("#### Raw Stored Data:")
-        st.code(str(cv_data), language="text")
+        st.error(f"Error: Stored data for CV '{cv_name}' is corrupted or contains an error string. Please re-parse or re-save the CV.")
+        st.code(str(cv_data)) # Show the corrupted data
         return
-    # FIX END
         
     st.markdown(f"### 📄 CV View: **{cv_data.get('name', cv_name)}**")
     
@@ -697,77 +696,64 @@ def resume_parsing_tab():
         # Check for extraction errors
         if extracted_text.startswith("Error") or not extracted_text:
             st.error(f"Text Extraction Failed: {extracted_text}")
-            # Ensure an error key is created even for extraction failures
-            timestamp = datetime.now().strftime("%Y%m%d-%H%M")
-            error_key = f"ERROR_{file_name}_{timestamp}"
-            st.session_state.managed_cvs[error_key] = f"Extraction Error: {extracted_text}"
-            st.session_state.current_resume_name = error_key
-            st.session_state.show_cv_output = error_key
-            st.rerun() 
+            # Store error string to prevent later attribute errors if logic fails to check
+            st.session_state.managed_cvs[f"ERROR_{file_name}_{datetime.now().strftime('%H%M')}"] = extracted_text
             return
             
         # Proceed with LLM parsing
         with st.spinner("🧠 Sending to Groq LLM for structured parsing..."):
             parsed_data = parse_cv_with_llm(extracted_text)
         
-        # Determine a unique key name for the new CV
-        candidate_name = "Pasted_Resume"
-        if uploaded_file is not None:
-             candidate_name = file_name.rsplit('.', 1)[0]
-        
-        timestamp = datetime.now().strftime("%Y%m%d-%H%M")
-        cv_key_name = f"{candidate_name.replace(' ', '_')}_{timestamp}"
-
         # Check for parsing errors
         if "error" in parsed_data:
             st.error(f"AI Parsing Failed: {parsed_data['error']}")
             st.code(parsed_data.get('raw_output', 'No raw output available.'), language='text')
             # Store the error string instead of the dictionary
-            error_key = f"ERROR_{candidate_name.replace(' ', '_')}_{timestamp}"
-            st.session_state.managed_cvs[error_key] = "Parsing Error: " + parsed_data['error']
-            st.session_state.current_resume_name = error_key
-            st.session_state.show_cv_output = error_key
-            st.rerun()
+            st.session_state.managed_cvs[f"ERROR_{file_name}_{datetime.now().strftime('%H%M')}"] = "Parsing Error: " + parsed_data['error']
             return
 
         # --- Success & Storage ---
         
-        # Use the name found by the LLM if available
-        candidate_name_llm = parsed_data.get('name', candidate_name.replace('_', ' '))
-        # Regenerate key name using parsed name for better key structure
-        cv_key_name = f"{candidate_name_llm.replace(' ', '_')}_{timestamp}"
+        # Determine a unique key name for the new CV
+        candidate_name = parsed_data.get('name', 'Unknown_Candidate').replace(' ', '_')
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M")
+        cv_key_name = f"{candidate_name}_{timestamp}"
         
         # Store the new structured CV
         st.session_state.managed_cvs[cv_key_name] = parsed_data
         st.session_state.current_resume_name = cv_key_name
         
-        # Set the parsed data to the manual form fields for potential editing
-        st.session_state.form_name_value = parsed_data.get('name', '')
-        st.session_state.form_email_value = parsed_data.get('email', '')
-        st.session_state.form_phone_value = parsed_data.get('phone', '')
-        st.session_state.form_linkedin_value = parsed_data.get('linkedin', '')
-        st.session_state.form_github_value = parsed_data.get('github', '')
-        st.session_state.form_summary_value = parsed_data.get('summary', '')
-        
-        # Convert lists back to newline separated strings for text areas
-        if isinstance(parsed_data.get('skills'), list):
-            st.session_state.form_skills_value = "\n".join([str(s) for s in parsed_data['skills']])
-        else:
-             st.session_state.form_skills_value = ""
-
-        if isinstance(parsed_data.get('strength'), list):
-            st.session_state.form_strengths_input = "\n".join([str(s) for s in parsed_data['strength']])
-        else:
-             st.session_state.form_strengths_input = ""
+        # FIXED: Ensure parsed_data is a dict before assigning to form state
+        if isinstance(parsed_data, dict):
+            # Set the parsed data to the manual form fields for potential editing
+            st.session_state.form_name_value = parsed_data.get('name', '')
+            st.session_state.form_email_value = parsed_data.get('email', '')
+            st.session_state.form_phone_value = parsed_data.get('phone', '')
+            st.session_state.form_linkedin_value = parsed_data.get('linkedin', '')
+            st.session_state.form_github_value = parsed_data.get('github', '')
+            st.session_state.form_summary_value = parsed_data.get('summary', '')
             
-        # Assign structured lists directly
-        st.session_state.form_education = parsed_data.get('education', [])
-        st.session_state.form_experience = parsed_data.get('experience', [])
-        st.session_state.form_certifications = parsed_data.get('certifications', [])
-        st.session_state.form_projects = parsed_data.get('projects', [])
+            # Convert lists back to newline separated strings for text areas
+            if isinstance(parsed_data.get('skills'), list):
+                st.session_state.form_skills_value = "\n".join([str(s) for s in parsed_data['skills']])
+            else:
+                 st.session_state.form_skills_value = ""
+
+            if isinstance(parsed_data.get('strength'), list):
+                st.session_state.form_strengths_input = "\n".join([str(s) for s in parsed_data['strength']])
+            else:
+                 st.session_state.form_strengths_input = ""
+                
+            # Assign structured lists directly, ensuring defaults are used if keys are missing
+            st.session_state.form_education = parsed_data.get('education', [])
+            st.session_state.form_experience = parsed_data.get('experience', [])
+            st.session_state.form_certifications = parsed_data.get('certifications', [])
+            st.session_state.form_projects = parsed_data.get('projects', [])
         
-        st.success(f"✅ Successfully parsed and structured CV for **{candidate_name_llm}**!")
-        
+            st.success(f"✅ Successfully parsed and structured CV for **{candidate_name}**! Data loaded for editing.")
+        else:
+            st.error(f"❌ Internal Error: Parsed data for **{candidate_name}** is not a dictionary. Please check LLM output logic.")
+
         # Show the result in the display area
         st.session_state.show_cv_output = cv_key_name
         st.rerun() # Rerun to refresh the CV form and display with new data
@@ -828,10 +814,15 @@ def cv_form_content():
             default_date_from = date(2020, 1, 1)
             try:
                 # Attempt to get the latest experience date start
-                if st.session_state.form_experience:
+                if st.session_state.form_experience and isinstance(st.session_state.form_experience[-1], dict):
                     latest_exp_date = st.session_state.form_experience[-1]['dates'].split(' - ')[0]
-                    default_date_from = datetime.strptime(latest_exp_date, "%Y").date()
-            except:
+                    # Assuming the date format is just year (e.g., '2020')
+                    if len(latest_exp_date) == 4 and latest_exp_date.isdigit():
+                        default_date_from = datetime.strptime(latest_exp_date, "%Y").date()
+                    elif '-' in latest_exp_date: # Handle full date format if it was generated that way
+                        default_date_from = datetime.strptime(latest_exp_date.split('-')[0].strip(), "%Y").date()
+
+            except Exception:
                  pass
             
             new_exp_date_from = st.date_input("Date From (Start)", value=default_date_from, key="form_new_exp_date_from")
@@ -907,7 +898,7 @@ def cv_form_content():
             col_edu, col_rem = st.columns([0.8, 0.2])
             with col_edu:
                 if isinstance(entry, dict):
-                    st.code(f"{entry.get('degree', 'N/A')} at {entry.get('college', 'N/A')} ({entry.get('university', 'N/A')} - {entry.get('dates', 'N/A')})", language="text")
+                    st.code(f"{entry.get('degree', 'N/A')} at {entry.get('college', 'N/A')} ({entry.get('university', 'N/A')}) ({entry.get('dates', 'N/A')})", language="text")
                 else:
                     st.code(f"Corrupted Entry: {str(entry)}", language="text")
 
@@ -1239,11 +1230,11 @@ def batch_jd_match_tab():
     
     cv_data = st.session_state.managed_cvs[current_cv_name]
     
-    # Validate CV data type (Critical check before proceeding with matching logic)
+    # Validate CV data type (Critical check for 'str' object error)
     if not isinstance(cv_data, dict):
-        st.error(f"❌ **Error:** Current CV data is corrupted/unstructured and cannot be matched. Please re-parse/re-save the CV '{current_cv_name}'.")
+        st.error(f"❌ **Error: Current CV data is corrupted** (it's a string, not a dictionary). Please re-parse/re-save the CV '{current_cv_name}'.")
         st.code(str(cv_data), language="text")
-        return
+        return # STOP execution if data is corrupted
         
     st.success(f"Matching CV: **{cv_data.get('name', current_cv_name)}**")
     
@@ -1387,7 +1378,7 @@ def batch_jd_match_tab():
         st.markdown("### Detailed Reports")
         
         for res in match_results:
-            # Corrected line 1364 from previous fix
+            # This line was fixed in the previous iteration
             report_title = f"Rank {res['Rank']} | Report for {res['Job Description (Ranked)']} (Score: {res['Fit Score (out of 10)']}/10 | S: {res['Skills (%)']}% | E: {res['Experience (%)']}% | Edu: {res['Education (%)']}%)"
             
             with st.expander(report_title):
