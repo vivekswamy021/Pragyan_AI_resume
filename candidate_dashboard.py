@@ -636,7 +636,7 @@ def format_cv_to_markdown(cv_data, cv_name):
                 md += f"""
 ### **{proj.get('name', 'N/A')}**
 * *Description:* {proj.get('description', 'N/A')}
-* *Technologies:* {tech_str}
+* ***Technologies Used:*** {tech_str}
 {link_md}
 """
             else:
@@ -802,7 +802,7 @@ def add_certification_entry(name, title, given_by, received_by, course, date_val
 
 def add_project_entry(name, description, technologies, app_link, state_key='form_projects'):
     if not name or not description or not technologies:
-        st.error("Please fill in **Project Name**, **Description**, and **Technologies Used**.")
+        st.error("Please fill in **Project Name**, **Description**, and **Skills, Tools, or Technologies Used**.")
         return
         
     entry = {
@@ -856,7 +856,7 @@ def resume_parsing_tab():
     st.markdown("---")
     
     if not GROQ_API_KEY:
-        st.error("GROQ_API_KEY is missing. AI Parsing features are disabled.")
+        st.error("GROQ_API_KEY is missing. AI Parsing functions are disabled.")
         process_button = st.button("✨ Parse and Load Uploaded File", type="primary", use_container_width=True, disabled=True)
     else:
         process_button = st.button("✨ Parse and Load Uploaded File", type="primary", use_container_width=True)
@@ -1156,7 +1156,11 @@ def cv_form_content():
             
         col_tech, col_link = st.columns(2)
         with col_tech:
-            new_technologies = st.text_input("Technologies Used (Comma separated list, e.g., Python, SQL, Streamlit)", key="form_new_technologies")
+            # UPDATED LABEL HERE
+            new_technologies = st.text_input(
+                "Skills, Tools, or Technologies Used (Comma separated list, e.g., Python, SQL, Streamlit)", 
+                key="form_new_technologies"
+            )
         with col_link:
             new_app_link = st.text_input("App Link / Repository URL (Optional)", key="form_new_app_link")
 
@@ -1770,8 +1774,6 @@ def cover_letter_tab():
         )
         
     st.markdown("---")
-    
-    # RECIPIENT DETAILS REMOVED HERE
     
     # Define placeholder recipient details using JD title to guess company/role
     if selected_jd_key:
