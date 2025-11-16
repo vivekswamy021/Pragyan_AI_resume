@@ -1036,13 +1036,14 @@ def resume_parsing_tab():
         st.error("GROQ_API_KEY is missing. AI Parsing functions are disabled.")
         process_button = st.button("✨ Parse and Load Uploaded File", type="primary", use_container_width=True, disabled=True)
     else:
-        process_button = st.button("✨ Parse and Load Uploaded File", type="primary", use_container_width=True)
+        process_button = st.button("✨ Parse and Load CV Data", type="primary", use_container_width=True)
 
 
     if process_button:
         extracted_text = ""
         file_name = "Pasted_Resume"
         
+        # --- FIX: Robustly check for file or text ---
         if uploaded_file is not None:
             file_name = uploaded_file.name
             file_bytes = uploaded_file.getvalue()
@@ -1055,11 +1056,11 @@ def resume_parsing_tab():
             extracted_text = pasted_text.strip()
             
         else:
-            st.warning("Please upload a file or paste text content to proceed with parsing.")
+            st.warning("❌ Please upload a file or paste text content to proceed with parsing.")
             return
 
         if extracted_text.startswith("Error") or not extracted_text:
-            st.error(f"Text Extraction Failed: {extracted_text}")
+            st.error(f"❌ Text Extraction Failed: {extracted_text}")
             error_key = f"ERROR_{file_name}_{datetime.now().strftime('%H%M')}"
             st.session_state.managed_cvs[error_key] = "Extraction Error: " + extracted_text
             st.session_state.current_resume_name = error_key
@@ -1070,7 +1071,7 @@ def resume_parsing_tab():
             parsed_data = parse_cv_with_llm(extracted_text)
         
         if "error" in parsed_data:
-            st.error(f"AI Parsing Failed: {parsed_data['error']}")
+            st.error(f"❌ AI Parsing Failed: {parsed_data['error']}")
             st.code(parsed_data.get('raw_output', 'No raw output available.'), language='text')
             error_key = f"ERROR_{file_name}_{datetime.now().strftime('%H%M')}"
             st.session_state.managed_cvs[error_key] = "AI Parsing Error: " + parsed_data['error']
@@ -1117,6 +1118,7 @@ def resume_parsing_tab():
             st.error(f"❌ Internal Error: Parsed data for **{candidate_name}** is not a dictionary. Please check LLM output logic.")
 
         st.session_state.show_cv_output = cv_key_name
+        # --- FIX: Rerun to refresh all stateful components (like the form fields) ---
         st.rerun() 
 
 # --- CORE CV FORM FUNCTION ---
