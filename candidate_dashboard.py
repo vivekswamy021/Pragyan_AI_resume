@@ -1251,7 +1251,7 @@ def tab_cv_management():
 # JD MANAGEMENT TAB CONTENT (UPDATED TO VIEW/PARSE LAST ADDED JD)
 # -------------------------
 
-def process_jd_file(file, jd_type):
+def process_jd_file(file):
     """Handles processing a single JD file."""
     if not GROQ_API_KEY:
         return False, "AI Parsing disabled: GROQ_API_KEY not set."
@@ -1313,7 +1313,7 @@ def process_jd_url(url):
     
     # --- MOCKING: Simulate fetching and parsing content from a LinkedIn URL ---
     mock_title = "Senior Data Scientist (Mocked from LinkedIn)"
-    mock_text = f"This is a mock JD for a {mock_title} at a large tech company. Requirements include Python, SQL, AWS, and strong communication skills. Must have 5+ years experience and a Masters degree."
+    mock_text = f"This is a mock JD for a {mock_title} at a large tech company. Requirements include Python, SQL, AWS, and strong communication skills. Must have 5+ years experience and a Masters degree. The URL entered was: {url}"
     
     parsed_data = parse_jd_with_llm(mock_text, jd_title=mock_title)
     
@@ -1385,6 +1385,9 @@ def jd_management_tab():
     if not GROQ_API_KEY:
          st.error("⚠️ GROQ_API_KEY is missing. AI Parsing features for JDs are disabled.")
     
+    # Placeholder for general success/error messages
+    message_placeholder = st.empty()
+    
     st.markdown("#### 1. Select JD Type")
     jd_type = st.radio(
         "Choose JD scope:",
@@ -1408,13 +1411,19 @@ def jd_management_tab():
 
     st.markdown("---")
     
-    # Use a placeholder for messages
-    message_placeholder = st.empty()
+    # Function to handle post-processing (error/success messages and rerun)
+    def handle_jd_processing_result(success, message, is_multiple=False):
+        if success:
+            st.session_state.processing_message = (True, message)
+        else:
+            st.session_state.processing_message = (False, message)
+        st.rerun() # Rerun to ensure the message and latest JD view are updated
+
     
     if jd_method == "Upload File":
         st.markdown("##### Upload JD File(s)")
         
-        with st.form("jd_upload_form"):
+        with st.form("jd_upload_form", clear_on_submit=True):
             uploaded_jds = st.file_uploader(
                 "Drag and drop file(s) here",
                 type=['pdf', 'txt', 'docx'],
@@ -1427,30 +1436,27 @@ def jd_management_tab():
 
             if upload_button:
                 if not uploaded_jds:
-                    message_placeholder.warning("Please upload at least one JD file.")
+                    handle_jd_processing_result(False, "Please upload at least one JD file.")
+                    return
                 elif not GROQ_API_KEY:
-                    message_placeholder.error("AI Parsing disabled. Cannot process JD.")
+                    handle_jd_processing_result(False, "AI Parsing disabled. Cannot process JD.")
+                    return
+
+                files_to_process = uploaded_jds if isinstance(uploaded_jds, list) else [uploaded_jds]
+                
+                with st.spinner(f"Processing {len(files_to_process)} JD file(s)..."):
+                    # Process files and collect results
+                    results = [process_jd_file(f) for f in files_to_process]
+                
+                success_count = sum(r[0] for r in results)
+                
+                if success_count > 0:
+                    handle_jd_processing_result(True, f"✅ Finished processing: {success_count} JD(s) successfully saved. See details below.")
                 else:
-                    files_to_process = uploaded_jds if isinstance(uploaded_jds, list) else [uploaded_jds]
-                    
-                    with st.spinner(f"Processing {len(files_to_process)} JD file(s)..."):
-                        results = [process_jd_file(f, jd_type) for f in files_to_process]
-                    
-                    success_count = sum(r[0] for r in results)
-                    if success_count > 0:
-                        message_placeholder.success(f"✅ Finished processing: {success_count} success(es).")
-                        st.markdown("---")
-                        # Display individual results
-                        for success, message in results:
-                            if success:
-                                st.text(message)
-                            else:
-                                st.error(message)
-                        st.rerun() # Rerun to update the status and details view
-                    else:
-                        message_placeholder.error("❌ All JD processing failed. See details below.")
-                        for _, message in results:
-                            st.error(message)
+                    error_messages = "\n".join([f"❌ {r[1]}" for r in results if not r[0]])
+                    handle_jd_processing_result(False, f"❌ All JD processing failed. Errors:\n{error_messages}")
+                    return
+
         
     elif jd_method == "Paste Text":
         st.markdown("##### Paste JD Text")
@@ -1463,18 +1469,16 @@ def jd_management_tab():
         
         if st.button("Add JD", type="primary", use_container_width=True, key="paste_jd_button"):
             if not pasted_jd_text.strip():
-                message_placeholder.warning("Please paste the JD text.")
+                handle_jd_processing_result(False, "Please paste the JD text.")
+                return
             elif not GROQ_API_KEY:
-                 message_placeholder.error("AI Parsing disabled. Cannot process JD.")
+                 handle_jd_processing_result(False, "AI Parsing disabled. Cannot process JD.")
+                 return
             else:
                 with st.spinner("Processing pasted JD text..."):
                     success, message = process_jd_text(pasted_jd_text.strip())
                 
-                if success:
-                    message_placeholder.success(message)
-                    st.rerun() # Rerun to update the status and details view
-                else:
-                    message_placeholder.error(message)
+                handle_jd_processing_result(success, message)
 
     elif jd_method == "LinkedIn URL":
         st.markdown("##### Enter LinkedIn URL (Mock Feature)")
@@ -1487,23 +1491,30 @@ def jd_management_tab():
         
         if st.button("Fetch and Add JD (Mock)", type="primary", use_container_width=True, key="url_jd_button"):
             if not linkedin_url.strip():
-                message_placeholder.warning("Please enter a LinkedIn Job URL.")
+                handle_jd_processing_result(False, "Please enter a LinkedIn Job URL.")
+                return
             elif not GROQ_API_KEY:
-                 message_placeholder.error("AI Parsing disabled. Cannot process JD.")
+                 handle_jd_processing_result(False, "AI Parsing disabled. Cannot process JD.")
+                 return
             else:
                 with st.spinner("MOCKING: Simulating fetch and parsing of JD from URL..."):
                     success, message = process_jd_url(linkedin_url.strip())
                 
-                if success:
-                    message_placeholder.success(message)
-                    st.rerun() # Rerun to update the status and details view
-                else:
-                    message_placeholder.error(message)
+                handle_jd_processing_result(success, message)
                     
     
     # --- 3. Saved JD Status and Latest JD View ---
     
     st.markdown(f"---")
+    
+    # Display the result message from the last operation
+    if st.session_state.get('processing_message'):
+        success, message = st.session_state.processing_message
+        if success:
+            message_placeholder.success(message)
+        else:
+            message_placeholder.error(message)
+        del st.session_state.processing_message # Clear the message after display
     
     jd_keys = list(st.session_state.managed_jds.keys())
     jd_count = len(jd_keys)
@@ -1513,9 +1524,9 @@ def jd_management_tab():
         
         if 'latest_added_jd_key' in st.session_state and st.session_state.latest_added_jd_key in st.session_state.managed_jds:
             latest_key = st.session_state.latest_added_jd_key
-            st.markdown(f"#### Last Added JD Details: {st.session_state.managed_jds[latest_key].get('title', latest_key)}")
+            st.markdown(f"#### Last Processed JD Details: {st.session_state.managed_jds[latest_key].get('title', latest_key)}")
             
-            # Display details of the last added JD
+            # Display details of the last added JD, including full text in an expander
             display_jd_details(latest_key, display_full_text=True)
 
         if st.button("🗑️ Clear All Saved JDs", key="clear_all_jds", on_click=clear_all_jds, type="secondary"):
@@ -1974,7 +1985,9 @@ def filter_jd_tab():
         search_roles = {r.strip().lower() for r in filter_role_input.split(',') if r.strip()}
         
         # Only run filter logic if *any* filter besides 'All Job Types' is active
-        if not search_skills and (filter_job_type == 'All Job Types') and not search_roles:
+        is_filter_active = search_skills or (filter_job_type != 'All Job Types') or search_roles
+        
+        if not is_filter_active:
             st.warning("Please enter or select at least one filter criterion (excluding 'All Job Types') to apply.")
             st.session_state.filtered_jds = []
             st.session_state.show_jd_details_from_filter = False
@@ -2105,7 +2118,7 @@ def candidate_dashboard():
     col_header, col_logout = st.columns([4, 1])
     with col_logout:
         if st.button("🚪 Log Out", use_container_width=True):
-            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output', 'form_name_value', 'form_email_value', 'form_phone_value', 'form_linkedin_value', 'form_github_value', 'form_summary_value', 'form_skills_value', 'form_strengths_input', 'form_cv_key_name', 'resume_uploader', 'resume_paster', 'jd_type_select', 'jd_method_select', 'jd_uploader', 'jd_paster', 'jd_linkedin_url', 'managed_jds', 'selected_jds_for_match', 'selected_jd_key', 'filter_skills_input', 'filter_min_skills', 'filter_job_type_select_filter_tab', 'filter_job_type_default', 'filter_role_input', 'filtered_jds', 'show_jd_details_from_filter', 'last_cover_letter', 'cl_cv_name', 'cl_jd_title', 'latest_added_jd_key']
+            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output', 'form_name_value', 'form_email_value', 'form_phone_value', 'form_linkedin_value', 'form_github_value', 'form_summary_value', 'form_skills_value', 'form_strengths_input', 'form_cv_key_name', 'resume_uploader', 'resume_paster', 'jd_type_select', 'jd_method_select', 'jd_uploader', 'jd_paster', 'jd_linkedin_url', 'managed_jds', 'selected_jds_for_match', 'selected_jd_key', 'filter_skills_input', 'filter_min_skills', 'filter_job_type_select_filter_tab', 'filter_job_type_default', 'filter_role_input', 'filtered_jds', 'show_jd_details_from_filter', 'last_cover_letter', 'cl_cv_name', 'cl_jd_title', 'latest_added_jd_key', 'processing_message']
             for key in keys_to_delete:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -2125,6 +2138,7 @@ def candidate_dashboard():
     if "filtered_jds" not in st.session_state: st.session_state.filtered_jds = None 
     if "show_jd_details_from_filter" not in st.session_state: st.session_state.show_jd_details_from_filter = False 
     if "latest_added_jd_key" not in st.session_state: st.session_state.latest_added_jd_key = None # NEW state for latest JD key
+    if "processing_message" not in st.session_state: st.session_state.processing_message = None # NEW state for JD processing messages
     
     # NEW Cover Letter State
     if "last_cover_letter" not in st.session_state: st.session_state.last_cover_letter = None
