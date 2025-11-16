@@ -221,6 +221,16 @@ def parse_jd_with_llm(text):
     except Exception as e:
         parsed = {"error": f"LLM parsing error: {e}", "raw_text": text}
 
+    # Ensure critical fields have N/A fallback if missing after parsing
+    for field in ['title', 'company', 'location', 'experience_level', 'qualifications', 'responsibilities', 'benefits']:
+         if field not in parsed:
+              parsed[field] = 'N/A'
+         elif isinstance(parsed[field], list) and not parsed[field]:
+              # If the key exists but is an empty list, often it's better to keep it an empty list for list display
+               pass
+         elif not parsed[field]:
+              parsed[field] = 'N/A'
+    
     return parsed
 # --- END JD PARSING ---
 
@@ -256,7 +266,13 @@ def mock_jd_match(cv_data, jd_data):
              cv_skills.update(skill.lower().strip() for item in s for skill in str(item).split(',') if skill.strip())
 
     # Education/Qualification Preparation
-    jd_qualifications = {q.lower() for q in jd_data.get('qualifications', ['b.tech']) if isinstance(q, str)}
+    # Ensure qualifications is a list before attempting set comprehension
+    jd_qualifications_raw = jd_data.get('qualifications', ['b.tech'])
+    if not isinstance(jd_qualifications_raw, list):
+        jd_qualifications_raw = [str(jd_qualifications_raw)] if jd_qualifications_raw != 'N/A' else ['b.tech']
+        
+    jd_qualifications = {q.lower() for q in jd_qualifications_raw if isinstance(q, str) and q != 'n/a'}
+    
     cv_education = [e.get('degree', '').lower() for e in cv_data.get('education', []) if isinstance(e, dict)]
     cv_certifications = [c.get('name', '').lower() for c in cv_data.get('certifications', []) if isinstance(c, dict)]
     
@@ -302,7 +318,7 @@ def mock_jd_match(cv_data, jd_data):
                  education_strengths.append(f"The candidate holds a certification relevant to the requirement: {jd_qual.title()}.")
                  found = True
 
-            if not found and 'certification' not in jd_qual and 'degree' not in jd_qual:
+            if not found and 'certification' not in jd_qual and 'degree' not in jd_qual and jd_qual not in ['n/a']:
                  education_gaps.append(f"The candidate does not clearly mention a required qualification: {jd_qual.title()}.")
 
         if required_count > 0:
@@ -485,8 +501,7 @@ def format_cv_to_html(cv_data, cv_name):
         return f"""
         <div class="entry">
             <p><strong>{cert.get('name', 'N/A')}</strong> - {cert.get('title', 'N/A')}</p>
-            <p><em>Issued by:</em> {cert.get('given_by', 'N/A')}</p>
-            <p><em>Date:</em> {cert.get('date_received', 'N/A')}</p>
+            <p><em>Issued by:</em> {cert.get('given_by', 'N/A')} | <em>Date:</em> {cert.get('date_received', 'N/A')}</p>
         </div>
         """
 
@@ -802,7 +817,6 @@ def clear_all_jds():
     st.session_state.managed_jds = {}
     st.success("All managed Job Descriptions have been cleared.")
 
-# --- FIX: Updated display_jd_details for robust list handling ---
 def display_jd_details(jd_key):
     """Displays the structured data of a single JD in a clean format."""
     if jd_key not in st.session_state.managed_jds:
@@ -825,13 +839,17 @@ def display_jd_details(jd_key):
 
     # Helper function to display lists robustly
     def safe_display_list(data, default_message="N/A"):
+        # Check if the data is a list and not empty
         if isinstance(data, list) and data:
-            # Ensure each item is a string, handling dicts/non-strings gracefully
-            list_items = [str(item) for item in data if item and str(item).strip()]
+            # Ensure each item is a string, handling dicts/non-strings gracefully and filtering N/A entries
+            list_items = [str(item) for item in data if item and str(item).strip() and str(item).lower().strip() != 'n/a']
             if list_items:
                 st.markdown("\n".join([f"* {s}" for s in list_items]))
             else:
                 st.markdown(f"*{default_message}*")
+        # Check if the data is a single non-N/A string
+        elif isinstance(data, str) and data.lower().strip() != 'n/a':
+             st.markdown(f"*{data}*")
         else:
             st.markdown(f"*{default_message}*")
 
@@ -841,6 +859,7 @@ def display_jd_details(jd_key):
         safe_display_list(jd_data.get('required_skills'))
     with col_qual:
         st.markdown("**Qualifications:**")
+        # Qualifications might be a string (N/A) or a list. Use get and rely on safe_display_list
         safe_display_list(jd_data.get('qualifications'))
 
     st.subheader("Responsibilities")
@@ -1475,7 +1494,16 @@ def jd_management_tab():
                 title = jd_data.get('title', 'N/A')
                 company = jd_data.get('company', 'N/A')
                 
-                with st.expander(f"**{title}** at {company} ({jd_key})"):
+                # --- FIX: Better display title for N/A JDs ---
+                display_title = title
+                if title == 'N/A':
+                    display_title = f"Untitled JD at {company} ({jd_key.split('_')[-1]})"
+                elif company != 'N/A':
+                    display_title = f"**{title}** at {company}"
+                else:
+                    display_title = f"**{title}** ({jd_key.split('_')[-1]})"
+
+                with st.expander(display_title):
                     display_jd_details(jd_key)
             else:
                 st.error(f"Corrupted Entry: {jd_key} - {str(jd_data)}")
@@ -1637,7 +1665,6 @@ def batch_jd_match_tab():
 
 @st.cache_data(show_spinner="✍️ Generating personalized cover letter with Groq LLM...")
 def generate_cover_letter_llm(cv_data, jd_data, recipient_info):
-    # ... (Content remains unchanged) ...
     """
     Generates a cover letter based on CV and JD.
     
