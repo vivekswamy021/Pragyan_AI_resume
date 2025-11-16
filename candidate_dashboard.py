@@ -1248,7 +1248,7 @@ def tab_cv_management():
     cv_form_content()
 
 # -------------------------
-# JD MANAGEMENT TAB CONTENT (FIXED: Upload file logic wrapped in st.form)
+# JD MANAGEMENT TAB CONTENT (MODIFIED TO REMOVE SAVED JD LIST AND SHOW ONLY LAST ADDED JD)
 # -------------------------
 
 def process_jd_file(file, jd_type):
@@ -1256,23 +1256,27 @@ def process_jd_file(file, jd_type):
     file_name = file.name
     file_bytes = file.getvalue()
     file_type = get_file_type(file_name)
-    jd_key = file_name.replace('.', '_').replace(' ', '_').replace('-', '_') + "_" + datetime.now().strftime("%H%M")
+    jd_key = file_name.replace('.', '_').replace(' ', '_').replace('-', '_') + "_" + datetime.now().strftime("%H%M%S")
     
     extracted_text = extract_content(file_type, file_bytes, file_name)
     
     if extracted_text.startswith("Error"):
         st.session_state.managed_jds[jd_key] = f"Extraction Error: Failed to read file content ({file_type})."
-        return False, f"Extraction Failed for {file_name}: {extracted_text}"
+        return False, f"Extraction Failed for {file_name}: {extracted_text}", None
         
     parsed_data = parse_jd_with_llm(extracted_text, jd_title=file_name)
     
     if "error" in parsed_data:
         st.session_state.managed_jds[jd_key] = f"AI Parsing Error: {parsed_data['error']}"
-        return False, f"AI Parsing Failed for {file_name}: {parsed_data['error']}"
+        return False, f"AI Parsing Failed for {file_name}: {parsed_data['error']}", None
     
     st.session_state.managed_jds[jd_key] = parsed_data
     st.session_state.managed_jds[jd_key]['raw_text'] = extracted_text
-    return True, f"Successfully parsed and saved JD **{jd_key}** (Title: {parsed_data.get('title', 'N/A')})"
+    
+    # Store the parsed job description text so it can be viewed in detail
+    st.session_state.managed_jds[jd_key]['parsed_text_preview'] = json.dumps(parsed_data, indent=2)
+
+    return True, f"Successfully parsed and saved JD **{jd_key}** (Title: {parsed_data.get('title', 'N/A')})", jd_key
 
 def process_jd_text(text):
     """Handles processing pasted JD text."""
@@ -1282,11 +1286,15 @@ def process_jd_text(text):
     
     if "error" in parsed_data:
         st.session_state.managed_jds[jd_key] = f"AI Parsing Error: {parsed_data['error']}"
-        return False, f"AI Parsing Failed: {parsed_data['error']}"
+        return False, f"AI Parsing Failed: {parsed_data['error']}", None
         
     st.session_state.managed_jds[jd_key] = parsed_data
     st.session_state.managed_jds[jd_key]['raw_text'] = text
-    return True, f"Successfully parsed and saved JD **{jd_key}** (Title: {parsed_data.get('title', 'N/A')})"
+    
+    # Store the parsed job description text so it can be viewed in detail
+    st.session_state.managed_jds[jd_key]['parsed_text_preview'] = json.dumps(parsed_data, indent=2)
+
+    return True, f"Successfully parsed and saved JD **{jd_key}** (Title: {parsed_data.get('title', 'N/A')})", jd_key
 
 def clear_all_jds():
     """Callback to clear all JDs."""
@@ -1295,33 +1303,42 @@ def clear_all_jds():
     st.session_state.selected_jds_for_match = [] # Clear batch selection on JD clear
     st.toast("All saved JDs cleared!")
 
-# Modified function: REMOVED RAW TEXT TAB/DISPLAY
+# Modified function to include RAW TEXT view for detailed feedback
 def display_jd_details(key):
-    """Displays the details of the selected JD (Structured Summary ONLY)."""
+    """Displays the details of the selected JD (Structured Summary and Raw Text)."""
     jd_data = st.session_state.managed_jds.get(key)
     
     if not jd_data or isinstance(jd_data, str):
         st.error(f"Error: JD '{key}' data is corrupted or missing.")
         return
 
-    st.markdown(f"### JD Details: **{jd_data.get('title', 'N/A')}**")
+    st.markdown(f"### 💼 JD View: **{jd_data.get('title', 'N/A')}**")
+    st.caption(f"JD Key: `{key}`")
     
-    st.markdown("#### Structured Summary")
-    st.markdown(f"**Job Title:** {jd_data.get('title', 'N/A')}")
-    st.markdown(f"**Experience Level:** {jd_data.get('experience_level', 'N/A')}")
-    
-    st.markdown("#### Required Skills")
-    st.markdown("* " + "\n* ".join(jd_data.get('required_skills', ['N/A'])))
+    tab_summary, tab_raw = st.tabs(["Structured Summary", "Raw Text (Original Upload)"])
 
-    st.markdown("#### Qualifications")
-    st.markdown("* " + "\n* ".join(jd_data.get('qualifications', ['N/A'])))
-    
-    st.markdown("#### Responsibilities")
-    st.markdown("* " + "\n* ".join(jd_data.get('responsibilities', ['N/A'])))
-    
-    if st.button("⬅️ Hide Details", key="hide_jd_details"):
+    with tab_summary:
+        st.markdown(f"**Job Title:** {jd_data.get('title', 'N/A')}")
+        st.markdown(f"**Experience Level:** {jd_data.get('experience_level', 'N/A')}")
+        
+        st.markdown("#### Required Skills")
+        st.markdown("* " + "\n* ".join(jd_data.get('required_skills', ['N/A'])))
+
+        st.markdown("#### Qualifications")
+        st.markdown("* " + "\n* ".join(jd_data.get('qualifications', ['N/A'])))
+        
+        st.markdown("#### Responsibilities")
+        st.markdown("* " + "\n* ".join(jd_data.get('responsibilities', ['N/A'])))
+
+    with tab_raw:
+        if jd_data.get('raw_text'):
+            st.text_area("Original Job Description Text", jd_data['raw_text'], height=500)
+        else:
+            st.warning("Original raw text not saved for this entry.")
+        
+    st.markdown("---")
+    if st.button("🔄 Clear Display", key="hide_jd_details_manager"):
         st.session_state.selected_jd_key = None
-        # Also unset the filter flag if coming from there
         st.session_state.show_jd_details_from_filter = False
         st.rerun()
 
@@ -1352,41 +1369,44 @@ def jd_management_tab():
 
     st.markdown("---")
     
+    # --- Initialize Last Added JD Key if it doesn't exist ---
+    if "last_added_jd_key" not in st.session_state: st.session_state.last_added_jd_key = None
+    
     if jd_method == "Upload File":
         st.markdown("##### Upload JD File(s)")
         
-        # --- FIX APPLIED: Wrap uploader and button in st.form ---
         with st.form("jd_upload_form"):
             uploaded_jds = st.file_uploader(
                 "Drag and drop file(s) here",
                 type=['pdf', 'txt', 'docx'],
                 accept_multiple_files=(jd_type == "Multiple JD"),
-                key="jd_uploader_in_form" # Use a new key for the uploader inside the form
+                key="jd_uploader_in_form"
             )
             st.caption("Limit 200MB per file • PDF, TXT, DOCX")
             
-            # Use st.form_submit_button to process the uploaded files
             upload_button = st.form_submit_button("Add JD(s)", type="primary", use_container_width=True, key="upload_jd_button")
 
             if upload_button:
                 if uploaded_jds:
                     files_to_process = uploaded_jds if isinstance(uploaded_jds, list) else [uploaded_jds]
+                    last_successful_key = None
                     
                     with st.spinner(f"Processing {len(files_to_process)} JD file(s)..."):
-                        results = [process_jd_file(f, jd_type) for f in files_to_process]
+                        for f in files_to_process:
+                            success, message, key = process_jd_file(f, jd_type)
+                            if success:
+                                st.text(f"✅ {message}")
+                                last_successful_key = key
+                            else:
+                                st.error(f"❌ {message}")
                     
-                    success_count = sum(r[0] for r in results)
-                    st.success(f"✅ Finished processing: {success_count} success(es).")
-                    for success, message in results:
-                        if success:
-                            st.text(message)
-                        else:
-                            st.error(message)
-                    # Force a re-run to refresh the "Saved Job Descriptions" list
+                    if last_successful_key:
+                        st.session_state.selected_jd_key = last_successful_key
+                        st.session_state.show_jd_details_from_filter = True # Use this flag to control the display
+                    
                     st.rerun() 
                 else:
                     st.warning("Please upload at least one JD file.")
-        # --- END FIX ---
         
     elif jd_method == "Paste Text":
         st.markdown("##### Paste JD Text")
@@ -1400,11 +1420,12 @@ def jd_management_tab():
         if st.button("Add JD", type="primary", use_container_width=True, key="paste_jd_button"):
             if pasted_jd_text.strip():
                 with st.spinner("Processing pasted JD text..."):
-                    success, message = process_jd_text(pasted_jd_text.strip())
+                    success, message, key = process_jd_text(pasted_jd_text.strip())
                 
                 if success:
                     st.success(message)
-                    # --- FIX APPLIED: Rerun to refresh the saved JDs list ---
+                    st.session_state.selected_jd_key = key
+                    st.session_state.show_jd_details_from_filter = True # Use this flag to control the display
                     st.rerun() 
                 else:
                     st.error(message)
@@ -1430,54 +1451,20 @@ def jd_management_tab():
                 st.warning("Please enter a LinkedIn Job URL.")
 
     st.markdown("---")
-    st.markdown("#### 3. Saved Job Descriptions")
     
-    if st.session_state.managed_jds:
-        jd_keys = [k for k, v in st.session_state.managed_jds.items() if isinstance(v, dict)]
-        error_keys = [k for k, v in st.session_state.managed_jds.items() if isinstance(v, str)]
-        
-        st.button("🗑️ Clear All JDs", key="clear_all_jds", on_click=clear_all_jds)
-
-        # Only show details if selected_jd_key is set AND we are NOT coming from the filter tab's detail view
-        # This prevents the filter tab from showing multiple detail views simultaneously.
-        is_showing_details_from_filter = st.session_state.get('show_jd_details_from_filter', False)
-        if st.session_state.get('selected_jd_key') and not is_showing_details_from_filter:
-            display_jd_details(st.session_state.selected_jd_key)
-        else:
-            if jd_keys:
-                st.markdown("##### Select a JD to View Details:")
-                
-                max_cols = 3 
-                cols = st.columns(max_cols) 
-
-                for i, key in enumerate(jd_keys):
-                    jd_data = st.session_state.managed_jds[key]
-                    title = jd_data.get('title', 'N/A')
-                    
-                    with cols[i % max_cols]:
-                        with st.container(border=True):
-                            st.markdown(f"**{i+1}. {title}**")
-                            skills_preview = ', '.join(jd_data.get('required_skills', ['No skills listed'])[:2])
-                            if len(jd_data.get('required_skills', [])) > 2:
-                                skills_preview += '...'
-                                
-                            st.caption(f"Key: `{key}` | Skills: {skills_preview}")
-
-                            if st.button("👁️ View Details", key=f"view_jd_btn_{key}", use_container_width=True):
-                                st.session_state.selected_jd_key = key
-                                st.session_state.show_jd_details_from_filter = False # Ensure filter flag is off
-                                st.rerun()
-            
-            if error_keys:
-                 st.error("⚠️ The following keys contain corrupted or failed parsing data and cannot be displayed structured details:")
-                 st.code("\n".join(error_keys), language='text')
-
-            if not jd_keys and not error_keys:
-                st.info("No JDs saved yet. Add one above to enable batch matching.")
-                
+    # --- Display of the Last Added JD (replacing the 'Saved Job Descriptions' section) ---
+    if st.session_state.get('selected_jd_key') and st.session_state.get('show_jd_details_from_filter'):
+        st.markdown("#### Latest Added Job Description Details")
+        display_jd_details(st.session_state.selected_jd_key)
     else:
-        st.info("No JDs saved yet. Add one above to enable batch matching.")
-
+        st.info("The last added Job Description details will appear here after you click 'Add JD(s)' or 'Add JD'.")
+        
+    # Optional: Display count of saved JDs to confirm they are still being saved
+    jd_keys = [k for k, v in st.session_state.managed_jds.items() if isinstance(v, dict)]
+    if jd_keys:
+        st.caption(f"({len(jd_keys)} JDs are currently saved for use in other tabs.)")
+        if st.button("🗑️ Clear All Saved JDs", key="clear_all_jds_bottom", on_click=clear_all_jds):
+             st.rerun()
 
 # -------------------------
 # BATCH JD MATCH TAB CONTENT (UPDATED CV SELECTION & REPORT TABLE)
