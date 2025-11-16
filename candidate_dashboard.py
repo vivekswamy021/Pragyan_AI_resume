@@ -348,7 +348,8 @@ def mock_jd_match(cv_data, jd_data):
         top_missing = list(missing_skills)[:3]
         skills_gaps.append(f"The resume is missing key required skills like **{', '.join([s.title() for s in top_missing])}**.")
         if len(missing_skills) > 3:
-             skills_gaps[-1] += f" (and {len(missing_skills) - 3} other required skills)."}
+            # FIX: Removed the unmatched '}' here
+            skills_gaps[-1] += f" (and {len(missing_skills) - 3} other required skills)."
              
     # Placeholder for soft skills/responsibilities gaps (mocked)
     if "communication" in jd_skills and "communication" not in cv_skills:
@@ -1767,17 +1768,21 @@ def cover_letter_tab():
     
     if not selected_cv_key:
         st.warning("⚠️ **No CV uploaded/pasted in the 'Resume Parsing' tab.** Please upload a CV there first.")
-        return
+        # Ensure jd selection is disabled if no CV is found
+        selected_jd_key = None
+        jd_keys_valid = {}
     else:
         st.info(f"Automatically selected CV: **{cv_data.get('name', 'N/A')}**")
+        jd_keys_valid = {k: v.get('title', k) for k, v in st.session_state.managed_jds.items() if isinstance(v, dict)}
+
         
     st.markdown("---")
         
     # --- JD Selection Section ---
-    jd_keys_valid = {k: v.get('title', k) for k, v in st.session_state.managed_jds.items() if isinstance(v, dict)}
-
+    
     if not jd_keys_valid:
         st.warning("Please ensure you have at least **one valid JD** saved in the 'JD Management' tab.")
+        selected_jd_key = None
         return
 
     st.markdown("#### 2. Select Target Job Description")
@@ -1785,7 +1790,8 @@ def cover_letter_tab():
         "Select Job Description",
         options=list(jd_keys_valid.keys()),
         format_func=lambda k: jd_keys_valid[k],
-        key="cl_jd_select"
+        key="cl_jd_select",
+        disabled=not selected_cv_key # Disable JD selection if CV is missing
     )
         
     st.markdown("---")
@@ -1808,12 +1814,13 @@ def cover_letter_tab():
         "✨ Generate Personalized Cover Letter",
         type="primary",
         use_container_width=True,
-        key="cl_generate_button"
+        key="cl_generate_button",
+        disabled=not (selected_cv_key and selected_jd_key) # Ensure both CV and JD are selected
     )
     
     st.markdown("---")
 
-    if generate_button:
+    if generate_button and selected_cv_key and selected_jd_key:
         # cv_data is already set from the auto-selection logic
         jd_data = st.session_state.managed_jds.get(selected_jd_key)
         
@@ -1825,6 +1832,7 @@ def cover_letter_tab():
         st.session_state.last_cover_letter = cl_text
         st.session_state.cl_cv_name = cv_data.get('name', 'Candidate')
         st.session_state.cl_jd_title = jd_data.get('title', 'Role')
+        st.session_state.cl_selected_jd_key = selected_jd_key # Save key for download function
 
         if cl_text.startswith("AI Generation Error"):
              st.error(cl_text)
@@ -1836,6 +1844,18 @@ def cover_letter_tab():
         cv_name = st.session_state.cl_cv_name
         jd_title = st.session_state.cl_jd_title
         
+        # Use the stored keys for download data retrieval
+        dl_cv_key = parsing_cv_items[-1][0] if parsing_cv_items else None
+        dl_jd_key = st.session_state.get('cl_selected_jd_key', selected_jd_key) 
+        
+        if dl_cv_key and dl_jd_key:
+            cv_dl_data = st.session_state.managed_cvs.get(dl_cv_key, {})
+            jd_dl_data = st.session_state.managed_jds.get(dl_jd_key, {})
+        else:
+            # Fallback for error state
+            cv_dl_data = {}
+            jd_dl_data = {}
+
         st.markdown(f"### Generated Cover Letter for **{jd_title}**")
         st.markdown("---")
         
@@ -1844,9 +1864,6 @@ def cover_letter_tab():
         st.markdown("---")
         
         # Download options
-        cv_dl_data = st.session_state.managed_cvs.get(selected_cv_key, {})
-        jd_dl_data = st.session_state.managed_jds.get(selected_jd_key, {})
-        
         html_output = format_cl_to_html(cl_text, cv_dl_data, jd_dl_data)
         
         col_dl_html, col_dl_txt = st.columns(2)
@@ -2052,7 +2069,7 @@ def candidate_dashboard():
     col_header, col_logout = st.columns([4, 1])
     with col_logout:
         if st.button("🚪 Log Out", use_container_width=True):
-            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output', 'form_name_value', 'form_email_value', 'form_phone_value', 'form_linkedin_value', 'form_github_value', 'form_summary_value', 'form_skills_value', 'form_strengths_input', 'form_cv_key_name', 'resume_uploader', 'resume_paster', 'jd_type_select', 'jd_method_select', 'jd_uploader', 'jd_paster', 'jd_linkedin_url', 'managed_jds', 'selected_jds_for_match', 'selected_jd_key', 'filter_skills_input', 'filter_min_skills', 'filter_job_type', 'filter_job_type_default', 'filter_role_input', 'filtered_jds', 'show_jd_details_from_filter', 'last_cover_letter', 'cl_cv_name', 'cl_jd_title']
+            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output', 'form_name_value', 'form_email_value', 'form_phone_value', 'form_linkedin_value', 'form_github_value', 'form_summary_value', 'form_skills_value', 'form_strengths_input', 'form_cv_key_name', 'resume_uploader', 'resume_paster', 'jd_type_select', 'jd_method_select', 'jd_uploader', 'jd_paster', 'jd_linkedin_url', 'managed_jds', 'selected_jds_for_match', 'selected_jd_key', 'filter_skills_input', 'filter_min_skills', 'filter_job_type', 'filter_job_type_default', 'filter_role_input', 'filtered_jds', 'show_jd_details_from_filter', 'last_cover_letter', 'cl_cv_name', 'cl_jd_title', 'cl_selected_jd_key'] # Added 'cl_selected_jd_key' for completeness
             for key in keys_to_delete:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -2076,6 +2093,7 @@ def candidate_dashboard():
     if "last_cover_letter" not in st.session_state: st.session_state.last_cover_letter = None
     if "cl_cv_name" not in st.session_state: st.session_state.cl_cv_name = None
     if "cl_jd_title" not in st.session_state: st.session_state.cl_jd_title = None
+    if "cl_selected_jd_key" not in st.session_state: st.session_state.cl_selected_jd_key = None # NEW state key
 
 
     # Initialize keys for personal details to ensure stability
