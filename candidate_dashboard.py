@@ -224,6 +224,7 @@ def get_ai_response(context_text, user_question, context_type):
         system_prompt = "You are an expert HR assistant. Your task is to analyze the provided candidate's resume/CV content and answer the user's question accurately and concisely. **You must ONLY draw from the information explicitly present in the CV text.** If the information is not in the CV, you must state: 'The answer is not explicitly stated in the provided CV content.' Do not make assumptions, invent details, or use external knowledge."
         
     elif context_type == 'JD':
+        # Enhanced JD prompt: clearly state the purpose (recruiting) and the context constraint
         system_prompt = "You are an expert recruiting specialist. Your task is to analyze the provided Job Description (JD) and answer the user's question accurately and concisely. **You must ONLY draw from the information explicitly present in the JD text.** If the information is not in the JD, you must state: 'The answer is not explicitly stated in the provided Job Description.' Focus only on requirements, responsibilities, and qualifications."
         
     else:
@@ -2136,6 +2137,7 @@ def resume_chatbot_qa(cv_data):
             st.markdown(prompt)
 
         # Get raw text for context
+        # Fallback to structured data json dump if raw_text is missing
         cv_raw_text = cv_data.get('raw_text', json.dumps(cv_data, indent=2))
         
         # Get AI response
@@ -2148,7 +2150,11 @@ def resume_chatbot_qa(cv_data):
         st.session_state.cv_messages.append({"role": "assistant", "content": response})
 
 def jd_chatbot_qa():
-    """Handles the JD Q&A functionality."""
+    """
+    Handles the JD Q&A functionality.
+    
+    FIX: Ensured JD data retrieval is robust and chat history key is consistent.
+    """
     st.subheader("2. 💼 JD Chatbot (Q&A)")
     
     # JD Selection Logic
@@ -2158,6 +2164,7 @@ def jd_chatbot_qa():
         st.warning("⚠️ **No valid JDs available.** Please add JDs in the 'JD Management' tab before starting the JD Chatbot.")
         return
 
+    # Use a unique key for the selectbox to prevent conflicts
     selected_jd_key = st.selectbox(
         "Select Job Description for Q&A",
         options=list(jd_keys_valid.keys()),
@@ -2165,16 +2172,24 @@ def jd_chatbot_qa():
         key="jd_qa_select"
     )
     
-    st.caption(f"JD Selected: **{jd_keys_valid[selected_jd_key]}**")
-    jd_data = st.session_state.managed_jds[selected_jd_key]
+    jd_data = st.session_state.managed_jds.get(selected_jd_key)
+
+    if not jd_data or isinstance(jd_data, str):
+        st.error("Error: The selected JD data is corrupted or could not be loaded.")
+        return
+        
+    # **FIX:** Ensure raw_text is used, or fallback to structured data JSON dump
     jd_raw_text = jd_data.get('raw_text', json.dumps(jd_data, indent=2))
+    
+    st.caption(f"JD Selected: **{jd_data.get('title', 'N/A')}**")
     
     # Initialize chat history for JD Q&A
     # Use selected_jd_key to maintain separate histories for different JDs
-    if f"jd_messages_{selected_jd_key}" not in st.session_state:
-        st.session_state[f"jd_messages_{selected_jd_key}"] = [{"role": "assistant", "content": f"I am ready to answer questions about the **{jd_data.get('title', 'Job Description')}**. Ask me about required skills, experience level, or responsibilities."}]
+    history_key = f"jd_messages_{selected_jd_key}"
+    if history_key not in st.session_state:
+        st.session_state[history_key] = [{"role": "assistant", "content": f"I am ready to answer questions about the **{jd_data.get('title', 'Job Description')}**. Ask me about required skills, experience level, or responsibilities. I will **ONLY** use the text from the JD."}]
 
-    messages = st.session_state[f"jd_messages_{selected_jd_key}"]
+    messages = st.session_state[history_key]
         
     # Use a unique key for the chat input specific to the selected JD
     chat_input_key = f"jd_chat_input_{selected_jd_key}"
@@ -2192,12 +2207,13 @@ def jd_chatbot_qa():
         # Get AI response
         with st.chat_message("assistant"):
             with st.spinner("Analyzing JD content..."):
+                # Use the robustly retrieved jd_raw_text
                 response = get_ai_response(jd_raw_text, prompt, 'JD')
             st.markdown(response)
             
         # Add assistant response to chat history
         messages.append({"role": "assistant", "content": response})
-        st.session_state[f"jd_messages_{selected_jd_key}"] = messages
+        st.session_state[history_key] = messages # Save the updated messages list
 
 
 def chatbot_tab():
@@ -2226,18 +2242,14 @@ def chatbot_tab():
     else:
         cv_data = None
     
-    if not cv_data:
-        st.warning("⚠️ **CV Q&A disabled.** Please upload a CV in the 'Resume Parsing' tab or save a CV in the 'CV Management (Form)' tab to enable this feature.")
-        st.markdown("---")
-        # JD Q&A is still possible
-        jd_chatbot_qa()
-        return
-
     # Tabs for the two chatbots
     tab_cv_qa, tab_jd_qa = st.tabs(["📄 CV Q&A", "💼 JD Q&A"])
 
     with tab_cv_qa:
-        resume_chatbot_qa(cv_data)
+        if not cv_data:
+            st.warning("⚠️ **CV Q&A disabled.** Please upload a CV in the 'Resume Parsing' tab or save a CV in the 'CV Management (Form)' tab to enable this feature.")
+        else:
+            resume_chatbot_qa(cv_data)
 
     with tab_jd_qa:
         jd_chatbot_qa()
@@ -2253,7 +2265,7 @@ def candidate_dashboard():
     col_header, col_logout = st.columns([4, 1])
     with col_logout:
         if st.button("🚪 Log Out", use_container_width=True):
-            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output', 'form_name_value', 'form_email_value', 'form_phone_value', 'form_linkedin_value', 'form_github_value', 'form_summary_value', 'form_skills_value', 'form_strengths_input', 'form_cv_key_name', 'resume_uploader', 'resume_paster', 'jd_type_select', 'jd_method_select', 'jd_uploader', 'jd_paster', 'jd_linkedin_url', 'managed_jds', 'selected_jds_for_match', 'selected_jd_key', 'filter_skills_input', 'filter_min_skills', 'filter_job_type', 'filter_job_type_default', 'filter_role_input', 'filtered_jds', 'show_jd_details_from_filter', 'last_cover_letter', 'cl_cv_name', 'cl_jd_title', 'cl_selected_jd_key', 'cv_messages', 'jd_messages'] # Added 'cv_messages', and 'jd_messages' (for all JD keys)
+            keys_to_delete = ['candidate_results', 'current_resume', 'manual_education', 'managed_cvs', 'current_resume_name', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'show_cv_output', 'form_name_value', 'form_email_value', 'form_phone_value', 'form_linkedin_value', 'form_github_value', 'form_summary_value', 'form_skills_value', 'form_strengths_input', 'form_cv_key_name', 'resume_uploader', 'resume_paster', 'jd_type_select', 'jd_method_select', 'jd_uploader', 'jd_paster', 'jd_linkedin_url', 'managed_jds', 'selected_jds_for_match', 'selected_jd_key', 'filter_skills_input', 'filter_min_skills', 'filter_job_type', 'filter_job_type_default', 'filter_role_input', 'filtered_jds', 'show_jd_details_from_filter', 'last_cover_letter', 'cl_cv_name', 'cl_jd_title', 'cl_selected_jd_key', 'cv_messages'] # Removed dynamic jd_messages as they are cleared below
             
             # Delete dynamic JD chat histories
             for key in list(st.session_state.keys()):
