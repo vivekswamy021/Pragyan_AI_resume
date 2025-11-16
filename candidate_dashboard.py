@@ -856,7 +856,7 @@ def resume_parsing_tab():
     st.markdown("---")
     
     if not GROQ_API_KEY:
-        st.error("GROQ_API_KEY is missing. AI Parsing features are disabled.")
+        st.error("GROQ_API_KEY is missing. AI Parsing functions are disabled.")
         process_button = st.button("✨ Parse and Load Uploaded File", type="primary", use_container_width=True, disabled=True)
     else:
         process_button = st.button("✨ Parse and Load Uploaded File", type="primary", use_container_width=True)
@@ -1420,55 +1420,10 @@ def jd_management_tab():
             else:
                 st.warning("Please enter a LinkedIn Job URL.")
 
-    st.markdown("---")
-    st.markdown("#### 3. Saved Job Descriptions")
-    
-    if st.session_state.managed_jds:
-        jd_keys = [k for k, v in st.session_state.managed_jds.items() if isinstance(v, dict)]
-        error_keys = [k for k, v in st.session_state.managed_jds.items() if isinstance(v, str)]
-        
-        st.button("🗑️ Clear All JDs", key="clear_all_jds", on_click=clear_all_jds)
-
-        # Only show details if selected_jd_key is set AND we are NOT coming from the filter tab's detail view
-        # This prevents the filter tab from showing multiple detail views simultaneously.
-        is_showing_details_from_filter = st.session_state.get('show_jd_details_from_filter', False)
-        if st.session_state.get('selected_jd_key') and not is_showing_details_from_filter:
-            display_jd_details(st.session_state.selected_jd_key)
-        else:
-            if jd_keys:
-                st.markdown("##### Select a JD to View Details:")
-                
-                max_cols = 3 
-                cols = st.columns(max_cols) 
-
-                for i, key in enumerate(jd_keys):
-                    jd_data = st.session_state.managed_jds[key]
-                    title = jd_data.get('title', 'N/A')
-                    
-                    with cols[i % max_cols]:
-                        with st.container(border=True):
-                            st.markdown(f"**{i+1}. {title}**")
-                            skills_preview = ', '.join(jd_data.get('required_skills', ['No skills listed'])[:2])
-                            if len(jd_data.get('required_skills', [])) > 2:
-                                skills_preview += '...'
-                                
-                            st.caption(f"Key: `{key}` | Skills: {skills_preview}")
-
-                            if st.button("👁️ View Details", key=f"view_jd_btn_{key}", use_container_width=True):
-                                st.session_state.selected_jd_key = key
-                                st.session_state.show_jd_details_from_filter = False # Ensure filter flag is off
-                                st.rerun()
-            
-            if error_keys:
-                 st.error("⚠️ The following keys contain corrupted or failed parsing data and cannot be displayed structured details:")
-                 st.code("\n".join(error_keys), language='text')
-
-            if not jd_keys and not error_keys:
-                st.info("No JDs saved yet. Add one above to enable batch matching.")
-                
-    else:
-        st.info("No JDs saved yet. Add one above to enable batch matching.")
-
+    # --- REMOVED SECTION 3: Saved Job Descriptions ---
+    # st.markdown("---")
+    # st.markdown("#### 3. Saved Job Descriptions")
+    # ... (rest of the display logic removed)
 
 # -------------------------
 # BATCH JD MATCH TAB CONTENT (UPDATED CV SELECTION & REPORT TABLE)
@@ -1771,15 +1726,12 @@ def cover_letter_tab():
         
     st.markdown("---")
     
-    # RECIPIENT DETAILS REMOVED HERE
-    
-    # Define placeholder recipient details using JD title to guess company/role
+    # Default Recipient Info (Recipient inputs removed per request)
     if selected_jd_key:
         jd_title_guess = jd_keys_valid.get(selected_jd_key, "The Role")
     else:
         jd_title_guess = "The Role"
 
-    # Default Recipient Info
     recipient_info = {
         "recipient_name": "Hiring Manager",
         "company_name": "The Company Hiring for " + jd_title_guess # A small guess based on JD title
