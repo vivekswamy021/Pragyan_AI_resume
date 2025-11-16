@@ -202,12 +202,15 @@ def parse_jd_with_llm(text, jd_title="Job Description"):
 
     return parsed
     
-# --- CHATBOT UTILITY FUNCTION (NEW) ---
+# --- CHATBOT UTILITY FUNCTION (FIXED) ---
 
 @st.cache_data(show_spinner="Thinking...")
 def get_ai_response(context_text, user_question, context_type):
     """
     Generates a Q&A response based on the provided text context (CV or JD).
+    
+    FIX: Strengthened system prompt to enforce strict adherence to context 
+    and prevent the LLM from hallucinating or using general knowledge.
     
     :param context_text: The full text of the CV or JD.
     :param user_question: The question asked by the user.
@@ -218,10 +221,10 @@ def get_ai_response(context_text, user_question, context_type):
         return "Error: GROQ_API_KEY not set. AI functions disabled."
 
     if context_type == 'CV':
-        system_prompt = "You are an expert HR assistant. Your task is to analyze the provided candidate's resume/CV content and answer the user's question accurately and concisely, drawing ONLY from the information explicitly present in the CV text. Do not make assumptions or invent details."
+        system_prompt = "You are an expert HR assistant. Your task is to analyze the provided candidate's resume/CV content and answer the user's question accurately and concisely. **You must ONLY draw from the information explicitly present in the CV text.** If the information is not in the CV, you must state: 'The answer is not explicitly stated in the provided CV content.' Do not make assumptions, invent details, or use external knowledge."
         
     elif context_type == 'JD':
-        system_prompt = "You are an expert recruiting specialist. Your task is to analyze the provided Job Description (JD) and answer the user's question accurately and concisely, drawing ONLY from the information explicitly present in the JD text. Focus on requirements, responsibilities, and qualifications."
+        system_prompt = "You are an expert recruiting specialist. Your task is to analyze the provided Job Description (JD) and answer the user's question accurately and concisely. **You must ONLY draw from the information explicitly present in the JD text.** If the information is not in the JD, you must state: 'The answer is not explicitly stated in the provided Job Description.' Focus only on requirements, responsibilities, and qualifications."
         
     else:
         return "Error: Invalid context type for chatbot."
@@ -232,7 +235,7 @@ def get_ai_response(context_text, user_question, context_type):
     --- USER QUESTION ---
     {user_question}
     
-    Based ONLY on the context above, provide a direct answer to the user question.
+    Based ONLY on the context above, provide a direct answer to the user question, following the strict instructions in the system prompt.
     """
     
     try:
@@ -242,7 +245,7 @@ def get_ai_response(context_text, user_question, context_type):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.1
+            temperature=0.1 # Low temperature is key for RAG
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -789,6 +792,9 @@ def save_form_cv():
         # CVs created via form are flagged as 'Manual_Form'
         "source_type": 'Manual_Form'
     }
+    
+    # Store a placeholder raw_text for Manual CVs so the chatbot can still access context
+    final_cv_data['raw_text'] = format_cv_to_markdown(final_cv_data, final_cv_data['name'])
     
     st.session_state.managed_cvs[cv_key_name] = final_cv_data
     st.session_state.current_resume_name = cv_key_name
@@ -2123,7 +2129,7 @@ def resume_chatbot_qa(cv_data):
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input(f"Ask a question about {cv_data.get('name', 'the CV')}..."):
+    if prompt := st.chat_input(f"Ask a question about {cv_data.get('name', 'the CV')}...", key="cv_chat_input"):
         # Display user message
         st.session_state.cv_messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -2170,11 +2176,14 @@ def jd_chatbot_qa():
 
     messages = st.session_state[f"jd_messages_{selected_jd_key}"]
         
+    # Use a unique key for the chat input specific to the selected JD
+    chat_input_key = f"jd_chat_input_{selected_jd_key}"
+        
     for message in messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input(f"Ask a question about {jd_data.get('title', 'the JD')}..."):
+    if prompt := st.chat_input(f"Ask a question about {jd_data.get('title', 'the JD')}...", key=chat_input_key):
         # Display user message
         messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -2196,19 +2205,35 @@ def chatbot_tab():
     st.caption("Use these specialized chatbots to query your CV and the saved JDs.")
     
     cv_data_items = st.session_state.managed_cvs.items()
+    # Find a CV that has raw_text and is an upload (preferred) or a form-saved CV
+    
+    # Priority 1: Uploaded CV with raw_text
     parsing_cv_items = [
         (k, v) for k, v in cv_data_items 
         if isinstance(v, dict) and v.get('source_type') == 'Parsing_Upload' and v.get('raw_text')
     ]
     
-    cv_data = parsing_cv_items[-1][1] if parsing_cv_items else None
+    # Priority 2: Manual CV with generated raw_text
+    manual_cv_items = [
+        (k, v) for k, v in cv_data_items 
+        if isinstance(v, dict) and v.get('source_type') == 'Manual_Form' and v.get('raw_text')
+    ]
+    
+    if parsing_cv_items:
+        cv_data = parsing_cv_items[-1][1]
+    elif manual_cv_items:
+        cv_data = manual_cv_items[-1][1]
+    else:
+        cv_data = None
     
     if not cv_data:
-        st.warning("⚠️ **CV Q&A disabled.** Please upload or paste a CV in the 'Resume Parsing' tab to enable this feature (The CV needs to have the original 'raw_text' saved).")
+        st.warning("⚠️ **CV Q&A disabled.** Please upload a CV in the 'Resume Parsing' tab or save a CV in the 'CV Management (Form)' tab to enable this feature.")
         st.markdown("---")
+        # JD Q&A is still possible
         jd_chatbot_qa()
         return
 
+    # Tabs for the two chatbots
     tab_cv_qa, tab_jd_qa = st.tabs(["📄 CV Q&A", "💼 JD Q&A"])
 
     with tab_cv_qa:
