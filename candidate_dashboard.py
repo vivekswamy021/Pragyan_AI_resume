@@ -162,19 +162,21 @@ def parse_cv_with_llm(text):
 
     return parsed
 
-# --- JD PARSING FUNCTION (RESTORED/CREATED) ---
+# --- JD PARSING FUNCTION (FIXED FOR ROBUSTNESS) ---
 @st.cache_data(show_spinner="Analyzing JD content with Groq LLM...")
 def parse_jd_with_llm(text):
     """Sends JD text to the LLM for structured information extraction."""
+    # 1. Immediate error handling
     if text.startswith("Error") or not GROQ_API_KEY:
         return {"error": "Parsing error or API key missing or file content extraction failed.", "raw_text": text}
 
+    # 2. LLM Prompt
     prompt = f"""Extract the following information from the Job Description in structured JSON format.
     - Title (Job Title), - Company, - Location, - Required_Skills (List of mandatory skills), 
     - Qualifications (List of required degrees/certifications), - Experience_Level (e.g., 'Entry', 'Mid-level', 'Senior'),
     - Responsibilities (List of 3-5 key duties), - Benefits (List of 2-3 key benefits, if mentioned)
     
-    The output must also contain a key called **'raw_text'** which includes the *entire original text* of the JD.
+    The output must contain the key **'raw_text'** with the *entire original text* of the JD.
     
     Job Description Text: {text}
     
@@ -190,49 +192,60 @@ def parse_jd_with_llm(text):
         )
         content = response.choices[0].message.content.strip()
         
-        # Robustly isolate JSON object
+        # 3. Robustly isolate and load JSON object
         json_match = re.search(r'\{.*\}', content, re.DOTALL)
         if json_match:
             json_str = json_match.group(0).strip()
             json_str = json_str.replace('```json', '').replace('```', '').strip() 
             parsed = json.loads(json_str)
-            # Ensure raw_text is included even if the LLM missed it
-            parsed['raw_text'] = text
-            
-            # Robustly ensure skill lists are present and clean (TWEAKED FALLBACK)
-            if 'required_skills' not in parsed or not isinstance(parsed['required_skills'], list):
-                 # Fallback extraction: look for common list indicators in raw text
-                keywords = ["skills", "requirements", "must have", "qualifications"]
-                fallback_skills = []
-                for keyword in keywords:
-                    # Simple regex to grab list-like content after keywords
-                    match = re.search(rf'{keyword}.*?[:\s]*(.*?)(?:\n\n|\n[A-Z][a-z])', text, re.DOTALL | re.IGNORECASE)
-                    if match:
-                         # Simple split and clean
-                        fallback_skills.extend([s.strip().lower() for s in re.split(r'[,\-•*]', match.group(1)) if s.strip() and len(s.strip()) > 2])
-
-                parsed['required_skills'] = list(set(fallback_skills))
-                if not parsed['required_skills']:
-                     parsed['required_skills'] = ["python", "sql", "communication"] # Minimal fallback
-
         else:
             raise json.JSONDecodeError("Could not isolate a valid JSON structure.", content, 0)
 
     except Exception as e:
         parsed = {"error": f"LLM parsing error: {e}", "raw_text": text}
+        return parsed # Return immediately on critical error
 
-    # Ensure critical fields have N/A fallback if missing after parsing
-    for field in ['title', 'company', 'location', 'experience_level', 'qualifications', 'responsibilities', 'benefits']:
-         if field not in parsed:
-              parsed[field] = 'N/A'
-         elif isinstance(parsed[field], list) and not parsed[field]:
-              # If the key exists but is an empty list, often it's better to keep it an empty list for list display
-               pass
-         elif not parsed[field]:
-              parsed[field] = 'N/A'
+    # 4. Post-Parsing Cleanup and Robust Fallbacks (CRITICAL FIX FOR DISPLAY)
     
+    # Ensure raw_text is included
+    parsed['raw_text'] = text
+    
+    # Define all expected fields and ensure they are present with 'N/A' or []
+    expected_fields = {
+        'title': 'N/A', 
+        'company': 'N/A', 
+        'location': 'N/A', 
+        'experience_level': 'N/A', 
+        'required_skills': [], 
+        'qualifications': [], 
+        'responsibilities': [], 
+        'benefits': []
+    }
+
+    for field, default_value in expected_fields.items():
+        current_value = parsed.get(field)
+        
+        if field in ['required_skills', 'qualifications', 'responsibilities', 'benefits']:
+            # For lists, ensure it is a list, and clean up 'N/A' strings
+            if not isinstance(current_value, list):
+                 # Simple fallback: if it's a non-empty string, try to split it
+                 if isinstance(current_value, str) and current_value.lower().strip() not in ['n/a', 'none', '']:
+                      parsed[field] = [s.strip() for s in re.split(r'[,\n•*-]', current_value) if s.strip() and s.strip().lower() != 'n/a']
+                 else:
+                      parsed[field] = []
+            else:
+                 # Clean the list of any 'N/A' or empty strings the LLM might have inserted
+                 parsed[field] = [str(item).strip() for item in current_value if item and str(item).strip() and str(item).strip().lower() != 'n/a']
+
+        else:
+            # For strings, ensure it's a string, and not empty or N/A
+            if not current_value or (isinstance(current_value, str) and current_value.lower().strip() in ['n/a', 'none', '']):
+                parsed[field] = default_value
+            elif isinstance(current_value, str):
+                 parsed[field] = current_value.strip() # Ensure clean string
+
     return parsed
-# --- END JD PARSING ---
+# --- END JD PARSING FIX ---
 
 
 # --- CORE MATCHING LOGIC (Using structured JD data) ---
@@ -747,7 +760,7 @@ def generate_and_display_cv(cv_name):
             key=f"download_html_btn_{cv_name}"
         )
 
-# --- JD Management Utility Functions (RESTORED) ---
+# --- JD Management Utility Functions ---
 
 def process_jd_file(uploaded_files):
     """Processes uploaded JD files, extracts text, and parses them."""
@@ -779,12 +792,15 @@ def process_jd_file(uploaded_files):
             st.code(parsed_data.get('raw_text', 'No raw output available.'), language='text')
             continue
             
-        jd_title = parsed_data.get('title', 'Unknown_JD').replace(' ', '_')
+        # Use parsed title for key name, falling back to a timestamped generic name
+        jd_title = parsed_data.get('title', 'Unknown_JD').replace(' ', '_').replace('/', '_')
         timestamp = datetime.now().strftime("%Y%m%d-%H%M")
-        jd_key_name = f"{jd_title}_{timestamp}" 
+        # Ensure the key is unique and descriptive, even if the title is 'N/A'
+        jd_key_name = f"{jd_title}_{timestamp}_{random.randint(100, 999)}"
         
         st.session_state.managed_jds[jd_key_name] = parsed_data
-        st.success(f"✅ Successfully added structured JD: **{parsed_data.get('title', file_name)}**")
+        st.success(f"✅ Successfully added structured JD: **{parsed_data.get('title', file_name)}** at **{parsed_data.get('company', 'N/A')}**")
+        st.rerun() # Rerun to update the display of current JDs
 
 def process_jd_text(pasted_text):
     """Processes pasted JD text and parses it."""
@@ -804,13 +820,15 @@ def process_jd_text(pasted_text):
         st.code(parsed_data.get('raw_text', 'No raw output available.'), language='text')
         return
 
-    jd_title = parsed_data.get('title', 'Pasted_JD').replace(' ', '_')
+    # Use parsed title for key name, falling back to a timestamped generic name
+    jd_title = parsed_data.get('title', 'Pasted_JD').replace(' ', '_').replace('/', '_')
     timestamp = datetime.now().strftime("%Y%m%d-%H%M")
-    jd_key_name = f"{jd_title}_{timestamp}" 
+    jd_key_name = f"{jd_title}_{timestamp}_{random.randint(100, 999)}"
     
     st.session_state.managed_jds[jd_key_name] = parsed_data
-    st.success(f"✅ Successfully added structured JD: **{parsed_data.get('title', 'Pasted Job Description')}**")
+    st.success(f"✅ Successfully added structured JD: **{parsed_data.get('title', 'Pasted Job Description')}** at **{parsed_data.get('company', 'N/A')}**")
     st.session_state.jd_paster_content = "" # Clear the text area
+    st.rerun() # Rerun to update the display of current JDs
 
 def clear_all_jds():
     """Clears all managed JDs from session state."""
@@ -825,18 +843,10 @@ def display_jd_details(jd_key):
         
     jd_data = st.session_state.managed_jds[jd_key]
     
-    if isinstance(jd_data, str):
-        st.error(f"Corrupted JD Data: {jd_data}")
+    if isinstance(jd_data, str) or "error" in jd_data:
+        st.error(f"Corrupted or Error JD Data: {jd_data.get('error', str(jd_data))}")
         return
         
-    st.markdown(f"**Title:** {jd_data.get('title', 'N/A')}")
-    st.markdown(f"**Company:** {jd_data.get('company', 'N/A')} | **Location:** {jd_data.get('location', 'N/A')}")
-    st.markdown(f"**Experience Level:** {jd_data.get('experience_level', 'N/A').title()}")
-    
-    st.subheader("Key Requirements")
-    
-    col_req, col_qual = st.columns(2)
-
     # Helper function to display lists robustly
     def safe_display_list(data, default_message="N/A"):
         # Check if the data is a list and not empty
@@ -853,13 +863,18 @@ def display_jd_details(jd_key):
         else:
             st.markdown(f"*{default_message}*")
 
+    st.markdown(f"**Title:** **{jd_data.get('title', 'N/A')}**")
+    st.markdown(f"**Company:** {jd_data.get('company', 'N/A')} | **Location:** {jd_data.get('location', 'N/A')} | **Experience Level:** {jd_data.get('experience_level', 'N/A').title()}")
+    
+    st.subheader("Key Requirements")
+    
+    col_req, col_qual = st.columns(2)
 
     with col_req:
         st.markdown("**Required Skills:**")
         safe_display_list(jd_data.get('required_skills'))
     with col_qual:
         st.markdown("**Qualifications:**")
-        # Qualifications might be a string (N/A) or a list. Use get and rely on safe_display_list
         safe_display_list(jd_data.get('qualifications'))
 
     st.subheader("Responsibilities")
@@ -869,20 +884,33 @@ def display_jd_details(jd_key):
     safe_display_list(jd_data.get('benefits'), default_message="No explicit benefits listed.")
 
     st.markdown("---")
-    with st.expander("View Raw JD Text"):
-        st.text(jd_data.get('raw_text', 'N/A'))
+    tab_raw, tab_json = st.tabs(["Raw JD Text", "JSON Data"])
+    
+    with tab_raw:
+        st.text_area("Original JD Text", jd_data.get('raw_text', 'N/A'), height=200, key=f"raw_text_{jd_key}")
         
-        # Consistent layout for the delete button
-        col_space, col_delete = st.columns([0.8, 0.2])
-        with col_delete:
-            st.button(
-                "❌ Remove This JD", 
-                key=f"delete_jd_{jd_key}", 
-                on_click=lambda k=jd_key: st.session_state.managed_jds.pop(k),
-                args=(),
-                type="secondary",
-                use_container_width=True
-            )
+    with tab_json:
+         json_output = json.dumps(jd_data, indent=4)
+         st.code(json_output, language="json")
+         st.download_button(
+            label="Download JD JSON",
+            data=json_output,
+            file_name=f"{jd_data.get('title', 'JD')}_data.json",
+            mime="application/json",
+            key=f"download_json_jd_{jd_key}" 
+        )
+        
+    # Consistent layout for the delete button
+    col_space, col_delete = st.columns([0.8, 0.2])
+    with col_delete:
+        st.button(
+            "❌ Remove This JD", 
+            key=f"delete_jd_{jd_key}", 
+            on_click=lambda k=jd_key: st.session_state.managed_jds.pop(k),
+            args=(),
+            type="secondary",
+            use_container_width=True
+        )
 # --- END JD Management Utility Functions ---
 
 
@@ -1428,7 +1456,7 @@ def tab_cv_management():
     cv_form_content()
 
 # -------------------------
-# JD MANAGEMENT TAB CONTENT (NEWLY ADDED)
+# JD MANAGEMENT TAB CONTENT (FIXED FOR DISPLAY)
 # -------------------------
 
 def jd_management_tab():
@@ -1440,11 +1468,9 @@ def jd_management_tab():
 
     st.markdown("---")
 
-    col_type, col_method = st.columns(2)
-    with col_type:
-        st.selectbox("Select JD Type", options=["Single JD", "Multiple JD"], key="jd_type_select")
+    col_method = st.columns([1])[0] # Simplified layout for methods
     with col_method:
-        st.selectbox("Add JD by:", options=["Upload File", "Paste Text", "LinkedIn URL (Mock)"], key="jd_method_select")
+        st.selectbox("Add JD by:", options=["Upload File", "Paste Text"], key="jd_method_select")
         
     current_method = st.session_state.jd_method_select
 
@@ -1473,45 +1499,51 @@ def jd_management_tab():
         if st.button("➕ Add JD from Text", type="primary", use_container_width=True, disabled=not pasted_text.strip()):
             process_jd_text(pasted_text)
 
-    elif current_method == "LinkedIn URL (Mock)":
-        st.text_input("LinkedIn Job URL (Feature Mock)", placeholder="e.g., https://www.linkedin.com/jobs/view/...", disabled=True)
-        st.info("This feature is a placeholder and is currently disabled.")
-
     st.markdown("---")
 
     # --- Current JDs Added Section ---
     st.subheader("✅ Current JDs Added")
     
     managed_jds = st.session_state.managed_jds
-    if managed_jds:
-        st.info(f"You have **{len(managed_jds)}** Job Description(s) available for matching.")
+    
+    # Filter JDs to only show valid dictionary entries
+    valid_jds = {k: v for k, v in managed_jds.items() if isinstance(v, dict) and "error" not in v}
+    error_jds = {k: v for k, v in managed_jds.items() if isinstance(v, dict) and "error" in v}
+    
+    if valid_jds:
+        st.info(f"You have **{len(valid_jds)}** structured Job Description(s) available for matching.")
         
         if st.button("🗑️ Clear All JDs", type="secondary"):
             clear_all_jds()
             st.rerun()
 
-        # Display details in expanders
-        for jd_key, jd_data in managed_jds.items():
-            if isinstance(jd_data, dict):
-                title = jd_data.get('title', 'N/A')
-                company = jd_data.get('company', 'N/A')
-                
-                # --- FIX: Better display title for N/A JDs ---
-                display_title = title
-                if title == 'N/A':
-                    display_title = f"Untitled JD at {company} ({jd_key.split('_')[-1]})"
-                elif company != 'N/A':
-                    display_title = f"**{title}** at {company}"
-                else:
-                    display_title = f"**{title}** ({jd_key.split('_')[-1]})"
+        # Display valid JD details
+        for jd_key, jd_data in valid_jds.items():
+            title = jd_data.get('title', 'N/A')
+            company = jd_data.get('company', 'N/A')
+            
+            # --- FIX: Better display title ---
+            display_title = f"**{title}** at {company}" if title != 'N/A' and company != 'N/A' else f"**{title if title != 'N/A' else company if company != 'N/A' else 'Untitled JD'}** ({jd_key.split('_')[-1]})"
 
-                with st.expander(display_title):
-                    display_jd_details(jd_key)
-            else:
-                st.error(f"Corrupted Entry: {jd_key} - {str(jd_data)}")
+            with st.expander(display_title):
+                display_jd_details(jd_key)
     else:
-        st.info("No Job Descriptions have been added yet.")
-
+        st.info("No structured Job Descriptions have been successfully added yet.")
+        
+    if error_jds:
+        st.warning(f"⚠️ **{len(error_jds)}** JDs failed to parse or have corrupted data.")
+        with st.expander("View Error JDs"):
+            for jd_key, jd_data in error_jds.items():
+                st.error(f"Key: {jd_key} | Error: {jd_data.get('error', 'Corrupted Data')}")
+                # Provide a manual delete button for error entries
+                st.button(
+                    "❌ Remove Error JD", 
+                    key=f"delete_error_jd_{jd_key}", 
+                    on_click=lambda k=jd_key: st.session_state.managed_jds.pop(k),
+                    args=(),
+                    type="secondary"
+                )
+                st.markdown("---")
 
 # -------------------------
 # BATCH JD MATCH TAB CONTENT (USING MANAGED JDS)
@@ -1549,11 +1581,13 @@ def batch_jd_match_tab():
     st.markdown("---")
 
     # 2. JD Selection
-    if not jd_keys_all:
-        st.warning("⚠️ **No Job Descriptions available.** Please add JDs in the 'JD Management' tab.")
+    valid_jd_items = {k: v for k, v in st.session_state.managed_jds.items() if isinstance(v, dict) and "error" not in v}
+    
+    if not valid_jd_items:
+        st.warning("⚠️ **No valid Job Descriptions available.** Please add and successfully parse JDs in the 'JD Management' tab.")
         return
         
-    jd_options = {k: st.session_state.managed_jds[k].get('title', k) for k in jd_keys_all if isinstance(st.session_state.managed_jds[k], dict)}
+    jd_options = {k: f"{v.get('title', 'N/A')} at {v.get('company', 'N/A')}" for k, v in valid_jd_items.items()}
 
     selected_jds = st.multiselect(
         "Select Job Descriptions to Match Against",
@@ -1777,7 +1811,7 @@ def cover_letter_tab():
         return
 
     cv_keys_valid = {k: v.get('name', k) for k, v in st.session_state.managed_cvs.items() if isinstance(v, dict)}
-    jd_keys_valid = {k: v.get('title', k) for k, v in st.session_state.managed_jds.items() if isinstance(v, dict)}
+    jd_keys_valid = {k: f"{v.get('title', 'N/A')} at {v.get('company', 'N/A')}" for k, v in st.session_state.managed_jds.items() if isinstance(v, dict) and "error" not in v}
 
 
     if not cv_keys_valid or not jd_keys_valid:
@@ -1805,9 +1839,10 @@ def cover_letter_tab():
     st.markdown("---")
     
     # Default Recipient Info (can be customized if needed)
+    jd_data_selected = st.session_state.managed_jds.get(selected_jd_key, {})
     recipient_info = {
         "recipient_name": "Hiring Manager",
-        "company_name": st.session_state.managed_jds.get(selected_jd_key, {}).get('company', 'The Company') # Use JD's company if available
+        "company_name": jd_data_selected.get('company', 'The Company') # Use JD's company if available
     }
     
     st.info(f"The Cover Letter will be personalized using the JD details (Company: **{recipient_info['company_name']}**).")
@@ -1827,7 +1862,7 @@ def cover_letter_tab():
         cv_data = st.session_state.managed_cvs.get(selected_cv_key)
         jd_data = st.session_state.managed_jds.get(selected_jd_key)
         
-        if not cv_data or not jd_data or isinstance(cv_data, str) or isinstance(jd_data, str):
+        if not cv_data or not jd_data or isinstance(cv_data, str) or isinstance(jd_data, str) or "error" in jd_data:
             st.error("Error: Selected CV or JD data is corrupted or missing.")
             return
 
@@ -1887,9 +1922,10 @@ def filter_jd_tab():
     
     st.warning("This tab is a feature mock. It requires advanced filtering logic not fully implemented yet.")
     
-    managed_jds = st.session_state.managed_jds
+    # Filter to only use valid JDs for filtering
+    managed_jds = {k: v for k, v in st.session_state.managed_jds.items() if isinstance(v, dict) and "error" not in v}
     if not managed_jds:
-        st.info("No JDs available to filter. Please add JDs in the 'JD Management' tab.")
+        st.info("No valid JDs available to filter. Please add JDs in the 'JD Management' tab.")
         return
 
     st.markdown("---")
@@ -1897,13 +1933,13 @@ def filter_jd_tab():
     jd_keys = list(managed_jds.keys())
     
     # Mock Filter 1: Experience Level
-    exp_levels = sorted(list(set(d.get('experience_level', 'Unknown') for d in managed_jds.values() if isinstance(d, dict))))
+    exp_levels = sorted(list(set(d.get('experience_level', 'Unknown') for d in managed_jds.values())))
     selected_exp = st.multiselect("Filter by Experience Level", options=exp_levels, default=exp_levels)
 
     # Mock Filter 2: Skills Presence (Takes a random skill from all JDs)
     all_skills = set()
     for jd in managed_jds.values():
-        if isinstance(jd, dict) and jd.get('required_skills'):
+        if jd.get('required_skills'):
             all_skills.update([s.lower().strip() for s in jd['required_skills'] if s])
     
     top_skills = sorted(list(all_skills))
@@ -1915,7 +1951,6 @@ def filter_jd_tab():
     
     if st.button("Apply Filters"):
         for jd_key, jd_data in managed_jds.items():
-            if not isinstance(jd_data, dict): continue
             
             # Apply Experience Filter
             exp_match = jd_data.get('experience_level', 'Unknown') in selected_exp
