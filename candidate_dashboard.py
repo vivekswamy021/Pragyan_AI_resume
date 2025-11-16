@@ -1248,7 +1248,7 @@ def tab_cv_management():
     cv_form_content()
 
 # -------------------------
-# JD MANAGEMENT TAB CONTENT (FIXED: Upload file logic wrapped in st.form)
+# JD MANAGEMENT TAB CONTENT 
 # -------------------------
 
 def process_jd_file(file, jd_type):
@@ -1304,7 +1304,6 @@ def clear_all_jds():
     if 'latest_added_jd_key' in st.session_state: del st.session_state.latest_added_jd_key
     st.toast("All saved JDs cleared!")
 
-## START OF FIX: Simplified display_jd_details to remove Raw Text tab and error check logic
 def display_jd_details(key):
     """Displays the structured details of the selected JD (Structured Summary ONLY)."""
     jd_data = st.session_state.managed_jds.get(key)
@@ -1337,6 +1336,7 @@ def display_jd_details(key):
         st.session_state.show_jd_details_from_filter = False
         st.rerun()
 
+# --- START OF CHANGE: Remove Section 3 (Saved Job Descriptions) from JD Management Tab ---
 def jd_management_tab():
     st.header("Job Description (JD) Management")
     st.caption("Upload or paste job descriptions. They will be parsed and saved for matching against your CV.")
@@ -1367,17 +1367,15 @@ def jd_management_tab():
     if jd_method == "Upload File":
         st.markdown("##### Upload JD File(s)")
         
-        # --- FIX APPLIED: Wrap uploader and button in st.form ---
         with st.form("jd_upload_form"):
             uploaded_jds = st.file_uploader(
                 "Drag and drop file(s) here",
                 type=['pdf', 'txt', 'docx'],
                 accept_multiple_files=(jd_type == "Multiple JD"),
-                key="jd_uploader_in_form" # Use a new key for the uploader inside the form
+                key="jd_uploader_in_form"
             )
             st.caption("Limit 200MB per file • PDF, TXT, DOCX")
             
-            # Use st.form_submit_button to process the uploaded files
             upload_button = st.form_submit_button("Add JD(s)", type="primary", use_container_width=True, key="upload_jd_button")
 
             if upload_button:
@@ -1394,11 +1392,9 @@ def jd_management_tab():
                             st.text(message)
                         else:
                             st.error(message)
-                    # Force a re-run to refresh the "Saved Job Descriptions" list
                     st.rerun() 
                 else:
                     st.warning("Please upload at least one JD file.")
-        # --- END FIX ---
         
     elif jd_method == "Paste Text":
         st.markdown("##### Paste JD Text")
@@ -1416,7 +1412,6 @@ def jd_management_tab():
                 
                 if success:
                     st.success(message)
-                    # --- FIX APPLIED: Rerun to refresh the saved JDs list ---
                     st.rerun() 
                 else:
                     st.error(message)
@@ -1441,55 +1436,19 @@ def jd_management_tab():
             else:
                 st.warning("Please enter a LinkedIn Job URL.")
 
-    st.markdown("---")
-    st.markdown("#### 3. Saved Job Descriptions")
-    
+    # Optional: Display a small status line if JDs exist, but not the full list
     if st.session_state.managed_jds:
-        jd_keys = [k for k, v in st.session_state.managed_jds.items() if isinstance(v, dict)]
-        error_keys = [k for k, v in st.session_state.managed_jds.items() if isinstance(v, str)]
-        
-        st.button("🗑️ Clear All JDs", key="clear_all_jds", on_click=clear_all_jds)
-
-        # Only show details if selected_jd_key is set AND we are NOT coming from the filter tab's detail view
-        # This prevents the filter tab from showing multiple detail views simultaneously.
-        is_showing_details_from_filter = st.session_state.get('show_jd_details_from_filter', False)
-        if st.session_state.get('selected_jd_key') and not is_showing_details_from_filter:
-            display_jd_details(st.session_state.selected_jd_key)
-        else:
-            if jd_keys:
-                st.markdown("##### Select a JD to View Details:")
-                
-                max_cols = 3 
-                cols = st.columns(max_cols) 
-
-                for i, key in enumerate(jd_keys):
-                    jd_data = st.session_state.managed_jds[key]
-                    title = jd_data.get('title', 'N/A')
-                    
-                    with cols[i % max_cols]:
-                        with st.container(border=True):
-                            st.markdown(f"**{i+1}. {title}**")
-                            skills_preview = ', '.join(jd_data.get('required_skills', ['No skills listed'])[:2])
-                            if len(jd_data.get('required_skills', [])) > 2:
-                                skills_preview += '...'
-                                
-                            st.caption(f"Key: `{key}` | Skills: {skills_preview}")
-
-                            if st.button("👁️ View Details", key=f"view_jd_btn_{key}", use_container_width=True):
-                                st.session_state.selected_jd_key = key
-                                st.session_state.show_jd_details_from_filter = False # Ensure filter flag is off
-                                st.rerun()
-            
-            if error_keys:
-                 st.error("⚠️ The following keys contain corrupted or failed parsing data and cannot be displayed structured details:")
-                 st.code("\n".join(error_keys), language='text')
-
-            if not jd_keys and not error_keys:
-                st.info("No JDs saved yet. Add one above to enable batch matching.")
-                
+        jd_count = len([k for k, v in st.session_state.managed_jds.items() if isinstance(v, dict)])
+        st.markdown(f"---")
+        st.info(f"💾 **JD Management Status:** You currently have **{jd_count}** valid Job Descriptions saved.")
+        if st.button("🗑️ Clear All Saved JDs", key="clear_all_jds", on_click=clear_all_jds):
+            st.rerun()
     else:
-        st.info("No JDs saved yet. Add one above to enable batch matching.")
-## END OF FIX
+        st.markdown(f"---")
+        st.info("💾 **JD Management Status:** No Job Descriptions are currently saved.")
+
+
+# --- END OF CHANGE ---
 
 # -------------------------
 # BATCH JD MATCH TAB CONTENT (UPDATED CV SELECTION & REPORT TABLE)
