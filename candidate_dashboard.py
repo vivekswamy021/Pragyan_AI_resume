@@ -225,6 +225,8 @@ def extract_content(file_type, file_content_bytes, file_name):
 def parse_resume_with_llm(text):
     """
     Sends resume text to the LLM for structured information extraction.
+    
+    FIX: Ensures 'error' is explicitly set to None on successful return path.
     """
     
     def get_fallback_name():
@@ -232,6 +234,7 @@ def parse_resume_with_llm(text):
 
     # 1. Handle Pre-flight errors (e.g., failed extraction)
     if text.startswith("[Error"):
+        # The extraction function already returned an error string
         return {"name": "Parsing Error", "error": text}
 
     # 2. Check for and parse direct JSON content (for JSON file uploads)
@@ -245,7 +248,7 @@ def parse_resume_with_llm(text):
             if not parsed_data.get('name'):
                  parsed_data['name'] = get_fallback_name()
                  
-            parsed_data['error'] = None
+            parsed_data['error'] = None # <--- CRITICAL FIX: Explicitly set to None
             
             return parsed_data
         
@@ -263,7 +266,7 @@ def parse_resume_with_llm(text):
             if not parsed_data.get('name'):
                  parsed_data['name'] = get_fallback_name()
             
-            parsed_data['error'] = None 
+            parsed_data['error'] = None # <--- CRITICAL FIX: Explicitly set to None
             return parsed_data
             
         except Exception as e:
@@ -318,7 +321,8 @@ def parse_resume_with_llm(text):
         # Final cleanup for the app structure
         if not parsed.get('name'):
             parsed['name'] = get_fallback_name()
-        parsed['error'] = None
+            
+        parsed['error'] = None # <--- CRITICAL FIX: Explicitly set to None
         return parsed
 
     except json.JSONDecodeError as e:
@@ -369,7 +373,8 @@ def parse_and_store_resume(content_source, file_name_key, source_type):
     parsed_data = parse_resume_with_llm(extracted_text)
     
     # 3. Handle LLM Parsing Error
-    if parsed_data.get('error') is not None and parsed_data.get('error') != "":
+    # Now explicitly checks if error is not None (i.e., it failed)
+    if parsed_data.get('error') is not None: 
         # Use the name from the error dictionary if available, otherwise fallback
         error_name = parsed_data.get('name', file_name) 
         return {"error": parsed_data['error'], "full_text": extracted_text, "excel_data": excel_data, "name": error_name}
@@ -562,6 +567,11 @@ def evaluate_jd_fit(job_description, parsed_json):
     # Use the client object, which can be the real Groq client or the MockGroqClient
     global client, GROQ_MODEL, GROQ_API_KEY
     
+    # CHECK: The fix is here: ensures 'error' is explicitly None
+    if parsed_json.get('error') is not None: 
+         return f"Cannot evaluate due to resume parsing errors: {parsed_json['error']}"
+
+
     if isinstance(client, MockGroqClient) and not GROQ_API_KEY:
          # In mock mode, use the special mock implementation for fit evaluation
          response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": f"Evaluate how well the following resume content matches the provided job description: {job_description}"}])
@@ -569,7 +579,6 @@ def evaluate_jd_fit(job_description, parsed_json):
 
 
     if not job_description.strip(): return "Please paste a job description."
-    if "error" in parsed_json: return f"Cannot evaluate due to resume parsing errors: {parsed_json['error']}"
 
     # Prepare relevant resume data for the LLM
     relevant_resume_data = {
@@ -890,6 +899,7 @@ def jd_batch_match_tab():
     st.markdown("Compare your current resume against all saved job descriptions.")
 
     # Determine if a resume/CV is ready
+    # CRITICAL FIX: Ensure 'error' key is explicitly None
     is_resume_parsed = (
         st.session_state.get('parsed') is not None and
         st.session_state.parsed.get('name') is not None and
@@ -902,6 +912,10 @@ def jd_batch_match_tab():
     if not is_resume_parsed:
         st.warning("⚠️ Please **upload and parse your resume** in the 'Resume Parsing' tab first.")
         
+        # Display the specific parsing error if it exists
+        if st.session_state.get('parsed', {}).get('error') is not None:
+             st.error(f"Resume Parsing Error: {st.session_state.parsed.get('error')}")
+
     elif not st.session_state.candidate_jd_list:
         st.error("❌ Please **add Job Descriptions** in the 'JD Management' tab before running batch analysis.")
         
@@ -944,7 +958,8 @@ def jd_batch_match_tab():
             st.warning("Please select at least one Job Description to run the analysis.")
             
         elif not is_resume_parsed:
-             st.warning("Please **upload and parse your resume** first.")
+             # The warning above will already be shown, but we prevent the loop from running
+             st.warning("Please **upload and parse your resume** successfully first.")
 
         else:
             resume_name = st.session_state.parsed.get('name', 'Uploaded Resume')
@@ -1050,12 +1065,17 @@ def jd_batch_match_tab():
             # Simple fix to make the role name more readable for display if it's the mock-extracted role
             role_display = full_jd_item.get('role', 'N/A').replace("/ML Engineer", " Engineer")
             
+            # Use 'Cannot evaluate...' message if the overall_score is 'Error' and a parsing error exists
+            overall_score_display = item["overall_score"]
+            if overall_score_display == "Error" and "Cannot evaluate" in item["full_analysis"]:
+                overall_score_display = "Cannot evaluate" # Shortened for table
+
             display_data.append({
                 "Rank": item.get("rank", "N/A"),
                 "Job Description (Ranked)": item["jd_name"].replace("--- Simulated JD for: ", ""),
                 "Role": role_display, 
                 "Job Type": full_jd_item.get('job_type', 'N/A'), 
-                "Fit Score (out of 10)": item["overall_score"],
+                "Fit Score (out of 10)": overall_score_display,
                 "Skills (%)": item.get("skills_percent", "N/A"),
                 "Experience (%)": item.get("experience_percent", "N/A"), 
                 "Education (%)": item.get("education_percent", "N/A"), 
@@ -1066,8 +1086,13 @@ def jd_batch_match_tab():
         st.markdown("##### Detailed Reports")
         for item in results_df:
             rank_display = f"Rank {item.get('rank', 'N/A')} | "
+            
+            header_score = item['overall_score']
+            if header_score == "Error" and "Cannot evaluate" in item["full_analysis"]:
+                 header_score = "Parsing Error"
+                 
             # Ensure the full analysis is displayed with markdown formatting
-            header_text = f"{rank_display}Report for **{item['jd_name'].replace('--- Simulated JD for: ', '')}** (Score: **{item['overall_score']}/10** | S: **{item.get('skills_percent', 'N/A')}%** | E: **{item.get('experience_percent', 'N/A')}%** | Edu: **{item.get('education_percent', 'N/A')}%**)"
+            header_text = f"{rank_display}Report for **{item['jd_name'].replace('--- Simulated JD for: ', '')}** (Score: **{header_score}/10** | S: **{item.get('skills_percent', 'N/A')}%** | E: **{item.get('experience_percent', 'N/A')}%** | Edu: **{item.get('education_percent', 'N/A')}%**)"
             with st.expander(header_text):
                 # Use st.code to display the LLM output with good formatting
                 st.code(item['full_analysis'], language='markdown')
@@ -1220,6 +1245,7 @@ def parsed_data_tab():
     st.markdown("This tab displays the loaded candidate data and provides download options.")
     st.markdown("---")
 
+    # CRITICAL FIX: Ensure 'error' key is explicitly None for a 'valid' state
     is_data_loaded_and_valid = (
         st.session_state.get('parsed', {}).get('name') is not None and 
         st.session_state.get('parsed', {}).get('error') is None
@@ -1318,7 +1344,8 @@ def parsed_data_tab():
 
     else:
         st.warning(f"**Status:** ❌ **No Valid Resume Data Loaded**")
-        if st.session_state.get('parsed', {}).get('error'):
+        # Display the actual error message if one exists
+        if st.session_state.get('parsed', {}).get('error') is not None:
              st.error(f"Last Parsing Error: {st.session_state.parsed['error']}")
         st.info("Please successfully parse a resume in the **Resume Parsing** tab.")
 
