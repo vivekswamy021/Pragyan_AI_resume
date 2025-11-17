@@ -126,8 +126,6 @@ def extract_content(file_type, file_content_bytes, file_name):
             try:
                 # Wrap JSON content so LLM parsing function can detect and use it
                 text = file_content_bytes.decode('utf-8')
-                # Store the raw JSON content separately for dedicated JSON display if needed later
-                st.session_state.raw_uploaded_content = text
                 text = "--- JSON Content Start ---\n" + text + "\n--- JSON Content End ---"
             except UnicodeDecodeError:
                 return f"[Error] JSON content extraction failed: Unicode Decode Error.", None
@@ -145,14 +143,11 @@ def extract_content(file_type, file_content_bytes, file_name):
                         
                     excel_data = all_sheets_data 
                     text = json.dumps(all_sheets_data, indent=2)
-                    st.session_state.raw_uploaded_content = text # Store for display
                     text = f"[EXCEL_CONTENT] The following structured data was extracted:\n{text}"
                     
             except Exception as e:
                 return f"[Error] Excel/CSV file parsing failed. Error: {e}", None
 
-        # Store the extracted text (PDF/DOCX/TXT/LLM-wrapped JSON/Excel)
-        st.session_state.raw_uploaded_content = text # Overwrite/set for other file types
 
         if not text.strip() and file_type not in ('excel', 'json'): 
             return f"[Error] {file_type.upper()} content extraction failed or file is empty.", None
@@ -173,8 +168,7 @@ def parse_resume_with_llm(text):
 
     # Helper function to get a fallback name
     def get_fallback_name():
-        # FOR THIS SPECIFIC REQUEST, WE FORCE THE MOCK NAME TO "Vivek Swamy" 
-        # to ensure the download links are correct during testing/mocking.
+        # FOR TESTING CONSISTENCY, WE KEEP THE MOCK NAME AS "Vivek Swamy" 
         return "Vivek Swamy" 
     
     candidate_name = get_fallback_name()
@@ -206,7 +200,7 @@ def parse_resume_with_llm(text):
             "phone": "555-1234", 
             "linkedin": "https://linkedin.com/in/vivek-swamy-mock", 
             "github": "https://github.com/vivek-mock", 
-            "personal_details": f"Mock summary generated for: {candidate_name}. (Input was text/PDF/DOCX/TXT)", 
+            "personal_details": f"Mock summary generated for: {candidate_name}. (Input was text/PDF/DOCX, not direct JSON)", 
             "skills": ["Python", "Streamlit", "SQL", "AWS"], 
             "education": ["B.S. Computer Science, Mock University, 2020"], 
             "experience": ["Software Intern, Mock Solutions (2024-2025)", "Data Analyst, Test Corp (2022-2024)"], 
@@ -256,8 +250,6 @@ def parse_and_store_resume(content_source, file_name_key, source_type):
     extracted_text = ""
     excel_data = None
     file_name = "Pasted_Resume"
-    # Ensure raw_uploaded_content is initialized/cleared before extraction
-    st.session_state.raw_uploaded_content = ""
 
     if source_type == 'file':
         uploaded_file = content_source
@@ -270,7 +262,6 @@ def parse_and_store_resume(content_source, file_name_key, source_type):
         extracted_text = content_source.strip()
         file_name = "Pasted_Text"
         st.session_state.current_parsing_source_name = file_name 
-        st.session_state.raw_uploaded_content = extracted_text # Store pasted text directly
 
     if extracted_text.startswith("[Error"):
         return {"error": extracted_text, "full_text": extracted_text, "excel_data": None, "name": file_name}
@@ -306,10 +297,6 @@ def parse_and_store_resume(content_source, file_name_key, source_type):
 def get_download_link(data, filename, file_format):
     """
     Generates a base64 encoded download link for the given data and format.
-    
-    This function returns the href data string, which is necessary to inject into 
-    a button's onClick or to use as the download href directly in Streamlit 
-    with st.markdown(unsafe_allow_html=True).
     """
     mime_type = "application/octet-stream"
     
@@ -348,7 +335,6 @@ def get_download_link(data, filename, file_format):
 def render_download_button(data_uri, filename, label, color):
     """Renders an HTML button that triggers a file download."""
     
-    # Using specific colors for consistency
     if color == 'json':
         bg_color = "#4CAF50" # Green
         icon = "💾"
@@ -534,7 +520,6 @@ def resume_parsing_tab():
             st.session_state.parsed = {}
             st.session_state.full_text = ""
             st.session_state.excel_data = None
-            st.session_state.raw_uploaded_content = ""
             st.toast("Upload cleared.")
             
         file_to_parse = st.session_state.candidate_uploaded_resumes[0] if st.session_state.candidate_uploaded_resumes else None
@@ -624,7 +609,7 @@ def resume_parsing_tab():
             
     st.markdown("---")
     
-    # --- Section for Displaying Loaded Status & Download Options (MODIFIED FOR TABS) ---
+    # --- Section for Displaying Loaded Status & Download Options ---
     st.subheader("3. Current Loaded Candidate Data")
     
     is_data_loaded_and_valid = (
@@ -636,6 +621,14 @@ def resume_parsing_tab():
         
         candidate_name = st.session_state.parsed['name']
         
+        # Determine the source display name (FIXED LOGIC)
+        source_key = st.session_state.get('current_parsing_source_name', 'Unknown Source')
+        if source_key == "Pasted_Text":
+            source_display = "Pasted CV Data"
+        else:
+            # If it's a filename, replace underscores/dashes with spaces for clean display
+            source_display = source_key.replace('_', ' ').replace('-', ' ') 
+
         # Calculate filenames and URIs once
         base_filename = f"{candidate_name.replace(' ', '_')}_Parsed_Resume"
         parsed_json_data = json.dumps(st.session_state.parsed, indent=4)
@@ -650,7 +643,7 @@ def resume_parsing_tab():
         html_data_uri = get_download_link(parsed_markdown_data, html_filename, 'html')
         
         
-        # New tab structure 
+        # New tab structure as requested (Markdown and JSON downloads moved inside their views)
         tab_markdown, tab_json, tab_download = st.tabs([
             "📄 Markdown View", 
             "💾 JSON View", 
@@ -660,17 +653,14 @@ def resume_parsing_tab():
         # --- Markdown View Tab ---
         with tab_markdown:
             st.markdown(f"**Candidate:** **{candidate_name}**")
-            st.caption(f"Source: {st.session_state.get('current_parsing_source_name', 'Unknown Source').replace('_', ' ').replace('Pasted Text', 'Pasted CV Data')}")
+            st.caption(f"Source: {source_display}")
             st.markdown("---")
-            
-            # 1. Display LLM-Compiled Markdown (The primary output)
-            st.markdown("### LLM-Compiled Resume Summary (Markdown)")
+            st.markdown("### Resume Content in Markdown Format")
             st.markdown(st.session_state.full_text)
             
-            # 2. Display Raw Content (Helpful for uploaded files like PDF/DOCX/TXT/MD)
-            if st.session_state.get('raw_uploaded_content') and len(st.session_state.raw_uploaded_content) > 100:
-                with st.expander("Show Raw Extracted Text/Source Content"):
-                    st.text(st.session_state.raw_uploaded_content)
+            if st.session_state.excel_data:
+                 st.markdown("### Extracted Spreadsheet Data (if applicable)")
+                 st.json(st.session_state.excel_data)
                  
             st.markdown("---")
             st.markdown("##### Download Markdown Data")
@@ -686,17 +676,10 @@ def resume_parsing_tab():
         # --- JSON View Tab ---
         with tab_json:
             st.markdown(f"**Candidate:** **{candidate_name}**")
-            st.caption(f"Source: {st.session_state.get('current_parsing_source_name', 'Unknown Source').replace('_', ' ').replace('Pasted Text', 'Pasted CV Data')}")
+            st.caption(f"Source: {source_display}")
             st.markdown("---")
-            
-            st.markdown("### Structured Data in JSON Format (LLM Output)")
-            # Display LLM PARSED data
+            st.markdown("### Structured Data in JSON Format")
             st.json(st.session_state.parsed)
-            
-            # If the original upload was a JSON file, display the raw JSON content as well
-            if st.session_state.get('current_parsing_source_name', '').lower().endswith('.json'):
-                with st.expander("Show Raw Uploaded JSON Content"):
-                    st.json(st.session_state.get('raw_uploaded_content', 'No raw JSON content stored.'))
 
             st.markdown("---")
             st.markdown("##### Download JSON Data")
@@ -712,7 +695,7 @@ def resume_parsing_tab():
         with tab_download:
             
             st.markdown("### Download Viewable Document")
-            st.info("This download provides the LLM-compiled summary in an HTML file that can be easily viewed or printed/saved as a PDF.")
+            st.info("This download provides the data in an HTML file that can be easily viewed or printed/saved as a PDF.")
             
             col_html = st.columns(1)[0]
 
@@ -1200,7 +1183,6 @@ def candidate_dashboard():
     if "candidate_uploaded_resumes" not in st.session_state: st.session_state.candidate_uploaded_resumes = []
     if "pasted_cv_text" not in st.session_state: st.session_state.pasted_cv_text = ""
     if "current_parsing_source_name" not in st.session_state: st.session_state.current_parsing_source_name = None 
-    if "raw_uploaded_content" not in st.session_state: st.session_state.raw_uploaded_content = "" # New variable for raw content
     
     if "candidate_jd_list" not in st.session_state: st.session_state.candidate_jd_list = []
     if "candidate_match_results" not in st.session_state: st.session_state.candidate_match_results = []
