@@ -164,7 +164,7 @@ def parse_cv_with_llm(text):
 
 @st.cache_data(show_spinner="Analyzing JD content with Groq LLM...")
 def parse_jd_with_llm(text, jd_title="Job Description"):
-    """Sends JD text to the LLM for structured information extraction."""
+    """Sends JD text to the LLM for structured information extraction. (Retained as it's needed for mock_jd_match internally)."""
     if text.startswith("Error") or not GROQ_API_KEY:
         return {"error": "Parsing error or API key missing or file content extraction failed.", "raw_output": text}
 
@@ -1137,7 +1137,6 @@ def cv_form_content():
                 st.button(
                     "Remove", 
                     key=f"remove_cert_{i}", 
-                    on_click=remove_entry, 
                     args=(i, 'form_certifications', 'Certification'),
                     type="secondary",
                     use_container_width=True
@@ -1213,6 +1212,7 @@ def cv_form_content():
         st.markdown("---")
 
 def tab_cv_management():
+    """Contains the CV management logic (mostly just calling the form)."""
     # Initialization for list-based state
     if "form_education" not in st.session_state: st.session_state.form_education = []
     if "form_experience" not in st.session_state: st.session_state.form_experience = []
@@ -1246,104 +1246,37 @@ def tab_cv_management():
             
     cv_form_content()
 
-# -------------------------
-# JD MANAGEMENT TAB CONTENT (REMOVED)
-# -------------------------
-
-def process_jd_file(file, jd_type):
-    """Handles processing a single JD file. (No longer called, but retained for clarity)."""
-    # This logic is retained but intentionally not used in the UI
-    pass
-
-def process_jd_text(text):
-    """Handles processing pasted JD text. (No longer called, but retained for clarity)."""
-    # This logic is retained but intentionally not used in the UI
-    pass
-
-def clear_all_jds():
-    """Callback to clear all JDs."""
-    st.session_state.managed_jds = {}
-    st.session_state.selected_jd_key = None
-    st.toast("All saved JDs cleared!")
-
-def display_jd_details(key):
-    """Displays the details of the selected JD (Structured Summary and Raw Text)."""
-    jd_data = st.session_state.managed_jds.get(key)
-    
-    if not jd_data or isinstance(jd_data, str):
-        st.error(f"Error: JD '{key}' data is corrupted or missing. Data: {jd_data}")
-        return
-
-    st.markdown(f"### JD Details: **{jd_data.get('title', key)}**")
-    
-    tab_structured, tab_raw = st.tabs(["Structured Summary", "Raw Text View"])
-    
-    with tab_structured:
-        st.markdown(f"**Job Title:** {jd_data.get('title', 'N/A')}")
-        st.markdown(f"**Experience Level:** {jd_data.get('experience_level', 'N/A')}")
-        
-        st.markdown("#### Required Skills")
-        skills = jd_data.get('required_skills', ['N/A'])
-        if isinstance(skills, list):
-            st.markdown("* " + "\n* ".join(skills))
-        else:
-            st.markdown(f"Skills data format error: {str(skills)}")
-
-        st.markdown("#### Qualifications")
-        qualifications = jd_data.get('qualifications', ['N/A'])
-        if isinstance(qualifications, list):
-            st.markdown("* " + "\n* ".join(qualifications))
-        else:
-            st.markdown(f"Qualifications data format error: {str(qualifications)}")
-        
-        st.markdown("#### Responsibilities")
-        responsibilities = jd_data.get('responsibilities', ['N/A'])
-        if isinstance(responsibilities, list):
-            st.markdown("* " + "\n* ".join(responsibilities))
-        else:
-            st.markdown(f"Responsibilities data format error: {str(responsibilities)}")
-            
-    with tab_raw:
-        raw_text = jd_data.get('raw_text')
-        if raw_text:
-            st.text_area(f"Raw Extracted Text for {key}", value=raw_text, height=500)
-        else:
-            st.warning("Raw text was not saved for this Job Description.")
-            
-    if st.button("⬅️ Hide Details", key="hide_jd_details"):
-        st.session_state.selected_jd_key = None
-        st.session_state.show_jd_details_from_filter = False
-        st.rerun()
+# ---------------------------------------------
+# JD MANAGEMENT TAB CONTENT (FUNCTION REMOVED)
+# ---------------------------------------------
 
 def jd_management_tab():
     """
-    REMOVED: The content of the JD management tab has been removed
-    as requested and replaced with a notice and a clear button to clear saved JDs.
+    REMOVED: This function is now a placeholder indicating the feature is gone.
     """
-    st.header("💼 JD Management (Feature Disabled)")
-    st.caption("Job Description uploading and parsing is currently disabled.")
+    st.header("💼 JD Management (Feature Removed)")
+    st.caption("Job Description uploading and parsing functionality has been removed.")
     
-    st.warning("⚠️ **JD Upload/Pasting has been deactivated in this version.**")
-    st.markdown("To use the **Batch JD Match** and **Cover Letter** features, ensure you have already loaded JD data into the session state using a previous version of the application.")
+    st.error("❌ The **JD Management** tab has been completely removed as requested.")
+    st.markdown("To use the **Batch JD Match** and **Filter JD** features, you must ensure that Job Description data is manually loaded into the Streamlit session state variable: `st.session_state.managed_jds`.")
     
     st.markdown("---")
-    st.markdown("#### Saved Job Descriptions in Session State")
+    st.markdown("#### Current JD Status")
     
     if st.session_state.managed_jds:
-        st.info(f"Currently **{len(st.session_state.managed_jds)}** JDs are loaded for matching.")
-        
-        # Show titles of loaded JDs
+        st.info(f"Currently **{len(st.session_state.managed_jds)}** JDs are found in the session state.")
         jd_titles = [v.get('title', k) for k, v in st.session_state.managed_jds.items() if isinstance(v, dict)]
         if jd_titles:
-            st.markdown("##### Loaded JDs:")
+            st.markdown("##### Loaded JD Titles:")
             st.dataframe(pd.DataFrame({"Title": jd_titles}), use_container_width=True)
             
-        # Clear button (Retained for management)
-        if st.button("🗑️ Clear All Saved JDs", type="secondary", key="clear_all_jds_button"):
-            clear_all_jds()
-            st.rerun()
+            if st.button("🗑️ Clear All Saved JDs", type="secondary", key="clear_all_jds_button"):
+                st.session_state.managed_jds = {}
+                st.session_state.selected_jd_key = None
+                st.toast("All saved JDs cleared!")
+                st.rerun()
     else:
-        st.info("No Job Descriptions are currently loaded in the session state.")
+        st.info("No Job Descriptions are currently loaded in the session state (`st.session_state.managed_jds` is empty).")
 
 
 # -------------------------
@@ -1392,7 +1325,7 @@ def batch_jd_match_tab():
     jd_keys_valid = [k for k, v in st.session_state.managed_jds.items() if isinstance(v, dict) and v.get('title')]
 
     if not jd_keys_valid:
-        st.warning("⚠️ **No valid JDs available.** Please add JDs in the 'JD Management' tab (or ensure they are loaded).")
+        st.warning("⚠️ **No valid JDs available.** The JD Management tab has been removed, so you must ensure JDs are loaded in session state externally.")
         selected_jds = []
     else:
         jd_options = {k: st.session_state.managed_jds[k].get('title', k) for k in jd_keys_valid}
@@ -1624,7 +1557,7 @@ def cover_letter_tab():
     jd_keys_valid = {k: v.get('title', k) for k, v in st.session_state.managed_jds.items() if isinstance(v, dict)}
 
     if not cv_keys_valid or not jd_keys_valid:
-        st.warning("Please ensure you have at least **one valid CV** and **one valid JD** saved in their respective tabs to use this feature.")
+        st.warning("Please ensure you have at least **one valid CV** saved and **JD data loaded into the session state** to use this feature.")
         return
         
     st.markdown("---")
@@ -1726,6 +1659,55 @@ def cover_letter_tab():
 # NEW: FILTER JD TAB CONTENT (UPDATED - REMOVED MIN SKILLS)
 # -------------------------
 
+def display_jd_details(key):
+    """Displays the details of the selected JD (Structured Summary and Raw Text)."""
+    jd_data = st.session_state.managed_jds.get(key)
+    
+    if not jd_data or isinstance(jd_data, str):
+        st.error(f"Error: JD '{key}' data is corrupted or missing. Data: {jd_data}")
+        return
+
+    st.markdown(f"### JD Details: **{jd_data.get('title', key)}**")
+    
+    tab_structured, tab_raw = st.tabs(["Structured Summary", "Raw Text View"])
+    
+    with tab_structured:
+        st.markdown(f"**Job Title:** {jd_data.get('title', 'N/A')}")
+        st.markdown(f"**Experience Level:** {jd_data.get('experience_level', 'N/A')}")
+        
+        st.markdown("#### Required Skills")
+        skills = jd_data.get('required_skills', ['N/A'])
+        if isinstance(skills, list):
+            st.markdown("* " + "\n* ".join(skills))
+        else:
+            st.markdown(f"Skills data format error: {str(skills)}")
+
+        st.markdown("#### Qualifications")
+        qualifications = jd_data.get('qualifications', ['N/A'])
+        if isinstance(qualifications, list):
+            st.markdown("* " + "\n* ".join(qualifications))
+        else:
+            st.markdown(f"Qualifications data format error: {str(qualifications)}")
+        
+        st.markdown("#### Responsibilities")
+        responsibilities = jd_data.get('responsibilities', ['N/A'])
+        if isinstance(responsibilities, list):
+            st.markdown("* " + "\n* ".join(responsibilities))
+        else:
+            st.markdown(f"Responsibilities data format error: {str(responsibilities)}")
+            
+    with tab_raw:
+        raw_text = jd_data.get('raw_text')
+        if raw_text:
+            st.text_area(f"Raw Extracted Text for {key}", value=raw_text, height=500)
+        else:
+            st.warning("Raw text was not saved for this Job Description.")
+            
+    if st.button("⬅️ Hide Details", key="hide_jd_details"):
+        st.session_state.selected_jd_key = None
+        st.session_state.show_jd_details_from_filter = False
+        st.rerun()
+
 def filter_jd_tab():
     st.header("🔍 Filter Job Descriptions")
     st.caption("Use the filters below to narrow down the saved JDs.")
@@ -1733,7 +1715,7 @@ def filter_jd_tab():
     jd_keys_valid = [k for k, v in st.session_state.managed_jds.items() if isinstance(v, dict) and v.get('title')]
 
     if not jd_keys_valid:
-        st.warning("⚠️ **No valid JDs available.** Please load JDs into the session state to use this feature.")
+        st.warning("⚠️ **No valid JDs available.** The JD Management tab has been removed, so you must ensure JDs are loaded in session state externally.")
         return
 
     # --- Filter Inputs ---
@@ -1927,6 +1909,7 @@ def candidate_dashboard():
 
     # --- Session State Initialization for Candidate ---
     if "managed_cvs" not in st.session_state: st.session_state.managed_cvs = {} 
+    # JD state is initialized, but no function exists to populate it
     if "managed_jds" not in st.session_state: st.session_state.managed_jds = {} 
     if "current_resume_name" not in st.session_state: st.session_state.current_resume_name = None 
     if "show_cv_output" not in st.session_state: st.session_state.show_cv_output = None 
@@ -1936,7 +1919,7 @@ def candidate_dashboard():
     if "filtered_jds" not in st.session_state: st.session_state.filtered_jds = None 
     if "show_jd_details_from_filter" not in st.session_state: st.session_state.show_jd_details_from_filter = False 
     
-    # NEW Cover Letter State
+    # Cover Letter State
     if "last_cover_letter" not in st.session_state: st.session_state.last_cover_letter = None
     if "cl_cv_name" not in st.session_state: st.session_state.cl_cv_name = None
     if "cl_jd_title" not in st.session_state: st.session_state.cl_jd_title = None
@@ -1956,10 +1939,10 @@ def candidate_dashboard():
     tab_parsing, tab_management, tab_jd, tab_filter_jd, tab_match, tab_cl = st.tabs([
         "📄 Resume Parsing", 
         "📝 CV Management (Form)", 
-        "💼 JD Management", 
+        "💼 JD Management (Removed)", 
         "🔍 Filter JD", 
         "🏆 Batch JD Match", 
-        "💌 Generate Cover Letter" # NEW TAB
+        "💌 Generate Cover Letter"
     ])
     
     with tab_parsing:
@@ -1969,7 +1952,7 @@ def candidate_dashboard():
         tab_cv_management()
         
     with tab_jd:
-        jd_management_tab()
+        jd_management_tab() # Placeholder function
 
     with tab_filter_jd: 
         filter_jd_tab()
@@ -1977,7 +1960,7 @@ def candidate_dashboard():
     with tab_match:
         batch_jd_match_tab()
 
-    with tab_cl: # NEW TAB
+    with tab_cl:
         cover_letter_tab()
 
 
