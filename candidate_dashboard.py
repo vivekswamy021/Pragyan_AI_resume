@@ -43,9 +43,13 @@ def go_to(page_name):
 def get_file_type(file_name):
     """Identifies the file type based on its extension."""
     ext = os.path.splitext(file_name)[1].lower().strip('.')
+    # UPDATED: Added markdown, json, and xlsx
     if ext == 'pdf': return 'pdf'
-    elif ext == 'docx' or ext == 'doc': return 'docx'
+    elif ext in ('docx', 'doc'): return 'docx'
     elif ext == 'txt': return 'txt'
+    elif ext in ('md', 'markdown'): return 'markdown'
+    elif ext == 'json': return 'json'
+    elif ext in ('xlsx', 'xls'): return 'xlsx'
     else: return 'unknown' 
 
 def extract_content(file_type, file_content_bytes, file_name):
@@ -63,12 +67,29 @@ def extract_content(file_type, file_content_bytes, file_name):
             doc = docx.Document(BytesIO(file_content_bytes))
             text = '\n'.join([para.text for para in doc.paragraphs])
         
-        elif file_type in ['txt', 'unknown']:
+        # UPDATED: Handling Markdown and TXT
+        elif file_type in ['txt', 'markdown']:
             try:
                 text = file_content_bytes.decode('utf-8')
             except UnicodeDecodeError:
                  text = file_content_bytes.decode('latin-1')
         
+        # UPDATED: Handling JSON
+        elif file_type == 'json':
+            try:
+                data = json.loads(file_content_bytes.decode('utf-8'))
+                text = "--- JSON Content Start ---\n" + json.dumps(data, indent=2) + "\n--- JSON Content End ---"
+            except json.JSONDecodeError:
+                return f"[Error] JSON content extraction failed: Invalid JSON format."
+            except UnicodeDecodeError:
+                return f"[Error] JSON content extraction failed: Unicode Decode Error."
+        
+        # UPDATED: Handling XLSX (Placeholder)
+        elif file_type == 'xlsx':
+            # NOTE: Full XLSX parsing requires pandas and potentially openpyxl, which are heavy dependencies.
+            # This is a placeholder for a simple app environment.
+            return f"[Error] XLSX/Excel file parsing is complex and requires specific libraries (pandas/openpyxl). Please copy and paste the text content from the file instead."
+
         if not text.strip():
             return f"[Error] {file_type.upper()} content extraction failed or file is empty."
         
@@ -199,10 +220,10 @@ def save_form_cv():
     
     cv_key_name = f"{current_form_name.replace(' ', '_')}_Manual_CV_{datetime.now().strftime('%Y%m%d-%H%M')}"
 
-    # Simplified CV data structure - FIX: Referencing the corrected key
+    # Simplified CV data structure
     final_cv_data = {
         "name": current_form_name,
-        "summary": st.session_state.get('form_summary_value_input', '').strip(), # Corrected key usage
+        "summary": st.session_state.get('form_summary_value_input', '').strip(), 
         "skills": [s.strip() for s in st.session_state.get('form_skills_value', '').split('\n') if s.strip()],
         # ... other fields
     }
@@ -225,14 +246,18 @@ def generate_and_display_cv(cv_name):
 def resume_parsing_tab():
     st.header("📄 Upload/Paste Resume for AI Parsing")
     
+    # UPDATED FILE UPLOADER TYPES
+    file_types_allowed = ['pdf', 'docx', 'txt', 'md', 'json', 'xlsx']
+    
     with st.form("resume_parsing_form", clear_on_submit=False):
         uploaded_file = st.file_uploader(
-            "Upload Resume File (.pdf, .docx, .txt)", 
-            type=['pdf', 'docx', 'txt'], 
+            f"Upload Resume File ({', '.join(file_types_allowed)})", 
+            type=file_types_allowed, 
             accept_multiple_files=False,
             key="resume_uploader"
         )
         st.markdown("---")
+        st.info("Limit 200MB per file. Allowed types: PDF, DOCX, TXT, MD, JSON, XLSX.")
         pasted_text = st.text_area("Or Paste Resume Text Here", height=200, key="resume_paster")
         st.markdown("---")
 
@@ -243,6 +268,8 @@ def resume_parsing_tab():
             if uploaded_file is not None:
                 file_name = uploaded_file.name
                 file_type = get_file_type(file_name)
+                # Ensure the file pointer is at the start
+                uploaded_file.seek(0) 
                 extracted_text = extract_content(file_type, uploaded_file.getvalue(), file_name)
             elif pasted_text.strip():
                 extracted_text = pasted_text.strip()
@@ -257,7 +284,7 @@ def resume_parsing_tab():
             with st.spinner("🧠 Sending to Groq LLM for structured parsing..."):
                 parsed_data = parse_resume_with_llm(extracted_text)
             
-            if "error" in parsed_data:
+            if "error" in parsed_data and parsed_data.get('error') != "Mock/Parsing error.":
                 st.error(f"AI Parsing Failed: {parsed_data['error']}")
                 return
 
@@ -277,7 +304,7 @@ def cv_form_content():
     st.info("Use this form to manually enter or edit structured CV details.")
     st.text_input("Full Name", key="form_name_value")
     
-    # FIX APPLIED HERE: Removed repeated 'key' argument. Used the intended key 'form_summary_value_input'.
+    # Corrected key usage
     st.text_area("Career Summary", key="form_summary_value_input") 
     
     st.text_area("Skills (One per line)", key="form_skills_value", help="Enter core skills, one per line.")
@@ -349,9 +376,11 @@ def jd_management_tab_candidate():
 
     # --- Upload File Section ---
     elif method == "Upload File":
+        # Updated to allow all supported JD file types for consistency
+        jd_file_types = ["pdf", "txt", "docx", "md", "json"]
         uploaded_files = st.file_uploader(
-            "Upload JD file(s)",
-            type=["pdf", "txt", "docx"],
+            f"Upload JD file(s) ({', '.join(jd_file_types)})",
+            type=jd_file_types,
             accept_multiple_files=(jd_type == "Multiple JD"),
             key="jd_file_uploader_candidate"
         )
@@ -372,6 +401,7 @@ def jd_management_tab_candidate():
                     if file:
                         with st.spinner(f"Extracting content from {file.name}..."):
                             file_type = get_file_type(file.name)
+                            file.seek(0)
                             jd_text = extract_content(file_type, file.getvalue(), file.name)
                             
                         if not jd_text.startswith("[Error"):
@@ -412,10 +442,10 @@ def jd_management_tab_candidate():
     else:
         st.info("No Job Descriptions added yet.")
         
-# --- New Batch Match Tab Function ---
+# --- Batch Match Tab Function ---
 
 def jd_batch_match_tab():
-    """The new Batch JD Match tab logic."""
+    """The Batch JD Match tab logic."""
     st.header("🎯 Batch JD Match: Best Matches")
     st.markdown("Compare your current resume against all saved job descriptions.")
 
@@ -595,7 +625,6 @@ def candidate_dashboard():
     
     # Initialize basic form states (required for save_form_cv to work)
     if "form_name_value" not in st.session_state: st.session_state.form_name_value = ""
-    # Only need to check for one key, the other was the issue.
     if "form_summary_value_input" not in st.session_state: st.session_state.form_summary_value_input = "" 
     if "form_skills_value" not in st.session_state: st.session_state.form_skills_value = ""
 
