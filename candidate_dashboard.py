@@ -39,8 +39,20 @@ class MockGroqClient:
             def create(self, **kwargs):
                 prompt_content = kwargs.get('messages', [{}])[0].get('content', '')
                 
-                # Check if it's a Q&A call
-                if "Answer the following question about the resume concisely and directly." in prompt_content:
+                # Check if it's a JD Q&A call
+                if "Answer the following question about the Job Description concisely and directly." in prompt_content:
+                    question_match = re.search(r'Question:\s*(.*)', prompt_content)
+                    question = question_match.group(1).strip() if question_match else "a question"
+                    
+                    if 'role' in question.lower():
+                        return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': 'The required role in this Job Description is Cloud Engineer.'})})()]})
+                    elif 'experience' in question.lower():
+                        return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': 'The job requires 3+ years of experience in AWS/GCP and infrastructure automation.'})})()]})
+                    else:
+                        return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': f'Mock answer for JD question: The JD mentions Python and Docker as key skills.'})})()]})
+
+                # Check if it's a Resume Q&A call
+                elif "Answer the following question about the resume concisely and directly." in prompt_content:
                     question_match = re.search(r'Question:\s*(.*)', prompt_content)
                     question = question_match.group(1).strip() if question_match else "a question"
                     
@@ -50,6 +62,7 @@ class MockGroqClient:
                         return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': 'Key skills include Python, SQL, AWS, and MLOps.'})})()]})
                     else:
                         return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': f'Based on the mock resume data, I can provide a simulated answer to your question about {question}.'})})()]})
+
 
                 # Mock candidate data (Vivek Swamy) for parsing
                 mock_llm_json = {
@@ -265,6 +278,7 @@ def parse_resume_with_llm(text):
     # 3. Handle Mock Client execution (Fallback for PDF/DOCX/TXT)
     if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
         try:
+            # Use the mock client's default mock response for parsing
             completion = client.chat().create(model=GROQ_MODEL, messages=[{}])
             content = completion.choices[0].message.content.strip()
             parsed_data = json.loads(content)
@@ -881,6 +895,8 @@ def jd_management_tab_candidate():
             if st.button("🗑️ Clear All JDs", key="clear_jds_candidate", use_container_width=True, help="Removes all currently loaded JDs."):
                 st.session_state.candidate_jd_list = []
                 if 'candidate_match_results' in st.session_state: del st.session_state['candidate_match_results']
+                # Clear JD Q&A history if it exists
+                if 'jd_chatbot_history' in st.session_state: del st.session_state['jd_chatbot_history']
                 st.success("All JDs and associated match results have been cleared.")
                 st.rerun() 
 
@@ -1344,7 +1360,6 @@ def parsed_data_tab():
             st.markdown("---")
             st.info("For structured data (JSON) or raw text (Markdown), please check their respective viewing tabs.")
 
-
     else:
         st.warning(f"**Status:** ❌ **No Valid Resume Data Loaded**")
         # Display the actual error message if one exists
@@ -1353,9 +1368,10 @@ def parsed_data_tab():
         st.info("Please successfully parse a resume in the **Resume Parsing** tab.")
 
 # --------------------------------------------------------------------------------------
-# NEW CHATBOT FUNCTIONALITY
+# CHATBOT FUNCTIONALITY
 # --------------------------------------------------------------------------------------
 
+# 1. Resume Q&A Function (Original)
 def qa_on_resume(question):
     """Chatbot for Resume (Q&A) using LLM."""
     global client, GROQ_MODEL, GROQ_API_KEY
@@ -1387,12 +1403,40 @@ def qa_on_resume(question):
     except Exception as e:
         return f"AI Chatbot Error: Failed to get response from LLM. Error: {e}"
 
-def chatbot_tab_content():
-    """Content for the new Chatbot Tab."""
-    st.header("🤖 Resume Q&A Chatbot")
-    st.markdown("Ask specific questions about the currently loaded resume to the AI.")
-    st.markdown("---")
+# 2. JD Q&A Function (New)
+def qa_on_jd(question, jd_content):
+    """Chatbot for Job Description (Q&A) using LLM."""
+    global client, GROQ_MODEL, GROQ_API_KEY
     
+    if not GROQ_API_KEY and not isinstance(client, MockGroqClient):
+        return "AI Chatbot Disabled: GROQ_API_KEY not set."
+
+    if not jd_content or not jd_content.strip():
+        return "Please select a valid Job Description to chat about."
+
+    prompt = f"""Given the following Job Description (JD) text:
+    Job Description Text: {jd_content}
+    Answer the following question about the Job Description concisely and directly.
+    If the information is not present, state that clearly and briefly (e.g., 'The JD does not specify that information.').
+    Question: {question}
+    """
+    
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL, 
+            messages=[{"role": "user", "content": prompt}], 
+            temperature=0.4
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"AI Chatbot Error: Failed to get response from LLM. Error: {e}"
+
+# 3. Resume Q&A Content Tab
+def resume_qa_content():
+    """Content for the Resume Q&A sub-tab."""
+    st.subheader("👤 Resume Q&A Chatbot")
+    st.markdown("Ask specific questions about the currently loaded resume.")
+
     is_data_loaded_and_valid = (
         st.session_state.get('parsed', {}).get('name') is not None and 
         st.session_state.get('parsed', {}).get('error') is None
@@ -1402,21 +1446,21 @@ def chatbot_tab_content():
         st.warning("⚠️ **Q&A Disabled:** Please parse a valid resume in the 'Resume Parsing' tab first.")
         return
     
-    if "chatbot_history" not in st.session_state:
-        st.session_state.chatbot_history = []
+    if "resume_chatbot_history" not in st.session_state:
+        st.session_state.resume_chatbot_history = []
 
     st.info(f"Chatting about: **{st.session_state.parsed['name']}**")
     st.markdown("---")
     
-    # 1. Display Chat History
-    for message in st.session_state.chatbot_history:
+    # Display Chat History
+    for message in st.session_state.resume_chatbot_history:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    # 2. Chat Input and Logic
-    if prompt := st.chat_input("Ask a question about the resume..."):
+    # Chat Input and Logic
+    if prompt := st.chat_input("Ask a question about the resume...", key="resume_qa_input"):
         # Add user message to history
-        st.session_state.chatbot_history.append({"role": "user", "content": prompt})
+        st.session_state.resume_chatbot_history.append({"role": "user", "content": prompt})
         
         # Display user message
         with st.chat_message("user"):
@@ -1430,18 +1474,95 @@ def chatbot_tab_content():
         with st.chat_message("assistant"):
             st.markdown(ai_response)
             
-        st.session_state.chatbot_history.append({"role": "assistant", "content": ai_response})
+        st.session_state.resume_chatbot_history.append({"role": "assistant", "content": ai_response})
         st.rerun()
 
-    # 3. Clear Chat Button
-    if st.session_state.chatbot_history:
+    # Clear Chat Button
+    if st.session_state.resume_chatbot_history:
         st.markdown("---")
-        if st.button("🗑️ Clear Chat History", key="clear_chatbot_history"):
-            st.session_state.chatbot_history = []
+        if st.button("🗑️ Clear Resume Chat History", key="clear_resume_chatbot_history"):
+            st.session_state.resume_chatbot_history = []
             st.rerun()
 
+# 4. JD Q&A Content Tab (New Sub-tab)
+def jd_qa_content():
+    """Content for the JD Q&A sub-tab."""
+    st.subheader("💼 JD Q&A Chatbot")
+    st.markdown("Select a Job Description and ask questions about its requirements.")
+
+    if not st.session_state.get('candidate_jd_list'):
+        st.warning("⚠️ **Q&A Disabled:** Please load Job Descriptions in the 'JD Management' tab first.")
+        return
+
+    # Select JD
+    jd_names = [jd['name'] for jd in st.session_state.candidate_jd_list]
+    selected_jd_name = st.selectbox(
+        "Select Job Description",
+        options=jd_names,
+        key="selected_jd_for_qa"
+    )
+
+    if "jd_chatbot_history" not in st.session_state:
+        st.session_state.jd_chatbot_history = {} # History stored per JD name
+
+    # Get the JD content
+    selected_jd = next((jd for jd in st.session_state.candidate_jd_list if jd['name'] == selected_jd_name), None)
+    jd_content = selected_jd['content'] if selected_jd else ""
+
+    # Initialize history for the selected JD
+    current_jd_history = st.session_state.jd_chatbot_history.setdefault(selected_jd_name, [])
+
+    st.info(f"Chatting about: **{selected_jd_name}** (Role: {selected_jd.get('role', 'N/A')})")
+    st.markdown("---")
+
+    # Display Chat History
+    for message in current_jd_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Chat Input and Logic
+    if prompt := st.chat_input(f"Ask about the requirements of: {selected_jd_name}...", key="jd_qa_input"):
+        # Add user message to history
+        current_jd_history.append({"role": "user", "content": prompt})
+        
+        # Display user message
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Get AI response
+        with st.spinner("Thinking..."):
+            ai_response = qa_on_jd(prompt, jd_content)
+
+        # Display AI response and add to history
+        with st.chat_message("assistant"):
+            st.markdown(ai_response)
+            
+        current_jd_history.append({"role": "assistant", "content": ai_response})
+        st.rerun()
+
+    # Clear Chat Button for the current JD
+    if current_jd_history:
+        st.markdown("---")
+        if st.button(f"🗑️ Clear Chat History for {selected_jd_name}", key="clear_jd_chatbot_history"):
+            st.session_state.jd_chatbot_history[selected_jd_name] = []
+            st.rerun()
+
+# 5. Main Chatbot Tab Wrapper
+def chatbot_tab_content():
+    """Main Content for the Chatbot Tab with sub-tabs."""
+    st.header("🤖 AI Chatbot Assistant")
+    
+    # Sub-tabs for the main Chatbot tab
+    tab_resume, tab_jd = st.tabs(["👤 Resume Q&A", "💼 JD Q&A"])
+    
+    with tab_resume:
+        resume_qa_content()
+        
+    with tab_jd:
+        jd_qa_content()
+
 # --------------------------------------------------------------------------------------
-# END NEW CHATBOT FUNCTIONALITY
+# END CHATBOT FUNCTIONALITY
 # --------------------------------------------------------------------------------------
 
 
@@ -1475,7 +1596,10 @@ def candidate_dashboard():
     if "candidate_match_results" not in st.session_state: st.session_state.candidate_match_results = []
     if 'filtered_jds_display' not in st.session_state: st.session_state.filtered_jds_display = []
     if 'last_selected_skills' not in st.session_state: st.session_state.last_selected_skills = []
-    if "chatbot_history" not in st.session_state: st.session_state.chatbot_history = []
+    
+    # Chatbot history initialized separately for each sub-tab
+    if "resume_chatbot_history" not in st.session_state: st.session_state.resume_chatbot_history = []
+    if "jd_chatbot_history" not in st.session_state: st.session_state.jd_chatbot_history = {} # Keyed by JD name
 
     # --- Main Content with Tabs (NEW TAB ADDED) ---
     tab_parsing, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot = st.tabs(
