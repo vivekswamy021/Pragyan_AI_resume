@@ -10,7 +10,7 @@ from datetime import datetime
 from io import BytesIO 
 import time
 import pandas as pd
-import base64 # Added for HTML download/PDF conversion utility
+import base64 
 
 # --- CONFIGURATION & API SETUP ---
 
@@ -584,21 +584,17 @@ def cv_management_tab_content():
     
     # Only try to synchronize if 'parsed' has valid data and is not currently showing an error
     if parsed_data.get('name') and 'error' not in parsed_data:
-        # We need a robust check to see if the form data is OUT OF DATE compared to parsed data
         
-        # A simple flag (like last_parsed_id) is usually best, but without it:
         # Check if the form state (cv_name) is different from the parsed state (parsed_name)
         parsed_name = parsed_data.get('name', '')
         form_name = st.session_state.cv_form_data.get('name', '')
         
-        # If the parsed data is from a file/paste and the form hasn't been manually submitted yet
-        # or if the parsed name/email is definitively different from the current form data
+        # If the parsed name/email is definitively different from the current form data
         if parsed_name and (parsed_name != form_name or parsed_data.get('email') != st.session_state.cv_form_data.get('email')):
             
             # Merge parsed data into a copy of default to ensure all keys exist
             st.session_state.cv_form_data = {**default_parsed, **parsed_data}
-            # Optional toast, removed to reduce clutter on tab switch, but logic kept
-            # st.toast("CV Management form synchronized with data from the Resume Parsing tab.")
+            
             
     # --- END CRITICAL FIX ---
             
@@ -753,7 +749,7 @@ def cv_management_tab_content():
 
         st.success(f"✅ CV data for **{st.session_state.parsed['name']}** successfully generated and loaded!")
         
-        # --- CRITICAL FIX: Force rerun to display the preview immediately ---
+        # --- FIX: Force rerun to display the preview immediately after form submission ---
         st.rerun() 
         
         
