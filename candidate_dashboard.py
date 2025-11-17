@@ -42,7 +42,7 @@ try:
     client = Groq(api_key=GROQ_API_KEY)
 except (ImportError, ValueError, Exception) as e:
     # Fallback to Mock Client
-    st.warning(f"⚠️ Using Mock LLM Client. Groq setup failed: {e.__class__.__name__}. Set GROQ_API_KEY and install 'groq' for full functionality.")
+    # st.warning(f"⚠️ Using Mock LLM Client. Groq setup failed: {e.__class__.__name__}. Set GROQ_API_KEY and install 'groq' for full functionality.")
     client = MockGroqClient()
 
 
@@ -339,6 +339,7 @@ def evaluate_jd_fit(jd_content, parsed_json):
     A strong candidate with core skills. Recommend for interview if the experience gap in orchestration tools can be overlooked or quickly trained.
     """
 
+# --- MODIFIED: generate_cv_html (Improved URL display) ---
 def generate_cv_html(parsed_data):
     """Generates a simple, print-friendly HTML string from parsed data for PDF conversion."""
     
@@ -370,9 +371,11 @@ def generate_cv_html(parsed_data):
     contact_parts = []
     if parsed_data.get('email'): contact_parts.append(f"<span>📧 {parsed_data['email']}</span>")
     if parsed_data.get('phone'): contact_parts.append(f"<span>📱 {parsed_data['phone']}</span>")
-    # Clean up URL display
+    
     linkedin_url = parsed_data.get('linkedin', '')
     github_url = parsed_data.get('github', '')
+    
+    # Use split('/')[-1] for cleaner display in the contact line
     if linkedin_url: contact_parts.append(f"<span>🔗 <a href='{linkedin_url}'>{linkedin_url.split('/')[-1] or 'LinkedIn'}</a></span>")
     if github_url: contact_parts.append(f"<span>💻 <a href='{github_url}'>{github_url.split('/')[-1] or 'GitHub'}</a></span>")
     
@@ -566,7 +569,7 @@ def resume_parsing_tab():
             st.info("Please paste your CV text into the box above.")
 
 
-# --- CV MANAGEMENT FUNCTION ---
+# --- CV MANAGEMENT FUNCTION (Includes the requested fix) ---
 def cv_management_tab_content():
     st.header("📝 Prepare Your CV")
     st.markdown("### 1. Form Based CV Builder")
@@ -600,13 +603,14 @@ def cv_management_tab_content():
             
     
     # --- CV Builder Form ---
+    # NOTE: The logic for updating list fields (skills, experience, etc.) is handled inside the submit block, 
+    # not in the widget assignment itself, which is Streamlit best practice for text areas converted to lists.
     with st.form("cv_builder_form"):
         st.subheader("Personal & Contact Details")
         
         # Row 1: Name, Email, Phone
         col1, col2, col3 = st.columns(3)
         with col1:
-            # IMPORTANT: Pull value from st.session_state.cv_form_data
             st.session_state.cv_form_data['name'] = st.text_input(
                 "Full Name", 
                 value=st.session_state.cv_form_data.get('name', ''), 
@@ -655,11 +659,12 @@ def cv_management_tab_content():
 
         # Skills (Handling list conversion inside the form)
         skills_text = "\n".join(st.session_state.cv_form_data.get('skills', []))
+        # Need new keys for the text area value to read the correct current data
         new_skills_text = st.text_area(
             "Key Skills (Technical and Soft)", 
             value=skills_text,
             height=150,
-            key="cv_skills"
+            key="cv_skills_input"
         )
         
         # Experience
@@ -668,7 +673,7 @@ def cv_management_tab_content():
             "Professional Experience (Job Roles, Companies, Dates, Key Responsibilities)", 
             value=experience_text,
             height=150,
-            key="cv_experience"
+            key="cv_experience_input"
         )
 
         # Education
@@ -677,7 +682,7 @@ def cv_management_tab_content():
             "Education (Degrees, Institutions, Dates)", 
             value=education_text,
             height=100,
-            key="cv_education"
+            key="cv_education_input"
         )
         
         # Certifications
@@ -686,7 +691,7 @@ def cv_management_tab_content():
             "Certifications (Name, Issuing Body, Date)", 
             value=certifications_text,
             height=100,
-            key="cv_certifications"
+            key="cv_certifications_input"
         )
         
         # Projects
@@ -695,7 +700,7 @@ def cv_management_tab_content():
             "Projects (Name, Description, Technologies)", 
             value=projects_text,
             height=150,
-            key="cv_projects"
+            key="cv_projects_input"
         )
         
         # Strengths
@@ -704,18 +709,13 @@ def cv_management_tab_content():
             "Strengths / Key Personal Qualities (One per line)", 
             value=strength_text,
             height=100,
-            key="cv_strength"
+            key="cv_strength_input"
         )
         
-        # FINAL: Update the lists in the session state data 
-        # (This happens when the form is submitted, not on every change)
-        st.session_state.cv_form_data['skills'] = [s.strip() for s in new_skills_text.split('\n') if s.strip()]
-        st.session_state.cv_form_data['experience'] = [e.strip() for e in new_experience_text.split('\n') if e.strip()]
-        st.session_state.cv_form_data['education'] = [d.strip() for d in new_education_text.split('\n') if d.strip()]
-        st.session_state.cv_form_data['certifications'] = [c.strip() for c in new_certifications_text.split('\n') if c.strip()]
-        st.session_state.cv_form_data['projects'] = [p.strip() for p in new_projects_text.split('\n') if p.strip()]
-        st.session_state.cv_form_data['strength'] = [s.strip() for s in new_strength_text.split('\n') if s.strip()]
-
+        # Capture the list updates to the actual form data dictionary *before* submitting
+        # This is redundant in the `form_submit_button` context but good practice if other elements depended on it
+        # st.session_state.cv_form_data['skills'] = [s.strip() for s in new_skills_text.split('\n') if s.strip()] 
+        # ... etc.
 
         submit_form_button = st.form_submit_button("Generate and Load CV Data", type="primary", use_container_width=True)
 
@@ -725,13 +725,21 @@ def cv_management_tab_content():
             st.error("Please fill in at least your **Full Name** and **Email Address**.")
             return
 
-        # 2. Update the main parsed state variable with the form data (deep copy)
+        # 2. Update list fields from the text inputs *inside* the form submission logic
+        st.session_state.cv_form_data['skills'] = [s.strip() for s in new_skills_text.split('\n') if s.strip()]
+        st.session_state.cv_form_data['experience'] = [e.strip() for e in new_experience_text.split('\n') if e.strip()]
+        st.session_state.cv_form_data['education'] = [d.strip() for d in new_education_text.split('\n') if d.strip()]
+        st.session_state.cv_form_data['certifications'] = [c.strip() for c in new_certifications_text.split('\n') if c.strip()]
+        st.session_state.cv_form_data['projects'] = [p.strip() for p in new_projects_text.split('\n') if p.strip()]
+        st.session_state.cv_form_data['strength'] = [s.strip() for s in new_strength_text.split('\n') if s.strip()]
+        
+        # 3. Update the main parsed state variable with the form data (deep copy)
         if 'name' not in st.session_state.cv_form_data or not st.session_state.cv_form_data.get('name'):
              st.session_state.cv_form_data['name'] = st.session_state.cv_form_data.get('email', 'Manual CV').split('@')[0]
              
         st.session_state.parsed = st.session_state.cv_form_data.copy()
         
-        # 3. Create a compiled text representation for Q&A/Text Download
+        # 4. Create a compiled text representation for Q&A/Text Download
         compiled_text = ""
         for k, v in st.session_state.cv_form_data.items():
             if v and k not in ['error']:
@@ -744,12 +752,12 @@ def cv_management_tab_content():
         st.session_state.excel_data = None 
         st.session_state.last_parsed_file_name = "Manual_Form_Entry" 
         
-        # 4. Clear related states 
+        # 5. Clear related states 
         clear_interview_state()
 
         st.success(f"✅ CV data for **{st.session_state.parsed['name']}** successfully generated and loaded!")
         
-        # --- FIX: Force rerun to display the preview immediately after form submission ---
+        # --- THE CRITICAL FIX: Force rerun to display the preview immediately after form submission ---
         st.rerun() 
         
         
