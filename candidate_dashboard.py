@@ -54,8 +54,7 @@ def get_file_type(file_name):
     ext = os.path.splitext(file_name)[1].lower().strip('.')
     if ext == 'pdf': return 'pdf'
     elif ext in ('docx', 'doc'): return 'docx'
-    elif ext == 'txt': return 'txt'
-    elif ext in ('md', 'markdown'): return 'markdown'
+    elif ext in ('txt', 'md', 'markdown'): return 'txt'
     elif ext == 'json': return 'json'
     elif ext in ('xlsx', 'xls'): return 'xlsx'
     else: return 'unknown' 
@@ -64,7 +63,6 @@ def extract_content(file_type, file_content_bytes, file_name):
     """Extracts text content from uploaded file content (bytes)."""
     text = ''
     try:
-        # ... (PDF, DOCX, TXT, JSON, XLSX extraction logic remains the same)
         if file_type == 'pdf':
             with pdfplumber.open(BytesIO(file_content_bytes)) as pdf:
                 for page in pdf.pages:
@@ -76,7 +74,7 @@ def extract_content(file_type, file_content_bytes, file_name):
             doc = docx.Document(BytesIO(file_content_bytes))
             text = '\n'.join([para.text for para in doc.paragraphs])
         
-        elif file_type in ['txt', 'markdown']:
+        elif file_type == 'txt':
             try:
                 text = file_content_bytes.decode('utf-8')
             except UnicodeDecodeError:
@@ -115,44 +113,41 @@ def parse_resume_with_llm(text):
     # 2. Handle Mock Client execution (Always returns success for testing)
     if isinstance(client, MockGroqClient):
         # Mock structured data for demonstration
-        # ERROR is explicitly set to None (or just omitted) on mock success
         return {
             "name": "Mock Candidate", 
             "email": "mock@example.com", 
             "phone": "555-1234", 
-            "linkedin": "linkedin.com/in/mock", 
-            "github": "github.com/mock", 
+            "linkedin": "https://linkedin.com/in/mock", 
+            "github": "https://github.com/mock", 
             "personal_details": "Highly motivated individual with mock experience in Python and Streamlit.", 
             "skills": ["Python", "Streamlit", "SQL", "AWS"], 
-            "education": ["B.S. Computer Science, Mock University"], 
+            "education": ["B.S. Computer Science, Mock University, 2020"], 
             "experience": ["Software Intern, Mock Solutions (2024-2025)"], 
             "certifications": ["Mock Certification"], 
-            "projects": ["Mock Project"], 
+            "projects": ["Mock Project: Built a dashboard using Streamlit."], 
             "strength": ["Mock Strength"], 
-            "error": None  # <--- Fix: Set error to None for mock success
+            "error": None
         }
 
     # 3. Handle Real Groq Client execution (MOCKED HERE for a successful return structure)
     try:
-        # Placeholder for actual Groq call
-        # response = client.chat.completions.create(...)
-        # parsed_json = json.loads(response.choices[0].message.content)
+        # NOTE: Implement actual Groq API call here if key is set and library is installed.
+        # For this demo, we simulate a successful return for the real client.
         
-        # Simulating a successful real Groq call response structure
         parsed_data = {
             "name": "Parsed Candidate", 
             "email": "parsed@example.com", 
             "phone": "555-9876", 
-            "linkedin": "linkedin.com/in/parsed", 
-            "github": "github.com/parsed", 
+            "linkedin": "https://linkedin.com/in/parsed", 
+            "github": "https://github.com/parsed", 
             "personal_details": "Actual parsed summary from LLM.", 
             "skills": ["Real", "Python", "Streamlit"], 
-            "education": ["University of Code"], 
-            "experience": ["Senior Developer, TechCo"], 
+            "education": ["University of Code, 2021"], 
+            "experience": ["Senior Developer, TechCo, 2021 - Present"], 
             "certifications": ["AWS Certified"], 
             "projects": ["Project Alpha"], 
             "strength": ["Teamwork"], 
-            "error": None # <--- Fix: Set error to None on real LLM success
+            "error": None
         }
         return parsed_data
         
@@ -258,73 +253,78 @@ def evaluate_jd_fit(jd_content, parsed_json):
     A strong candidate with core skills. Recommend for interview if the experience gap in orchestration tools can be overlooked or quickly trained.
     """
 
+# --- NEW HELPER FUNCTION FOR HTML/PDF Generation ---
 def generate_cv_html(parsed_data):
-    """Generates basic HTML from the parsed CV data for print-to-PDF."""
+    """Generates a simple, print-friendly HTML string from parsed data for PDF conversion."""
     
-    # Simple CSS for a professional look and print readiness
+    # Simple CSS for a clean, print-friendly CV look
     css = """
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; color: #333; line-height: 1.6; }
-        h1 { font-size: 24px; color: #1e3a8a; border-bottom: 3px solid #1e3a8a; padding-bottom: 5px; margin-bottom: 5px; }
-        h2 { font-size: 18px; color: #1e3a8a; border-bottom: 1px solid #ddd; padding-bottom: 3px; margin-top: 20px; }
-        .contact-info { font-size: 12px; margin-bottom: 15px; }
-        .contact-info span { margin-right: 15px; }
-        .section-content { margin-left: 20px; margin-bottom: 15px; }
-        ul { list-style-type: disc; margin-left: 20px; padding-left: 0; }
-        li { margin-bottom: 5px; }
-        a { color: #1e3a8a; text-decoration: none; }
-        @media print {
-            body { margin: 0; }
-            h1 { font-size: 20pt; }
-            h2 { font-size: 14pt; }
-        }
+        @page { size: A4; margin: 1cm; }
+        body { font-family: 'Arial', sans-serif; line-height: 1.5; margin: 0; padding: 0; font-size: 10pt; }
+        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+        .header h1 { margin: 0; font-size: 1.8em; }
+        .contact-info { display: flex; justify-content: center; font-size: 0.8em; color: #555; }
+        .contact-info span { margin: 0 8px; }
+        .section { margin-bottom: 15px; page-break-inside: avoid; }
+        .section h2 { border-bottom: 1px solid #999; padding-bottom: 3px; margin-bottom: 8px; font-size: 1.1em; text-transform: uppercase; color: #333; }
+        .item-list ul { list-style-type: disc; margin-left: 20px; padding-left: 0; margin-top: 0; }
+        .item-list ul li { margin-bottom: 3px; }
+        .item-list p { margin: 3px 0 8px 0; }
+        a { color: #0056b3; text-decoration: none; }
     </style>
     """
     
     # --- HTML Structure ---
-    html = f"<!DOCTYPE html><html><head><title>{parsed_data.get('name', 'CV')}</title>{css}</head><body>"
+    html_content = f"<html><head>{css}<title>{parsed_data.get('name', 'CV')}</title></head><body>"
     
-    # 1. Header and Contact
-    html += f"<h1>{parsed_data.get('name', 'Candidate CV')}</h1>"
+    # 1. Header and Contact Info
+    html_content += '<div class="header">'
+    html_content += f"<h1>{parsed_data.get('name', 'Candidate Name')}</h1>"
+    
     contact_parts = []
     if parsed_data.get('email'): contact_parts.append(f"<span>📧 {parsed_data['email']}</span>")
-    if parsed_data.get('phone'): contact_parts.append(f"<span>📞 {parsed_data['phone']}</span>")
-    if parsed_data.get('linkedin'): contact_parts.append(f"<span>🔗 <a href='{parsed_data['linkedin']}'>LinkedIn</a></span>")
-    if parsed_data.get('github'): contact_parts.append(f"<span>💻 <a href='{parsed_data['github']}'>GitHub</a></span>")
+    if parsed_data.get('phone'): contact_parts.append(f"<span>📱 {parsed_data['phone']}</span>")
+    # Clean up URL display
+    linkedin_url = parsed_data.get('linkedin', '')
+    github_url = parsed_data.get('github', '')
+    if linkedin_url: contact_parts.append(f"<span>🔗 <a href='{linkedin_url}'>{linkedin_url.split('/')[-1] or 'LinkedIn'}</a></span>")
+    if github_url: contact_parts.append(f"<span>💻 <a href='{github_url}'>{github_url.split('/')[-1] or 'GitHub'}</a></span>")
     
-    if contact_parts:
-        html += f"<div class='contact-info'>{' | '.join(contact_parts)}</div>"
-
+    html_content += f'<div class="contact-info">{" | ".join(contact_parts)}</div>'
+    html_content += '</div>'
+    
     # 2. Sections
-    section_order = [
-        ('personal_details', 'Professional Summary'), 
-        ('experience', 'Professional Experience'), 
-        ('projects', 'Key Projects'), 
-        ('education', 'Education'), 
-        ('certifications', 'Certifications'), 
-        ('skills', 'Skills'), 
-        ('strength', 'Strengths')
-    ]
-
-    for key, title in section_order:
-        content = parsed_data.get(key)
+    section_order = ['personal_details', 'experience', 'projects', 'education', 'certifications', 'skills', 'strength']
+    
+    for k in section_order:
+        v = parsed_data.get(k)
         
-        if content and (isinstance(content, str) and content.strip() or isinstance(content, list) and content):
-            html += f"<h2>{title.upper()}</h2><div class='section-content'>"
+        # Skip contact details already handled
+        if k in ['name', 'email', 'phone', 'linkedin', 'github', 'error']: continue 
+
+        if v and (isinstance(v, str) and v.strip() or isinstance(v, list) and v):
             
-            if isinstance(content, str):
-                html += f"<p>{content.replace('\n', '<br>')}</p>"
-            elif isinstance(content, list):
-                html += "<ul>"
-                for item in content:
-                    if item:
-                        html += f"<li>{item}</li>"
-                html += "</ul>"
+            # Use title() for nicer display, e.g., 'personal_details' becomes 'Personal Details'
+            html_content += f'<div class="section"><h2>{k.replace("_", " ").title()}</h2>'
+            html_content += '<div class="item-list">'
+            
+            if k == 'personal_details' and isinstance(v, str):
+                html_content += f"<p>{v}</p>"
+            elif isinstance(v, list):
+                html_content += '<ul>'
+                for item in v:
+                    if item: 
+                        html_content += f"<li>{item}</li>"
+                html_content += '</ul>'
+            else:
+                # Fallback for any other string
+                html_content += f"<p>{v}</p>"
                 
-            html += "</div>"
-            
-    html += "</body></html>"
-    return html
+            html_content += '</div></div>'
+
+    html_content += '</body></html>'
+    return html_content
 
 # --- Tab Content Functions ---
 
@@ -368,20 +368,18 @@ def resume_parsing_tab():
             with st.spinner("🧠 Sending to Groq LLM for structured parsing..."):
                 parsed_data = parse_resume_with_llm(extracted_text)
             
-            # CRITICAL FIX: Check if an error exists AND is not None/empty before failing
+            # Check if an error exists AND is not None/empty before failing
             if parsed_data.get('error') is not None and parsed_data.get('error') != "":
                 st.error(f"AI Parsing Failed: {parsed_data['error']}")
                 return
 
             candidate_name = parsed_data.get('name', 'Unknown_Candidate').replace(' ', '_')
             
-            # CRITICAL: Store parsed data for match analysis and form initialization
+            # Store parsed data and copy to form data state
             st.session_state.parsed = parsed_data 
-            
-            # Also update the form data state so the form reflects the newly parsed data
             st.session_state.cv_form_data = parsed_data.copy()
             
-            # Create a compiled text representation for Q&A/Text Download (from new parsed data)
+            # Create a compiled text representation
             compiled_text = ""
             for k, v in parsed_data.items():
                 if v and k not in ['error']:
@@ -395,7 +393,7 @@ def resume_parsing_tab():
             st.success(f"✅ Successfully parsed and loaded CV for **{candidate_name}**! Check the 'CV Management' tab to review/edit.")
             st.rerun()
 
-# --- FIXED CV MANAGEMENT FUNCTION ---
+# --- CV MANAGEMENT FUNCTION ---
 def cv_management_tab_content():
     st.header("📝 Prepare Your CV")
     st.markdown("### 1. Form Based CV Builder")
@@ -428,7 +426,6 @@ def cv_management_tab_content():
         with col1:
             st.session_state.cv_form_data['name'] = st.text_input(
                 "Full Name", 
-                # CRITICAL FIX for KeyError: 'name' in text_input's value parameter
                 value=st.session_state.cv_form_data.get('name', ''), 
                 key="cv_name"
             )
@@ -474,7 +471,6 @@ def cv_management_tab_content():
         st.subheader("Technical Sections (One Item per Line)")
 
         # Skills
-        # Ensure conversion from list to string for display, handling None/empty gracefully
         skills_text = "\n".join(st.session_state.cv_form_data.get('skills', []))
         new_skills_text = st.text_area(
             "Key Skills (Technical and Soft)", 
@@ -557,9 +553,8 @@ def cv_management_tab_content():
                     compiled_text += str(v) + "\n\n"
         st.session_state.full_text = compiled_text
         
-        # 4. Clear related states (since this is a new resume)
+        # 4. Clear related states 
         if 'candidate_match_results' in st.session_state: st.session_state.candidate_match_results = []
-        if 'interview_qa' in st.session_state: del st.session_state.interview_qa
         if 'evaluation_report' in st.session_state: del st.session_state.evaluation_report
 
         st.success(f"✅ CV data for **{st.session_state.parsed['name']}** successfully generated and loaded! You can now use the Match tabs.")
@@ -574,7 +569,7 @@ def cv_management_tab_content():
         # Filter for non-empty/non-list fields before sending to formatter
         filled_data_for_preview = {
             k: v for k, v in st.session_state.parsed.items() 
-            if v and (isinstance(v, str) and v.strip() or isinstance(v, list) and v)
+            if v and k not in ['error'] and (isinstance(v, str) and v.strip() or isinstance(v, list) and v)
         }
         
         # Helper function for Markdown formatting
