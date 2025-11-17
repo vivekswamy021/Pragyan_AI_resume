@@ -21,11 +21,11 @@ load_dotenv()
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 
 # --- Default/Mock Data for Filtering ---
-DEFAULT_ROLES = ["Data Scientist", "Cloud Engineer", "Software Engineer"]
+DEFAULT_ROLES = ["Data Scientist", "Cloud Engineer", "Software Engineer", "AI/ML Engineer"]
 DEFAULT_JOB_TYPES = ["Full-time", "Contract", "Remote"]
 STARTER_KEYWORDS = {
     "Python", "MySQL", "GCP", "cloud computing", "ML", 
-    "API services", "LLM integration", "JavaScript", "SQL", "AWS" 
+    "API services", "LLM integration", "JavaScript", "SQL", "AWS", "MLOps", "Data Visualization"
 }
 # --- End Default/Mock Data ---
 
@@ -194,21 +194,27 @@ def parse_resume_with_llm(text):
     # 3. Handle Mock Client execution (Fallback for PDF/DOCX/TXT)
     if isinstance(client, MockGroqClient):
         # Generate structured data using the dynamic name
+        # --- FIX: ENRICHED MOCK SKILLS FOR BETTER SCORING DISTINCTION ---
         return {
             "name": candidate_name, # FORCED NAME HERE
             "email": "vivek.swamy@example.com", 
             "phone": "555-1234", 
             "linkedin": "https://linkedin.com/in/vivek-swamy-mock", 
             "github": "https://github.com/vivek-mock", 
-            "personal_details": f"Mock summary generated for: {candidate_name}. (Input was text/PDF/DOCX, not direct JSON)", 
-            "skills": ["Python", "Streamlit", "SQL", "AWS"], 
+            "personal_details": f"Mock summary generated for: {candidate_name}. (Input was text/PDF/DOCX/TXT)", 
+            "skills": [
+                "Python", "SQL", "AWS", "Streamlit", 
+                "LLM Integration", "MLOps", "Data Visualization", 
+                "Docker", "Kubernetes", "Java", "API Services"
+            ], 
             "education": ["B.S. Computer Science, Mock University, 2020"], 
             "experience": ["Software Intern, Mock Solutions (2024-2025)", "Data Analyst, Test Corp (2022-2024)"], 
-            "certifications": ["Mock Certification"], 
-            "projects": ["Mock Project: Built a dashboard using Streamlit."], 
+            "certifications": ["Mock Certification in AWS Cloud"], 
+            "projects": ["Mock Project: Built an MLOps pipeline using Docker and Kubernetes."], 
             "strength": ["Mock Strength"], 
             "error": None
         }
+        # --- END FIX ---
 
     # 4. Handle Real Groq Client execution (Simulated)
     try:
@@ -380,13 +386,19 @@ def extract_jd_metadata(jd_text):
         return {"role": "Error", "key_skills": ["Error"], "job_type": "Error"}
     
     # Simple heuristic mock
-    role_match = re.search(r'(?:Role|Position|Title)[:\s]+([\w\s/-]+)', jd_text, re.IGNORECASE)
+    role_match = re.search(r'(?:Role|Position|Title|Engineer)[:\s]+([\w\s/-]+)', jd_text, re.IGNORECASE)
     role = role_match.group(1).strip() if role_match else "Software Engineer (Mock)"
     
-    # Extract Skills from JD content
-    skills_match = re.findall(r'(Python|Java|SQL|AWS|Docker|Kubernetes|React|Streamlit|Cloud|Data)', jd_text, re.IGNORECASE)
+    # Extract Skills from JD content - ENHANCED SKILL LIST
+    skills_match = re.findall(r'(Python|Java|SQL|AWS|Docker|Kubernetes|React|Streamlit|Cloud|Data|ML|LLM|MLOps|Visualization|Deep Learning|TensorFlow|Pytorch)', jd_text, re.IGNORECASE)
     
-    job_type_match = re.search(r'(Full-time|Part-time|Contract|Remote)', jd_text, re.IGNORECASE)
+    # Simple heuristic to improve role names if generic title is found
+    if 'data scientist' in jd_text.lower() or 'machine learning' in jd_text.lower():
+         role = "Data Scientist/ML Engineer"
+    elif 'cloud engineer' in jd_text.lower() or 'aws' in jd_text.lower() or 'gcp' in jd_text.lower():
+         role = "Cloud Engineer"
+    
+    job_type_match = re.search(r'(Full-time|Part-time|Contract|Remote|Hybrid)', jd_text, re.IGNORECASE)
     job_type = job_type_match.group(1) if job_type_match else "Full-time (Mock)"
     
     return {
@@ -405,17 +417,22 @@ def extract_jd_from_linkedin_url(url):
     
     if "data-scientist" in url_lower:
         role = "Data Scientist"
-        skills = ["Python", "SQL", "ML", "Data Analysis"]
+        skills = ["Python", "SQL", "ML", "Data Analysis", "Pytorch", "Visualization"]
         focus = "machine learning and statistical modeling"
         
     elif "cloud-engineer" in url_lower or "aws" in url_lower:
         role = "Cloud Engineer"
-        skills = ["AWS", "Docker", "Kubernetes", "Cloud Services"]
+        skills = ["AWS", "Docker", "Kubernetes", "Cloud Services", "GCP", "Terraform"]
         focus = "infrastructure as code and cloud deployment"
+        
+    elif "ml-engineer" in url_lower or "ai-engineer" in url_lower:
+        role = "AI/ML Engineer"
+        skills = ["MLOps", "LLM", "Deep Learning", "Python", "TensorFlow", "API Services"]
+        focus = "production-level AI/ML model development and deployment"
         
     else:
         role = "Software Engineer"
-        skills = ["Java", "API", "SQL", "Streamlit"]
+        skills = ["Java", "API", "SQL", "React", "JavaScript"]
         focus = "full-stack application development"
     
     skills_str = ", ".join(skills)
@@ -441,11 +458,11 @@ def extract_jd_from_linkedin_url(url):
     ---
     """
     
-# --- FIX APPLIED HERE: Logic updated to use resume skills for dynamic scoring ---
+# --- FIX APPLIED HERE: Logic updated to check for *specific* role keywords for distinct scoring ---
 def evaluate_jd_fit(jd_content, parsed_json):
     """
     Mocks the LLM evaluation of resume fit against a JD. 
-    The logic now dynamically scores based on a few key overlaps.
+    The logic now dynamically scores based on specific role-based keyword overlaps.
     """
     
     # Get candidate skills (all lowercase for easy matching)
@@ -454,37 +471,65 @@ def evaluate_jd_fit(jd_content, parsed_json):
     # Analyze JD content to identify required skills (using the metadata function)
     jd_metadata = extract_jd_metadata(jd_content)
     required_skills = jd_metadata.get('key_skills', [])
+    jd_role = jd_metadata.get('role', '').lower()
     
     # Determine overlap
     common_skills = set(required_skills).intersection(set(candidate_skills))
     num_common_skills = len(common_skills)
     
-    # Base score
+    # --- Scoring Logic based on Specific Role Keywords (FIX) ---
     base_score = 5 # Start neutral
+    score_adj = 0 
     
-    # Score adjustment based on overlap (Max +4 adjustment)
-    if num_common_skills >= 4:
-        score_adj = 4
-        skills_percent = 95
-        strengths = "Excellent skill match, covering all major requirements like Python, SQL, and AWS."
-        weakness = "Minor gap in advanced Docker/Kubernetes."
-    elif num_common_skills >= 2:
-        score_adj = 2
-        skills_percent = 80
+    # 1. High-Value Skill Boosts based on JD Role
+    if 'data scientist' in jd_role or 'ml engineer' in jd_role:
+        # Data Scientist/ML Engineer critical skills
+        ml_skills = ['ml', 'pytorch', 'tensorflow', 'deep learning']
+        ml_match = len(set(ml_skills).intersection(candidate_skills))
+        score_adj += min(4, ml_match) # Max +4 for ML roles
+        
+    elif 'cloud engineer' in jd_role:
+        # Cloud Engineer critical skills
+        cloud_skills = ['aws', 'docker', 'kubernetes', 'gcp', 'terraform']
+        cloud_match = len(set(cloud_skills).intersection(candidate_skills))
+        score_adj += min(4, cloud_match) # Max +4 for Cloud roles
+        
+    elif 'software engineer' in jd_role and 'full-stack' in jd_content.lower():
+        # Software Engineer critical skills
+        se_skills = ['java', 'react', 'javascript', 'api']
+        se_match = len(set(se_skills).intersection(candidate_skills))
+        score_adj += min(3, se_match) # Max +3 for SE roles
+
+    # 2. General Skill Overlap Boost
+    score_adj += (num_common_skills // 3) # Additional boost for general skills (Max +2)
+    
+    # Final overall score (cap at 9)
+    overall_score = min(9, base_score + score_adj)
+    
+    # Calculate percentages based on the final score
+    skills_percent = 50 + score_adj * 10
+    experience_percent = 60 + score_adj * 5 
+    education_percent = 70 + (1 if 'B.S. Computer Science' in ' '.join(parsed_json.get('education', [])) else 0) * 10 
+    
+    # Ensure percentages are capped
+    skills_percent = min(95, skills_percent)
+    experience_percent = min(90, experience_percent)
+    education_percent = min(95, education_percent)
+    
+    # Determine dynamic text based on the final score
+    if overall_score >= 8:
+        strengths = f"Excellent fit! Strong command of core skills like Python, SQL, and direct matches in {jd_role} specific tools ({', '.join(list(common_skills)[:2])})."
+        weakness = "Minor areas for discussion, such as non-core framework experience."
+        summary = "Highly recommend for immediate interview."
+    elif overall_score >= 6:
         strengths = f"Good foundational skill match, specifically in {', '.join(list(common_skills)[:2])}."
-        weakness = f"Missing key skills: {', '.join(list(set(required_skills) - common_skills)) if len(set(required_skills) - common_skills) > 0 else 'None'}."
+        weakness = f"Missing key role-specific skills. Needs more experience in advanced {jd_role} topics."
+        summary = "Recommend for interview with a focus on skill gaps."
     else:
-        score_adj = 0
-        skills_percent = 60
         strengths = "Relevant education and general experience."
         weakness = "Significant skill mismatch. Core requirements are not explicitly covered by the candidate's skills list."
+        summary = "Weak fit. Proceed with caution or recommend for a different role."
 
-    # Final overall score (cap at 9)
-    overall_score = min(9, base_score + score_adj) 
-    
-    # Simple mock percentages for the rest
-    experience_percent = 65 + score_adj * 5 # Ranges from 65% to 85%
-    education_percent = 70 + (1 if 'B.S. Computer Science' in ' '.join(parsed_json.get('education', [])) else 0) * 10 
 
     time.sleep(0.5) # Simulate latency
     
@@ -499,14 +544,14 @@ def evaluate_jd_fit(jd_content, parsed_json):
     
     --- Strengths/Matches ---
     {strengths}
-    The candidate's education and experience level are highly relevant.
+    The candidate's education and general experience level are relevant.
     
     --- Weaknesses/Gaps ---
     {weakness}
     Further discussion is needed on applying conceptual knowledge to real-world deployment challenges.
     
     --- Summary Recommendation ---
-    A strong candidate with core skills, but fit depends on the urgency of filling the skill gaps identified. Recommend for interview.
+    {summary}
     """
 # --- END FIX ---
 
