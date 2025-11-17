@@ -337,6 +337,45 @@ def get_download_link(data, filename, file_format):
     # Return the full data URI
     return f"data:{mime_type};base64,{b64}"
 
+def render_download_button(data_uri, filename, label, color):
+    """Renders an HTML button that triggers a file download."""
+    
+    # Using specific colors for consistency
+    if color == 'json':
+        bg_color = "#4CAF50" # Green
+        icon = "💾"
+    elif color == 'markdown':
+        bg_color = "#008CBA" # Blue
+        icon = "⬇️"
+    elif color == 'html':
+        bg_color = "#f44336" # Red
+        icon = "📄"
+    else:
+        bg_color = "#555555"
+        icon = ""
+        
+    st.markdown(
+        f"""
+        <a href="{data_uri}" download="{filename}" style="text-decoration: none;">
+            <button style="
+                background-color: {bg_color}; 
+                color: white; 
+                border: none; 
+                padding: 10px 10px; 
+                text-align: center; 
+                text-decoration: none; 
+                display: inline-block; 
+                font-size: 14px; 
+                margin: 4px 0; 
+                cursor: pointer; 
+                border-radius: 4px;
+                width: 100%;">
+                {icon} {label}
+            </button>
+        </a>
+        """, 
+        unsafe_allow_html=True
+    )
 # --- END HELPER FUNCTIONS ---
 
 
@@ -588,7 +627,21 @@ def resume_parsing_tab():
         
         candidate_name = st.session_state.parsed['name']
         
-        # New tab structure as requested
+        # Calculate filenames and URIs once
+        base_filename = f"{candidate_name.replace(' ', '_')}_Parsed_Resume"
+        parsed_json_data = json.dumps(st.session_state.parsed, indent=4)
+        parsed_markdown_data = st.session_state.full_text
+        
+        json_filename = f"{base_filename}.json"
+        md_filename = f"{base_filename}.md"
+        html_filename = f"{base_filename}.html"
+        
+        json_data_uri = get_download_link(parsed_json_data, json_filename, 'json')
+        md_data_uri = get_download_link(parsed_markdown_data, md_filename, 'markdown')
+        html_data_uri = get_download_link(parsed_markdown_data, html_filename, 'html')
+        
+        
+        # New tab structure as requested (Markdown and JSON downloads moved inside their views)
         tab_markdown, tab_json, tab_download = st.tabs([
             "📄 Markdown View", 
             "💾 JSON View", 
@@ -606,6 +659,17 @@ def resume_parsing_tab():
             if st.session_state.excel_data:
                  st.markdown("### Extracted Spreadsheet Data (if applicable)")
                  st.json(st.session_state.excel_data)
+                 
+            st.markdown("---")
+            st.markdown("##### Download Markdown Data")
+            # Markdown Download Button (Moved here)
+            render_download_button(
+                md_data_uri, 
+                md_filename, 
+                f"⬇️ Download Markdown (.md)", 
+                'markdown'
+            )
+
 
         # --- JSON View Tab ---
         with tab_json:
@@ -615,108 +679,36 @@ def resume_parsing_tab():
             st.markdown("### Structured Data in JSON Format")
             st.json(st.session_state.parsed)
 
-        # --- Download Tab (UPDATED WITH BUTTONS) ---
+            st.markdown("---")
+            st.markdown("##### Download JSON Data")
+            # JSON Download Button (Moved here)
+            render_download_button(
+                json_data_uri, 
+                json_filename, 
+                f"💾 Download JSON (.json)", 
+                'json'
+            )
+
+        # --- Download Tab (Now only contains HTML/PDF) ---
         with tab_download:
             
-            parsed_json_data = json.dumps(st.session_state.parsed, indent=4)
-            parsed_markdown_data = st.session_state.full_text
+            st.markdown("### Download Viewable Document")
+            st.info("This download provides the data in an HTML file that can be easily viewed or printed/saved as a PDF.")
             
-            base_filename = f"{candidate_name.replace(' ', '_')}_Parsed_Resume"
-            
-            st.markdown("### Download Parsed Data")
-            
-            col_json, col_md, col_html = st.columns(3)
+            col_html = st.columns(1)[0]
 
-            # --- JSON Download Button ---
-            with col_json:
-                json_filename = f"{base_filename}.json"
-                json_data_uri = get_download_link(parsed_json_data, json_filename, 'json')
-                
-                st.markdown(f"**{json_filename}**", help="Structured data download.")
-                # Inject a button with the download link using HTML
-                st.markdown(
-                    f"""
-                    <a href="{json_data_uri}" download="{json_filename}">
-                        <button style="
-                            background-color: #4CAF50; 
-                            color: white; 
-                            border: none; 
-                            padding: 10px 10px; 
-                            text-align: center; 
-                            text-decoration: none; 
-                            display: inline-block; 
-                            font-size: 14px; 
-                            margin: 4px 2px; 
-                            cursor: pointer; 
-                            border-radius: 4px;
-                            width: 100%;">
-                            💾 Download JSON (.json)
-                        </button>
-                    </a>
-                    """, 
-                    unsafe_allow_html=True
-                )
-            
-            # --- Markdown Download Button ---
-            with col_md:
-                md_filename = f"{base_filename}.md"
-                md_data_uri = get_download_link(parsed_markdown_data, md_filename, 'markdown')
-                
-                st.markdown(f"**{md_filename}**", help="Human-readable format download.")
-                st.markdown(
-                    f"""
-                    <a href="{md_data_uri}" download="{md_filename}">
-                        <button style="
-                            background-color: #008CBA; 
-                            color: white; 
-                            border: none; 
-                            padding: 10px 10px; 
-                            text-align: center; 
-                            text-decoration: none; 
-                            display: inline-block; 
-                            font-size: 14px; 
-                            margin: 4px 2px; 
-                            cursor: pointer; 
-                            border-radius: 4px;
-                            width: 100%;">
-                            ⬇️ Download Markdown (.md)
-                        </button>
-                    </a>
-                    """, 
-                    unsafe_allow_html=True # Simulates the button from image_60d371.png
-                )
-
-            # --- HTML/PDF Simulated Download Button ---
             with col_html:
-                html_filename = f"{base_filename}.html"
-                html_data_uri = get_download_link(parsed_markdown_data, html_filename, 'html') 
-                
                 st.markdown(f"**{html_filename.replace('.html', '.pdf/html')}**", help="Viewable document format.")
-                st.markdown(
-                    f"""
-                    <a href="{html_data_uri}" download="{html_filename}">
-                        <button style="
-                            background-color: #f44336; 
-                            color: white; 
-                            border: none; 
-                            padding: 10px 10px; 
-                            text-align: center; 
-                            text-decoration: none; 
-                            display: inline-block; 
-                            font-size: 14px; 
-                            margin: 4px 2px; 
-                            cursor: pointer; 
-                            border-radius: 4px;
-                            width: 100%;">
-                            📄 Download HTML (PDF Sim.)
-                        </button>
-                    </a>
-                    """, 
-                    unsafe_allow_html=True
+                # HTML Download Button (Remains here)
+                render_download_button(
+                    html_data_uri, 
+                    html_filename, 
+                    f"📄 Download HTML (PDF Sim.)", 
+                    'html'
                 )
                 
             st.markdown("---")
-            st.info("Download the parsed data in structured JSON, human-readable Markdown, or a viewable HTML format.")
+            st.info("For structured data (JSON) or raw text (Markdown), please check their respective viewing tabs.")
 
 
     else:
@@ -1197,7 +1189,6 @@ def candidate_dashboard():
     
 
     # --- Main Content with Tabs ---
-    # Tabs structure is based on image 2 (Screenshot 2025-11-17 200009.png)
     tab_parsing, tab_jd, tab_batch_match, tab_filter_jd = st.tabs(
         ["📄 Resume Parsing", "📚 JD Management", "🎯 Batch JD Match", "🔍 Filter JD"]
     )
