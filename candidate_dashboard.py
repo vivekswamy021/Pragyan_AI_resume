@@ -27,10 +27,8 @@ class MockGroqClient:
     def chat(self):
         class Completions:
             def create(self, **kwargs):
-                # Simple mock response structure
-                # The actual candidate name is derived inside parse_resume_with_llm function
-                # This content is generic, but the name will be updated based on input file/text name.
-                return type('MockResponse', (object,), {'choices': [{'message': {'content': '{"name": "Mock Candidate", "summary": "Mock summary for testing.", "skills": ["Python", "Streamlit"], "email": "mock@example.com", "phone": "555-1234", "linkedin": "https://linkedin.com/in/mock", "github": "https://github.com/mock", "personal_details": "Mock summary for testing.", "education": ["Mock University"], "experience": ["Mock Job"], "certifications": ["Mock Cert"], "projects": ["Mock Project"], "strength": ["Mock Strength"], "error": null}'}}]})()
+                # This mock response is only used if the LLM function doesn't parse the input text first.
+                return type('MockResponse', (object,), {'choices': [{'message': {'content': '{"name": "Default Mock Candidate", "email": "mock@default.com", "personal_details": "This is a default mock response, used when the input text (e.g., a simple PDF) cannot be parsed directly by the LLM function."}'}}]})()
         return Completions()
 
 # Initialize Groq Client or use Mock Client 
@@ -41,31 +39,23 @@ try:
         # If key is missing, treat it as a setup failure and fall back to mock
         raise ValueError("GROQ_API_KEY not set.") 
     
-    # --- FIX: Simulated Groq Client with correct nested structure ---
+    # --- Simulated Groq Client with correct nested structure (Real API simulation) ---
     class Groq:
         def __init__(self, api_key): pass
         def chat(self):
             class Completions:
                 def create(self, **kwargs):
-                    # Mock JSON response that the LLM would return
-                    # Name will be set dynamically in the main LLM parsing function.
+                    # In a real scenario, the LLM processes the input text (kwargs['messages'][1]['content'])
+                    # and returns the JSON structure. We simulate a generic successful parse here.
                     mock_llm_json = {
-                        "name": "Parsed Candidate", 
-                        "email": "parsed@example.com", 
-                        "phone": "555-9876", 
-                        "linkedin": "https://linkedin.com/in/parsed", 
-                        "github": "https://github.com/parsed", 
-                        "personal_details": "Actual parsed summary from LLM.", 
-                        "skills": ["Real", "Python", "Streamlit"], 
-                        "education": ["University of Code, 2021"], 
-                        "experience": ["Senior Developer, TechCo, 2021 - Present"], 
-                        "certifications": ["AWS Certified"], 
-                        "projects": ["Project Alpha"], 
-                        "strength": ["Teamwork"], 
+                        "name": "LLM Parsed Candidate", 
+                        "email": "llm_parsed@example.com", 
+                        "phone": "555-0000", 
+                        "personal_details": "Successfully parsed by the simulated LLM service.", 
+                        "skills": ["Simulated Skill", "Python", "Streamlit"], 
                         "error": None
                     }
                     
-                    # Create the nested object structure to match the real API response
                     message_obj = type('Message', (object,), {'content': json.dumps(mock_llm_json)})()
                     choice_obj = type('Choice', (object,), {'message': message_obj})()
                     response_obj = type('MockResponse', (object,), {'choices': [choice_obj]})()
@@ -90,9 +80,9 @@ def get_file_type(file_name):
     ext = os.path.splitext(file_name)[1].lower().strip('.')
     if ext == 'pdf': return 'pdf'
     elif ext in ('docx', 'doc'): return 'docx'
-    elif ext in ('txt', 'md', 'markdown', 'rtf'): return 'txt' # Treat RTF and MD as plain text for simple extraction
+    elif ext in ('txt', 'md', 'markdown', 'rtf'): return 'txt' 
     elif ext == 'json': return 'json'
-    elif ext in ('xlsx', 'xls', 'csv'): return 'excel' # Group CSV and XLSX for pandas handling
+    elif ext in ('xlsx', 'xls', 'csv'): return 'excel' 
     else: return 'unknown' 
 
 def extract_content(file_type, file_content_bytes, file_name):
@@ -120,7 +110,7 @@ def extract_content(file_type, file_content_bytes, file_name):
         
         elif file_type == 'json':
             try:
-                # Keep JSON extraction simple for LLM parsing
+                # FIX: Wrap JSON content so LLM parsing function can detect and use it
                 text = file_content_bytes.decode('utf-8')
                 text = "--- JSON Content Start ---\n" + text + "\n--- JSON Content End ---"
             except UnicodeDecodeError:
@@ -128,19 +118,16 @@ def extract_content(file_type, file_content_bytes, file_name):
         
         elif file_type == 'excel':
             try:
-                # Use pandas to read all sheets and convert to a comprehensive text/json structure
                 if file_name.endswith('.csv'):
                     df = pd.read_csv(BytesIO(file_content_bytes))
-                else: # xlsx, xls
-                    # Read all sheets, combine into a JSON-like string for LLM parsing
+                else: 
                     xls = pd.ExcelFile(BytesIO(file_content_bytes))
                     all_sheets_data = {}
                     for sheet_name in xls.sheet_names:
                         df = pd.read_excel(xls, sheet_name=sheet_name)
-                        # Convert to JSON string format for easy LLM parsing
                         all_sheets_data[sheet_name] = df.to_json(orient='records') 
                         
-                    excel_data = all_sheets_data # Store structured data
+                    excel_data = all_sheets_data 
                     text = json.dumps(all_sheets_data, indent=2)
                     text = f"[EXCEL_CONTENT] The following structured data was extracted:\n{text}"
                     
@@ -148,7 +135,7 @@ def extract_content(file_type, file_content_bytes, file_name):
                 return f"[Error] Excel/CSV file parsing failed. Error: {e}", None
 
 
-        if not text.strip() and file_type not in ('excel', 'json'): # Allow structured excel data without pure text
+        if not text.strip() and file_type not in ('excel', 'json'): 
             return f"[Error] {file_type.upper()} content extraction failed or file is empty.", None
         
         return text, excel_data
@@ -163,34 +150,53 @@ def parse_resume_with_llm(text):
     
     # 1. Handle Pre-flight errors (e.g., failed extraction)
     if text.startswith("[Error"):
-        # Returns a dictionary with the original error message for the front end to handle
         return {"name": "Parsing Error", "error": text}
 
-    # FIX: Get candidate name from session state or input text for dynamic mock naming
-    candidate_name = "Parsed Candidate"
-    if st.session_state.get('last_parsed_file_name'):
-        # Use filename, strip extension, and replace underscores/dashes with spaces
-        name_part = os.path.splitext(st.session_state.last_parsed_file_name)[0]
-        candidate_name = name_part.replace('_', ' ').replace('-', ' ').title()
-    elif text.strip():
-        # Fallback: try to find a name from the first line of text
-        name_match = re.search(r'^[A-Z][a-zA-Z\s]+', text.split('\n')[0].strip())
-        if name_match:
-            candidate_name = name_match.group(0).strip()
+    # Helper function to get a fallback name
+    def get_fallback_name(text_input):
+        name = "Parsed Candidate"
+        if st.session_state.get('last_parsed_file_name'):
+            # Use filename, strip extension, and replace underscores/dashes with spaces
+            name_part = os.path.splitext(st.session_state.last_parsed_file_name)[0]
+            name = name_part.replace('_', ' ').replace('-', ' ').title().replace(' (1)', '').strip()
+            if name == "Pasted Text": name = "Pasted Resume Data"
+        return name if name else "Parsed Candidate"
     
-    if not candidate_name or candidate_name == "Pasted Text": 
-        candidate_name = "Pasted Resume Data" # Ensure a decent fallback name
-
-    # 2. Handle Mock Client execution (Always returns success for testing)
+    candidate_name = get_fallback_name(text)
+    
+    # 2. FIX: Check for and parse direct JSON content (for JSON file uploads)
+    json_match = re.search(r'--- JSON Content Start ---\s*(.*?)\s*--- JSON Content End ---', text, re.DOTALL)
+    
+    if json_match:
+        try:
+            # If JSON is found, try to parse it directly
+            json_content = json_match.group(1).strip()
+            parsed_data = json.loads(json_content)
+            
+            # Ensure name is set, prioritizing the name from the JSON, then the filename fallback
+            if not parsed_data.get('name'):
+                 parsed_data['name'] = candidate_name
+                 
+            # Ensure error is explicitly set to None on success
+            parsed_data['error'] = None
+            
+            # Return the actual JSON content from the uploaded file
+            return parsed_data
+        
+        except json.JSONDecodeError:
+            # If JSON parsing fails, treat it as an LLM error for the front-end to handle
+            return {"name": candidate_name, "error": f"LLM Input Error: Could not decode uploaded JSON content into a valid structure."}
+        
+    # 3. Handle Mock Client execution (Fallback for PDF/DOCX/TXT)
     if isinstance(client, MockGroqClient):
-        # Mock structured data for demonstration
+        # Generate structured data using the dynamic name
         return {
-            "name": candidate_name, # <-- FIX: Use the dynamic name
+            "name": candidate_name, 
             "email": "mock@example.com", 
             "phone": "555-1234", 
             "linkedin": "https://linkedin.com/in/mock", 
             "github": "https://github.com/mock", 
-            "personal_details": f"Highly motivated individual with mock experience in Python and Streamlit. This summary was parsed using the Mock LLM from the input text starting with: '{text[:100].replace('\n', ' ')}...'", 
+            "personal_details": f"Mock summary generated for: {candidate_name}. (Input was text/PDF, not direct JSON)", 
             "skills": ["Python", "Streamlit", "SQL", "AWS"], 
             "education": ["B.S. Computer Science, Mock University, 2020"], 
             "experience": ["Software Intern, Mock Solutions (2024-2025)", "Data Analyst, Test Corp (2022-2024)"], 
@@ -200,10 +206,9 @@ def parse_resume_with_llm(text):
             "error": None
         }
 
-    # 3. Handle Real Groq Client execution (MOCKED HERE)
+    # 4. Handle Real Groq Client execution (Simulated)
     try:
-        # This will now use the correctly structured mock client object if GROQ_API_KEY is present
-        # In a real setup, we would send the full text to the LLM
+        # If this were a real LLM call for PDF/TXT/DOCX, it would return a parsed JSON structure.
         completion = client.chat().create(
             model=GROQ_MODEL,
             messages=[
@@ -213,31 +218,20 @@ def parse_resume_with_llm(text):
             response_format={"type": "json_object"}
         )
         
-        # Access the content through the correct nested structure
         json_content = completion.choices[0].message.content
-        
         parsed_data = json.loads(json_content)
         
-        # Ensure essential keys are present, even if empty
-        default_keys = ["name", "email", "phone", "linkedin", "github", "personal_details", 
-                        "skills", "education", "experience", "certifications", "projects", "strength"]
-        for key in default_keys:
-            if key not in parsed_data:
-                parsed_data[key] = [] if key in ["skills", "education", "experience", "certifications", "projects", "strength"] else ""
-        
-        # Ensure 'error' is explicitly set to None on success
-        parsed_data['error'] = None 
-        # FIX: Ensure the LLM's parsed name is used if available, otherwise use the dynamically generated one
+        # Ensure name is set, using LLM's parse first, then fallback
         if not parsed_data.get('name'):
              parsed_data['name'] = candidate_name 
              
+        parsed_data['error'] = None 
         return parsed_data
         
     except Exception as e:
-        # Catch any exceptions during the Groq call or JSON parsing
         error_message = f"LLM Processing Error: {e.__class__.__name__} - {str(e)}"
-        return {"name": candidate_name, "error": error_message} # Use dynamic name in error
-
+        return {"name": candidate_name, "error": error_message} 
+    
 
 # --- NEW HELPER FUNCTIONS FOR FILE/TEXT PROCESSING ---
 
@@ -248,7 +242,6 @@ def clear_interview_state():
     if 'evaluation_report' in st.session_state: del st.session_state['evaluation_report']
     if 'candidate_match_results' in st.session_state: st.session_state.candidate_match_results = []
     
-    # Do NOT clear 'parsed' here. 
 
 def parse_and_store_resume(content_source, source_type):
     """
@@ -264,13 +257,11 @@ def parse_and_store_resume(content_source, source_type):
         file_name = uploaded_file.name
         file_type = get_file_type(file_name)
         uploaded_file.seek(0) 
-        # FIX: Set last_parsed_file_name *before* calling extract_content/parse_resume_with_llm
         st.session_state.last_parsed_file_name = file_name 
         extracted_text, excel_data = extract_content(file_type, uploaded_file.getvalue(), file_name)
     elif source_type == 'text':
         extracted_text = content_source.strip()
         file_name = "Pasted_Text"
-        # FIX: Set last_parsed_file_name *before* calling extract_content/parse_resume_with_llm
         st.session_state.last_parsed_file_name = file_name 
 
     if extracted_text.startswith("[Error"):
@@ -278,7 +269,6 @@ def parse_and_store_resume(content_source, source_type):
         return {"error": extracted_text, "full_text": extracted_text, "excel_data": None, "name": file_name}
     
     # 2. Call LLM Parser
-    # The cache key for parse_resume_with_llm is based on `text`, so it's consistent.
     parsed_data = parse_resume_with_llm(extracted_text)
     
     # 3. Handle LLM Parsing Error
@@ -509,23 +499,17 @@ def resume_parsing_tab():
         )
         st.markdown("---")
 
-        if "candidate_uploaded_resumes" not in st.session_state:
-            st.session_state.candidate_uploaded_resumes = []
-        if "pasted_cv_text" not in st.session_state:
-            st.session_state.pasted_cv_text = ""
-        # FIX: Ensure last_parsed_file_name is initialized
-        if "last_parsed_file_name" not in st.session_state:
-             st.session_state.last_parsed_file_name = None
+        if "candidate_uploaded_resumes" not in st.session_state: st.session_state.candidate_uploaded_resumes = []
+        if "pasted_cv_text" not in st.session_state: st.session_state.pasted_cv_text = ""
+        if "last_parsed_file_name" not in st.session_state: st.session_state.last_parsed_file_name = None
 
         # --- File Management Logic ---
         if uploaded_file is not None:
             if not st.session_state.candidate_uploaded_resumes or st.session_state.candidate_uploaded_resumes[0].name != uploaded_file.name:
-                # Update file list if a new file is uploaded
                 st.session_state.candidate_uploaded_resumes = [uploaded_file] 
-                st.session_state.pasted_cv_text = "" # Clear pasted text state
+                st.session_state.pasted_cv_text = "" 
                 st.toast("Resume file uploaded successfully.")
         elif st.session_state.candidate_uploaded_resumes and uploaded_file is None:
-            # Clear state if the file was manually removed
             st.session_state.candidate_uploaded_resumes = []
             st.session_state.parsed = {}
             st.session_state.full_text = ""
@@ -538,11 +522,10 @@ def resume_parsing_tab():
         st.markdown("### 2. Parse Uploaded File")
         
         if file_to_parse:
-            # Check if the currently loaded data matches the current file
             is_already_parsed = (
                 st.session_state.get('last_parsed_file_name') == file_to_parse.name and 
                 st.session_state.get('parsed', {}).get('name') is not None and
-                st.session_state.get('parsed', {}).get('error') is None # Must not have an error
+                st.session_state.get('parsed', {}).get('error') is None 
             )
 
             if st.button(f"Parse and Load: **{file_to_parse.name}**", use_container_width=True, disabled=is_already_parsed):
@@ -550,17 +533,14 @@ def resume_parsing_tab():
                     result = parse_and_store_resume(file_to_parse, source_type='file')
                     
                     if result.get('error') is None:
-                        # Success path
                         st.session_state.parsed = result['parsed']
                         st.session_state.full_text = result['full_text']
                         st.session_state.excel_data = result['excel_data'] 
-                        # st.session_state.parsed['name'] is already set in parse_and_store_resume
                         clear_interview_state()
                         
                         st.success(f"✅ Successfully loaded and parsed **{st.session_state.parsed['name']}**.")
                         st.rerun() 
                     else:
-                        # Error path
                         st.error(f"Parsing failed for {file_to_parse.name}: {result['error']}")
                         st.session_state.parsed = {"error": result['error'], "name": result['name']}
                         st.session_state.full_text = result['full_text'] or ""
@@ -582,13 +562,12 @@ def resume_parsing_tab():
             height=300,
             key='pasted_cv_text_input'
         )
-        st.session_state.pasted_cv_text = pasted_text # Update session state immediately
+        st.session_state.pasted_cv_text = pasted_text 
         
         st.markdown("---")
         st.markdown("### 2. Parse Pasted Text")
         
         if pasted_text.strip():
-            # Check if the currently loaded data matches the current pasted text
             is_already_parsed = (
                 st.session_state.get('last_parsed_file_name') == "Pasted_Text" and 
                 st.session_state.get('pasted_cv_text_input', '') == pasted_text and
@@ -597,23 +576,19 @@ def resume_parsing_tab():
 
             if st.button("Parse and Load Pasted Text", use_container_width=True, disabled=is_already_parsed):
                 with st.spinner("Parsing pasted text..."):
-                    # Clear file upload state
                     st.session_state.candidate_uploaded_resumes = []
                     
                     result = parse_and_store_resume(pasted_text, source_type='text')
                     
                     if result.get('error') is None:
-                        # Success path
                         st.session_state.parsed = result['parsed']
                         st.session_state.full_text = result['full_text']
                         st.session_state.excel_data = result['excel_data'] 
-                        # st.session_state.parsed['name'] is already set in parse_and_store_resume
                         clear_interview_state()
                         
                         st.success(f"✅ Successfully loaded and parsed **{st.session_state.parsed['name']}**.")
                         st.rerun() 
                     else:
-                        # Error path
                         st.error(f"Parsing failed: {result['error']}")
                         st.session_state.parsed = {"error": result['error'], "name": result['name']}
                         st.session_state.full_text = result['full_text'] or ""
@@ -626,7 +601,6 @@ def resume_parsing_tab():
     
     # --- TABBED VIEW SECTION (PDF/MARKDOWN/JSON) ---
     
-    # FIX: Robust check for successful loading: Must have a 'name' and 'error' must be None
     is_data_loaded_and_valid = (
         st.session_state.get('parsed', {}).get('name') is not None and 
         st.session_state.get('parsed', {}).get('error') is None
@@ -637,7 +611,6 @@ def resume_parsing_tab():
         st.markdown(f"**Current Loaded Candidate:** **{st.session_state.parsed['name']}**")
         st.caption(f"Source: {st.session_state.get('last_parsed_file_name', 'Unknown Source')}")
         
-        # Filter for non-empty/non-list fields before sending to formatter
         filled_data_for_preview = {
             k: v for k, v in st.session_state.parsed.items() 
             if v and k not in ['error'] and (isinstance(v, str) and v.strip() or isinstance(v, list) and v)
@@ -656,7 +629,6 @@ def resume_parsing_tab():
             if parsed_data.get('email'): contact_info.append(parsed_data['email'])
             if parsed_data.get('phone'): contact_info.append(parsed_data['phone'])
             
-            # Check if URLs are valid before appending
             linkedin_url = parsed_data.get('linkedin', '')
             github_url = parsed_data.get('github', '')
             if linkedin_url and (linkedin_url.startswith('http') or linkedin_url.startswith('www')): 
