@@ -208,6 +208,7 @@ def display_managed_jds():
         st.info("No Job Descriptions have been added yet. Use the methods above to add them.")
         return
 
+    # Sort JDs by latest timestamp
     sorted_keys = sorted(
         st.session_state.managed_jds.keys(),
         key=lambda k: st.session_state.managed_jds[k]['timestamp'],
@@ -222,9 +223,10 @@ def display_managed_jds():
         with st.expander(f"💼 **{display_name}**"):
             st.caption(f"Source: {source}")
             st.markdown("##### Content Preview:")
+            # Display only the first 1000 characters
             st.code(jd['content'][:1000] + ('...' if len(jd['content']) > 1000 else ''), language="text")
             
-            # Using a lambda function with default argument k=key to capture the current key value
+            # Button to remove JD
             st.button(
                 "Remove JD", 
                 key=f"remove_jd_{key}", 
@@ -265,12 +267,11 @@ def jd_management_tab():
         # Determine if single or multiple files are allowed
         accept_multiple = (st.session_state.jd_type == 'Multiple JD')
         
-        # Uploader mimicking the visual style of the image
         uploaded_files = st.file_uploader(
             "Upload JD file(s)", 
             type=['pdf', 'docx', 'doc', 'txt'], 
             accept_multiple_files=accept_multiple,
-            key="jd_uploader" # This is the widget key
+            key="jd_uploader"
         )
         
         # Ensure uploaded_files is a list for consistency
@@ -281,6 +282,7 @@ def jd_management_tab():
             st.markdown("##### Files Ready for Processing:")
             
             # Use a form to wrap the processing button for better control/clearing
+            # Note: File uploader state is not cleared by this form submission, only the button logic is encapsulated.
             with st.form("jd_file_processor", clear_on_submit=False):
                 # Display uploaded file names visually before processing
                 for file in files_to_process:
@@ -288,6 +290,7 @@ def jd_management_tab():
 
                 # Button to trigger processing
                 if st.form_submit_button(f"Add JD{'s' if accept_multiple else ''} from File", type="primary"):
+                    success_count = 0
                     for file in files_to_process:
                         with st.spinner(f"Extracting text from {file.name}..."):
                             file_type = get_file_type(file.name)
@@ -296,7 +299,11 @@ def jd_management_tab():
                                 st.error(f"File extraction failed for {file.name}: {extracted_text}")
                             else:
                                 process_and_store_jd(extracted_text, file.name)
-                    st.rerun() # Rerun to display new JDs
+                                success_count += 1
+                    
+                    # FIX: Rerun the app if at least one JD was successfully saved
+                    if success_count > 0:
+                        st.rerun()
 
     elif add_method == 'Paste Text':
         with st.form("jd_paste_form", clear_on_submit=True):
@@ -306,6 +313,7 @@ def jd_management_tab():
             if st.form_submit_button("Save Pasted JD", use_container_width=True, type="primary"):
                 if pasted_jd and pasted_name:
                     process_and_store_jd(pasted_jd, pasted_name)
+                    # FIX: Rerun the app to update the display
                     st.rerun() 
                 else:
                     st.warning("Please provide both the pasted text and a name.")
@@ -319,6 +327,7 @@ def jd_management_tab():
                     if "linkedin.com/jobs" in linkedin_url.lower():
                         mock_content = f"--- MOCK SCRAPE ---\nJob Description content scraped from LinkedIn URL: {linkedin_url}\n[Note: Web scraping is disabled.]\n--- MOCK SCRAPE ---"
                         process_and_store_jd(mock_content, f"LinkedIn JD: {linkedin_url[:40]}...")
+                        # FIX: Rerun the app to update the display
                         st.rerun()
                     else:
                         st.error("Please provide a valid LinkedIn job URL.")
@@ -427,7 +436,7 @@ def candidate_dashboard():
     with col_logout:
         if st.button("🚪 Log Out", use_container_width=True):
             # Reset session state on logout
-            keys_to_delete = ['managed_cvs', 'managed_jds', 'current_resume_name', 'show_cv_output', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'form_name_value', 'form_summary_value', 'form_skills_value', 'jd_type', 'jd_add_method', 'jd_uploader', 'resume_uploader', 'resume_paster']
+            keys_to_delete = ['managed_cvs', 'managed_jds', 'current_resume_name', 'show_cv_output', 'form_education', 'form_experience', 'form_certifications', 'form_projects', 'form_name_value', 'form_summary_value', 'form_skills_value', 'jd_type', 'jd_add_method', 'jd_uploader', 'resume_uploader', 'resume_paster', 'form_email_value', 'form_phone_value', 'form_linkedin_value', 'form_github_value', 'form_strengths_input']
             for key in keys_to_delete:
                 if key in st.session_state:
                     del st.session_state[key]
@@ -447,7 +456,7 @@ def candidate_dashboard():
     if "form_certifications" not in st.session_state: st.session_state.form_certifications = []
     if "form_projects" not in st.session_state: st.session_state.form_projects = []
     
-    # Initialize string states for CV form (to prevent "KeyError" when accessing form fields)
+    # Initialize string states for CV form
     if "form_name_value" not in st.session_state: st.session_state.form_name_value = ""
     if "form_email_value" not in st.session_state: st.session_state.form_email_value = ""
     if "form_phone_value" not in st.session_state: st.session_state.form_phone_value = ""
