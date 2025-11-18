@@ -47,7 +47,12 @@ class MockGroqClient:
                     if 'role' in question.lower():
                         return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': 'The required role in this Job Description is Cloud Engineer.'})})()]})
                     elif 'experience' in question.lower():
-                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'The job requires 3+ years of experience in AWS/GCP and infrastructure automation.'})})()]})
+                        # --- SYNTAX FIX APPLIED HERE ---
+                        # Fixed the incorrect closing parenthesis structure. 
+                        # It should be: type('Choice', (object,), {'message': Message_Object})()
+                        # where Message_Object is: type('Message', (object,), {'content': '...'})()
+                        return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': 'The job requires 3+ years of experience in AWS/GCP and infrastructure automation.'})()})()]})
+                        # --- END SYNTAX FIX ---
                     else:
                         return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': f'Mock answer for JD question: The JD mentions Python and Docker as key skills.'})})()]})
 
