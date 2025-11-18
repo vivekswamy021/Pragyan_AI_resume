@@ -1238,20 +1238,24 @@ def generate_cv_form():
         
     st.markdown("---")
     # --- End Dynamic Experience Section ---
-
-
-    # --- DYNAMIC PROJECTS SECTION (NEW) ---
+    
+# --- DYNAMIC PROJECTS SECTION (NEW) ---
     st.markdown("### 5. Projects") 
     st.markdown("Add your key projects one by one.")
 
     # Display existing projects entries with removal button
     if st.session_state.structured_projects:
         for i, project in enumerate(st.session_state.structured_projects):
+            # FIX: Ensure item is a dictionary before accessing keys
+            if not isinstance(project, dict):
+                st.warning(f"Skipping malformed project entry at index {i}.")
+                continue
+            
             col_display, col_remove = st.columns([4, 1])
             with col_display:
                 st.markdown(f"**{i+1}. {project['name']}**")
                 st.caption(f"Description: {project['description'][:80]}...")
-                if project['app_link'] and project['app_link'] != 'N/A':
+                if project.get('app_link') and project['app_link'] != 'N/A':
                     st.caption(f"Link: {project['app_link']}")
             with col_remove:
                 if st.button("🗑️ Remove", key=f"remove_proj_{i}"):
@@ -1276,7 +1280,6 @@ def generate_cv_form():
             height=100
         )
         
-        # Use st.form_submit_button for the button inside this mini-form
         add_project_submitted = st.form_submit_button("➕ Add Project Entry", type="secondary", use_container_width=True)
 
         if add_project_submitted:
@@ -1288,7 +1291,6 @@ def generate_cv_form():
                 }
                 st.session_state.structured_projects.append(new_entry)
                 st.success(f"Added Project: {new_project_name}")
-                # Rerun is triggered by the form submission itself
             else:
                 st.error("Please fill in Project Name and Description.")
         
