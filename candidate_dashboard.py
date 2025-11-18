@@ -45,7 +45,7 @@ class MockGroqClient:
                     mock_questions = [
                         f"Q1: Tell me about a time you used **{section}** to solve a complex problem.",
                         f"Q2: Describe a project from your **{section}** experience where you had to pivot your approach.",
-                        ff"Q3: What are the key skills you developed in the **{section}** area, and how would they benefit this role?",
+                        f"Q3: What are the key skills you developed in the **{section}** area, and how would they benefit this role?", # CORRECTED SYNTAX: Removed extra 'f'
                         f"Q4: Give an example of technical debt you encountered related to **{section}** and how you resolved it.",
                         f"Q5: How do you keep up to date with the latest trends in **{section}**?"
                     ]
