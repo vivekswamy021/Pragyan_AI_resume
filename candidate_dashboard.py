@@ -71,17 +71,17 @@ class MockGroqClient:
                     "phone": "555-1234", 
                     "linkedin": "https://linkedin.com/in/vivek-swamy-mock", 
                     "github": "https://github.com/vivek-mock", 
-                    "personal_details": "Mock summary generated for: Vivek Swamy.", 
+                    "personal_details": "Mock summary generated for: Vivek Swamy. Based in Bengaluru.", 
                     "skills": [
                         "Python", "SQL", "AWS", "Streamlit", 
                         "LLM Integration", "MLOps", "Data Visualization", 
                         "Docker", "Kubernetes", "Java", "API Services" 
                     ], 
                     "education": ["B.S. Computer Science, Mock University, 2020"], 
-                    "experience": ["Software Intern, Mock Solutions (2024-2025)", "Data Analyst, Test Corp (2022-2024)"], 
+                    "experience": ["Software Intern, Mock Solutions (2024-2025): Developed internal tools.", "Data Analyst, Test Corp (2022-2024): Led data cleaning projects."], 
                     "certifications": ["Mock Certification in AWS Cloud"], 
                     "projects": ["Mock Project: Built an MLOps pipeline using Docker and Kubernetes."], 
-                    "strength": ["Mock Strength"], 
+                    "strength": ["Mock Strength: Problem Solving", "Excellent communication skills"], 
                 }
                 
                 # Mock response content for GroqClient initialization check
@@ -112,13 +112,11 @@ class MockGroqClient:
                         score = 5
                         
                     # Calculate percentages based on the score to differentiate the rows
-                    # NOTE: Mock percentages are intentionally set to be extracted easily, similar to the image example.
                     skills_p = 50 + (score * 5)
                     exp_p = 60 + (score * 3)
                     edu_p = 70 + (score * 1)
                     
                     # NOTE: This mock output uses the strict format expected by the regex parser below.
-                    # It now uses the more robust 'Score: [N]/10' format
                     mock_fit_output = f"""
                     Overall Fit Score: {score}/10
                     
@@ -360,6 +358,83 @@ def parse_resume_with_llm(text):
 # -----------------------------------------------------------
 
 
+# --- NEW HELPER FUNCTION FOR HTML/PDF Generation ---
+def generate_cv_html(parsed_data):
+    """Generates a simple, print-friendly HTML string from parsed data for PDF conversion."""
+    
+    # Simple CSS for a clean, print-friendly CV look
+    css = """
+    <style>
+        @page { size: A4; margin: 1cm; }
+        body { font-family: 'Arial', sans-serif; line-height: 1.5; margin: 0; padding: 0; font-size: 10pt; }
+        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+        .header h1 { margin: 0; font-size: 1.8em; }
+        .contact-info { display: flex; justify-content: center; font-size: 0.8em; color: #555; }
+        .contact-info span { margin: 0 8px; }
+        .section { margin-bottom: 15px; page-break-inside: avoid; }
+        .section h2 { border-bottom: 1px solid #999; padding-bottom: 3px; margin-bottom: 8px; font-size: 1.1em; text-transform: uppercase; color: #333; }
+        .item-list ul { list-style-type: disc; margin-left: 20px; padding-left: 0; margin-top: 0; }
+        .item-list ul li { margin-bottom: 3px; }
+        .item-list p { margin: 3px 0 8px 0; }
+        a { color: #0056b3; text-decoration: none; }
+    </style>
+    """
+    
+    # --- HTML Structure ---
+    html_content = f"<html><head>{css}<title>{parsed_data.get('name', 'CV')}</title></head><body>"
+    
+    # 1. Header and Contact Info
+    html_content += '<div class="header">'
+    html_content += f"<h1>{parsed_data.get('name', 'Candidate Name')}</h1>"
+    
+    contact_parts = []
+    if parsed_data.get('email'): contact_parts.append(f"<span>📧 {parsed_data['email']}</span>")
+    if parsed_data.get('phone'): contact_parts.append(f"<span>📱 {parsed_data['phone']}</span>")
+    
+    # Clean links for display
+    linkedin_display = parsed_data.get('linkedin', '').replace('https://', '').replace('http://', '')
+    github_display = parsed_data.get('github', '').replace('https://', '').replace('http://', '')
+    
+    if parsed_data.get('linkedin'): contact_parts.append(f"<span>🔗 <a href='{parsed_data['linkedin']}'>{linkedin_display.split('/')[-1] if linkedin_display else 'LinkedIn'}</a></span>")
+    if parsed_data.get('github'): contact_parts.append(f"<span>💻 <a href='{parsed_data['github']}'>{github_display.split('/')[-1] if github_display else 'GitHub'}</a></span>")
+    
+    html_content += f'<div class="contact-info">{" | ".join(contact_parts)}</div>'
+    html_content += '</div>'
+    
+    # 2. Sections
+    section_order = ['personal_details', 'experience', 'projects', 'education', 'certifications', 'skills', 'strength']
+    
+    for k in section_order:
+        v = parsed_data.get(k)
+        
+        # Skip contact details already handled
+        if k in ['name', 'email', 'phone', 'linkedin', 'github']: continue 
+
+        if v and (isinstance(v, str) and v.strip() or isinstance(v, list) and v):
+            
+            html_content += f'<div class="section"><h2>{k.replace("_", " ").title()}</h2>'
+            html_content += '<div class="item-list">'
+            
+            if k == 'personal_details' and isinstance(v, str):
+                html_content += f"<p>{v}</p>"
+            elif isinstance(v, list):
+                html_content += '<ul>'
+                for item in v:
+                    if item: 
+                        # Escape any list items that might contain HTML/Markdown characters
+                        safe_item = item.replace('<', '&lt;').replace('>', '&gt;')
+                        html_content += f"<li>{safe_item}</li>"
+                html_content += '</ul>'
+            else:
+                html_content += f"<p>{v}</p>"
+                
+            html_content += '</div></div>'
+
+    html_content += '</body></html>'
+    return html_content
+# --- END NEW HELPER FUNCTION ---
+
+
 # --- HELPER FUNCTIONS FOR FILE/TEXT PROCESSING ---
 
 def clear_interview_state():
@@ -433,22 +508,8 @@ def get_download_link(data, filename, file_format):
         data_bytes = data.encode('utf-8')
         mime_type = "text/markdown"
     elif file_format == 'html':
-        # Create a simple HTML document for rendering
-        html_content = f"""
-        <!DOCTYPE html>
-        <html>
-        <head><title>{filename}</title></head>
-        <body style="font-family: Arial, sans-serif; padding: 20px;">
-        <h1 style="color: #4CAF50;">Parsed Resume Data: {filename.replace('.html', '')}</h1>
-        <hr/>
-        <pre style="white-space: pre-wrap; word-wrap: break-word; background: #f4f4f4; padding: 10px; border: 1px solid #ddd;">
-        {data}
-        </pre>
-        <p>Generated by PragyanAI</p>
-        </body>
-        </html>
-        """
-        data_bytes = html_content.encode('utf-8')
+        # The data is already the full HTML content from generate_cv_html
+        data_bytes = data.encode('utf-8')
         mime_type = "text/html"
     else:
         return "" 
@@ -496,84 +557,7 @@ def render_download_button(data_uri, filename, label, color):
         """, 
         unsafe_allow_html=True
     )
-# --- End Download Helper Functions ---
-
-# --- NEW HELPER FUNCTION FOR HTML/PDF Generation ---
-def generate_cv_html(parsed_data):
-    """Generates a simple, print-friendly HTML string from parsed data for PDF conversion."""
-    
-    # Simple CSS for a clean, print-friendly CV look
-    css = """
-    <style>
-        @page { size: A4; margin: 1cm; }
-        body { font-family: 'Arial', sans-serif; line-height: 1.5; margin: 0; padding: 0; font-size: 10pt; }
-        .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
-        .header h1 { margin: 0; font-size: 1.8em; }
-        .contact-info { display: flex; justify-content: center; font-size: 0.8em; color: #555; }
-        .contact-info span { margin: 0 8px; }
-        .section { margin-bottom: 15px; page-break-inside: avoid; }
-        .section h2 { border-bottom: 1px solid #999; padding-bottom: 3px; margin-bottom: 8px; font-size: 1.1em; text-transform: uppercase; color: #333; }
-        .item-list ul { list-style-type: disc; margin-left: 20px; padding-left: 0; margin-top: 0; }
-        .item-list ul li { margin-bottom: 3px; }
-        .item-list p { margin: 3px 0 8px 0; }
-        a { color: #0056b3; text-decoration: none; }
-    </style>
-    """
-    
-    # --- HTML Structure ---
-    html_content = f"<html><head>{css}<title>{parsed_data.get('name', 'CV')}</title></head><body>"
-    
-    # 1. Header and Contact Info
-    html_content += '<div class="header">'
-    html_content += f"<h1>{parsed_data.get('name', 'Candidate Name')}</h1>"
-    
-    contact_parts = []
-    if parsed_data.get('email'): contact_parts.append(f"<span>📧 {parsed_data['email']}</span>")
-    if parsed_data.get('phone'): contact_parts.append(f"<span>📱 {parsed_data['phone']}</span>")
-    
-    linkedin_url = parsed_data.get('linkedin', '')
-    if linkedin_url: 
-        display_link = linkedin_url.split('/')[-1] if linkedin_url.startswith('http') else 'LinkedIn'
-        contact_parts.append(f"<span>🔗 <a href='{linkedin_url}'>{display_link}</a></span>")
-    
-    github_url = parsed_data.get('github', '')
-    if github_url:
-        display_link = github_url.split('/')[-1] if github_url.startswith('http') else 'GitHub'
-        contact_parts.append(f"<span>💻 <a href='{github_url}'>{display_link}</a></span>")
-    
-    html_content += f'<div class="contact-info">{" | ".join(contact_parts)}</div>'
-    html_content += '</div>'
-    
-    # 2. Sections
-    section_order = ['personal_details', 'experience', 'projects', 'education', 'certifications', 'skills', 'strength']
-    
-    for k in section_order:
-        v = parsed_data.get(k)
-        
-        # Skip contact details already handled
-        if k in ['name', 'email', 'phone', 'linkedin', 'github']: continue 
-
-        if v and (isinstance(v, str) and v.strip() or isinstance(v, list) and v):
-            
-            html_content += f'<div class="section"><h2>{k.replace("_", " ").title()}</h2>'
-            html_content += '<div class="item-list">'
-            
-            if k == 'personal_details' and isinstance(v, str):
-                html_content += f"<p>{v}</p>"
-            elif isinstance(v, list):
-                html_content += '<ul>'
-                for item in v:
-                    if item: 
-                        html_content += f"<li>{item}</li>"
-                html_content += '</ul>'
-            else:
-                html_content += f"<p>{v}</p>"
-                
-            html_content += '</div></div>'
-
-    html_content += '</body></html>'
-    return html_content
-# --- END NEW HELPER FUNCTION ---
+# --- END HELPER FUNCTIONS ---
 
 
 @st.cache_data(show_spinner="Analyzing JD for metadata...")
@@ -799,10 +783,6 @@ def resume_parsing_tab():
                         st.session_state.full_text = result['full_text']
                         st.session_state.excel_data = result['excel_data'] 
                         st.session_state.parsed['name'] = result['name'] 
-                        
-                        # Set form data from parsed data for the builder tab
-                        st.session_state.cv_form_data = st.session_state.parsed.copy() 
-                        
                         clear_interview_state()
                         st.success(f"✅ Successfully loaded and parsed **{result['name']}**.")
                         st.info("The parsed data is ready for matching.")
@@ -843,10 +823,6 @@ def resume_parsing_tab():
                         st.session_state.full_text = result['full_text']
                         st.session_state.excel_data = result['excel_data'] 
                         st.session_state.parsed['name'] = result['name'] 
-                        
-                        # Set form data from parsed data for the builder tab
-                        st.session_state.cv_form_data = st.session_state.parsed.copy() 
-                        
                         clear_interview_state()
                         st.success(f"✅ Successfully loaded and parsed **{result['name']}**.")
                         st.info("The parsed data is ready for matching.") 
@@ -1015,7 +991,7 @@ def jd_batch_match_tab():
     is_mock_mode = isinstance(client, MockGroqClient) and not GROQ_API_KEY
     
     if not is_resume_parsed:
-        st.warning("⚠️ Please **upload and parse your resume** in the 'Resume Parsing' tab or **build a CV** in the 'CV Builder/Manager' tab first.")
+        st.warning("⚠️ Please **upload and parse your resume** in the 'Resume Parsing' tab first.")
         
         # Display the specific parsing error if it exists
         if st.session_state.get('parsed', {}).get('error') is not None:
@@ -1081,21 +1057,28 @@ def jd_batch_match_tab():
                         # Call the LLM-dependent evaluation function
                         fit_output = evaluate_jd_fit(jd_content, parsed_json) 
                         
-                        # --- START FIX: ROBUST REGEX EXTRACTION FOR SCORE AND PERCENTAGES ---
-                        # Overall Score: Tries to find 'Overall Fit Score: [N]/10', 'Score: N/10', or just 'N' near the score prompt.
-                        # Matches 'Overall Fit Score:', 'Score:', or similar, followed by optional brackets, digits, and optional '/10'.
-                        overall_score_match = re.search(r'(?:Overall\s*Fit\s*Score|Score):\s*\[?(\d{1,2})\]?(?:\s*/10)?', fit_output, re.IGNORECASE)
+                        # --- FIX: ROBUST REGEX EXTRACTION FOR SCORE AND PERCENTAGES ---
+                        overall_score_match = re.search(r'Overall Fit Score:\s*\[?\s*(\d+)\s*\]?\s*/10', fit_output, re.IGNORECASE)
+                        
+                        section_analysis_match = re.search(
+                            r'--- Section Match Analysis ---\s*(.*?)\s*(?:Strengths/Matches|Overall Summary):', 
+                            fit_output, re.DOTALL | re.IGNORECASE
+                        )
+                        
+                        skills_percent, experience_percent, education_percent = 'N/A', 'N/A', 'N/A'
+                        
+                        if section_analysis_match:
+                            section_text = section_analysis_match.group(1)
+                            
+                            skills_match = re.search(r'Skills\s*Match:\s*\[?\s*(\d+)%\s*\]?', section_text, re.IGNORECASE)
+                            experience_match = re.search(r'Experience\s*Match:\s*\[?\s*(\d+)%\s*\]?', section_text, re.IGNORECASE)
+                            education_match = re.search(r'Education\s*Match:\s*\[?\s*(\d+)%\s*\]?', section_text, re.IGNORECASE)
+                            
+                            if skills_match: skills_percent = skills_match.group(1)
+                            if experience_match: experience_percent = experience_match.group(1)
+                            if education_match: education_percent = education_match.group(1)
+                            
                         overall_score = overall_score_match.group(1) if overall_score_match else 'N/A'
-                        
-                        # Section Percentages: Look for the section name followed by one or two digits and a % sign.
-                        # This expression is already robust: [XX]%, XX%
-                        skills_match = re.search(r'Skills\s*Match:\s*\[?(\d{1,2})\]?%', fit_output, re.IGNORECASE)
-                        experience_match = re.search(r'Experience\s*Match:\s*\[?(\d{1,2})\]?%', fit_output, re.IGNORECASE)
-                        education_match = re.search(r'Education\s*Match:\s*\[?(\d{1,2})\]?%', fit_output, re.IGNORECASE)
-                        
-                        skills_percent = skills_match.group(1) if skills_match else 'N/A'
-                        experience_percent = experience_match.group(1) if experience_match else 'N/A'
-                        education_percent = education_match.group(1) if education_match else 'N/A'
                         
                         # 4. Check for API/Mock/Parsing errors
                         if "AI Evaluation Error" in fit_output:
@@ -1338,7 +1321,7 @@ def filter_jd_tab_content():
         st.info("Use the filters above and click **'Apply Filters'** to view matching Job Descriptions.")
 
 
-# --- New Parsed Data Tab (To house the removed content for testing) ---
+# --- Parsed Data View Tab (Modified for new HTML Generator) ---
 
 def parsed_data_tab():
     st.header("✨ Parsed Resume Data View")
@@ -1358,8 +1341,6 @@ def parsed_data_tab():
         source_key = st.session_state.get('current_parsing_source_name', 'Unknown Source')
         if source_key == "Pasted_Text":
             source_display = "Pasted CV Data"
-        elif source_key == "Form_Generated":
-            source_display = "CV Builder Form"
         else:
             source_display = source_key.replace('_', ' ').replace('-', ' ') 
 
@@ -1368,20 +1349,24 @@ def parsed_data_tab():
         parsed_json_data = json.dumps(st.session_state.parsed, indent=4)
         parsed_markdown_data = st.session_state.full_text
         
+        # --- NEW INTEGRATION POINT ---
+        parsed_html_data = generate_cv_html(st.session_state.parsed)
+        # --- END NEW INTEGRATION POINT ---
+        
         json_filename = f"{base_filename}.json"
         md_filename = f"{base_filename}.md"
         html_filename = f"{base_filename}.html"
         
         json_data_uri = get_download_link(parsed_json_data, json_filename, 'json')
         md_data_uri = get_download_link(parsed_markdown_data, md_filename, 'markdown')
-        # Use the generic HTML for raw text display here, as this tab is for raw file parsing output
-        raw_html_data_uri = get_download_link(parsed_markdown_data, html_filename, 'html') 
+        # Use the newly generated HTML data
+        html_data_uri = get_download_link(parsed_html_data, html_filename, 'html') 
         
         
         tab_markdown, tab_json, tab_download = st.tabs([
             "📄 Markdown View", 
             "💾 JSON View", 
-            "⬇️ Raw Download"
+            "⬇️ PDF/HTML Download"
         ])
 
         # --- Markdown View Tab ---
@@ -1426,22 +1411,22 @@ def parsed_data_tab():
         # --- Download Tab ---
         with tab_download:
             
-            st.markdown("### Download Raw Parsed Text")
-            st.info("This download provides the data in a raw, unformatted text file for utility purposes.")
+            st.markdown("### Download Viewable Document")
+            st.info("This download provides the structured data in a simple HTML file. You can open the HTML file and use your browser's 'Print to PDF' function to generate a clean PDF.")
             
             col_html = st.columns(1)[0]
 
             with col_html:
-                st.markdown(f"**Raw Data HTML**", help="Raw Text wrapped in simple HTML.")
+                st.markdown(f"**{html_filename.replace('.html', '.pdf/html')}**", help="Viewable document format.")
                 render_download_button(
-                    raw_html_data_uri, 
+                    html_data_uri, 
                     html_filename, 
-                    f"📄 Download Raw HTML", 
+                    f"📄 Download HTML (Printable CV)", 
                     'html'
                 )
                 
             st.markdown("---")
-            st.info("For structured data (JSON) or clean text (Markdown), please check their respective viewing tabs.")
+            st.info("For structured data (JSON) or raw text (Markdown), please check their respective viewing tabs.")
 
     else:
         st.warning(f"**Status:** ❌ **No Valid Resume Data Loaded**")
@@ -1526,7 +1511,7 @@ def resume_qa_content():
     )
     
     if not is_data_loaded_and_valid:
-        st.warning("⚠️ **Q&A Disabled:** Please parse a valid resume in the 'Resume Parsing' tab or use the 'CV Builder' tab first.")
+        st.warning("⚠️ **Q&A Disabled:** Please parse a valid resume in the 'Resume Parsing' tab first.")
         return
     
     if "resume_chatbot_history" not in st.session_state:
@@ -1648,300 +1633,6 @@ def chatbot_tab_content():
 # END CHATBOT FUNCTIONALITY
 # --------------------------------------------------------------------------------------
 
-# --------------------------------------------------------------------------------------
-# NEW CV BUILDER/MANAGER TAB CONTENT
-# --------------------------------------------------------------------------------------
-
-def cv_management_tab_content():
-    st.header("📝 CV Builder/Manager")
-    st.markdown("### 1. Form-Based CV Builder")
-    st.info("Fill out the details below to generate a structured CV that can be used immediately for matching and interview prep. Data from a previously parsed file is pre-loaded.")
-
-    # Initialize the parsed data if not already existing
-    default_parsed = {
-        "name": "", "email": "", "phone": "", "linkedin": "", "github": "",
-        "skills": [], "experience": [], "education": [], "certifications": [], 
-        "projects": [], "strength": [], "personal_details": ""
-    }
-    
-    # Use a specific session state key for form data, initializing from parsed if available
-    if "cv_form_data" not in st.session_state:
-        # Load existing parsed data or default if the tab is opened for the first time
-        if st.session_state.get('parsed', {}).get('name'):
-            st.session_state.cv_form_data = st.session_state.parsed.copy()
-        else:
-            st.session_state.cv_form_data = default_parsed
-    
-    # --- CV Builder Form ---
-    with st.form("cv_builder_form"):
-        st.subheader("Personal & Contact Details")
-        
-        # Row 1: Name, Email, Phone
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.session_state.cv_form_data['name'] = st.text_input(
-                "Full Name", 
-                value=st.session_state.cv_form_data.get('name', default_parsed['name']), 
-                key="cv_name"
-            )
-        with col2:
-            st.session_state.cv_form_data['email'] = st.text_input(
-                "Email Address", 
-                value=st.session_state.cv_form_data.get('email', default_parsed['email']), 
-                key="cv_email"
-            )
-        with col3:
-            st.session_state.cv_form_data['phone'] = st.text_input(
-                "Phone Number", 
-                value=st.session_state.cv_form_data.get('phone', default_parsed['phone']), 
-                key="cv_phone"
-            )
-        
-        # Row 2: LinkedIn, GitHub
-        col4, col5 = st.columns(2)
-        with col4:
-            st.session_state.cv_form_data['linkedin'] = st.text_input(
-                "LinkedIn Profile URL", 
-                value=st.session_state.cv_form_data.get('linkedin', default_parsed['linkedin']), 
-                key="cv_linkedin"
-            )
-        with col5:
-            st.session_state.cv_form_data['github'] = st.text_input(
-                "GitHub Profile URL", 
-                value=st.session_state.cv_form_data.get('github', default_parsed['github']), 
-                key="cv_github"
-            )
-        
-        # Row 3: Summary/Personal Details 
-        st.markdown("---")
-        st.subheader("Summary / Personal Details")
-        st.session_state.cv_form_data['personal_details'] = st.text_area(
-            "Professional Summary or Personal Details (e.g., address, date of birth, nationality)", 
-            value=st.session_state.cv_form_data.get('personal_details', default_parsed['personal_details']), 
-            height=100,
-            key="cv_personal_details"
-        )
-        
-        st.markdown("---")
-        st.subheader("Technical Sections (One Item per Line)")
-
-        # Skills
-        skills_text = "\n".join(st.session_state.cv_form_data.get('skills', default_parsed['skills']))
-        new_skills_text = st.text_area(
-            "Key Skills (Technical and Soft)", 
-            value=skills_text,
-            height=150,
-            key="cv_skills"
-        )
-        st.session_state.cv_form_data['skills'] = [s.strip() for s in new_skills_text.split('\n') if s.strip()]
-        
-        # Experience
-        experience_text = "\n".join(st.session_state.cv_form_data.get('experience', default_parsed['experience']))
-        new_experience_text = st.text_area(
-            "Professional Experience (Job Roles, Companies, Dates, Key Responsibilities)", 
-            value=experience_text,
-            height=150,
-            key="cv_experience"
-        )
-        st.session_state.cv_form_data['experience'] = [e.strip() for e in new_experience_text.split('\n') if e.strip()]
-
-        # Education
-        education_text = "\n".join(st.session_state.cv_form_data.get('education', default_parsed['education']))
-        new_education_text = st.text_area(
-            "Education (Degrees, Institutions, Dates)", 
-            value=education_text,
-            height=100,
-            key="cv_education"
-        )
-        st.session_state.cv_form_data['education'] = [d.strip() for d in new_education_text.split('\n') if d.strip()]
-        
-        # Certifications
-        certifications_text = "\n".join(st.session_state.cv_form_data.get('certifications', default_parsed['certifications']))
-        new_certifications_text = st.text_area(
-            "Certifications (Name, Issuing Body, Date)", 
-            value=certifications_text,
-            height=100,
-            key="cv_certifications"
-        )
-        st.session_state.cv_form_data['certifications'] = [c.strip() for c in new_certifications_text.split('\n') if c.strip()]
-        
-        # Projects
-        projects_text = "\n".join(st.session_state.cv_form_data.get('projects', default_parsed['projects']))
-        new_projects_text = st.text_area(
-            "Projects (Name, Description, Technologies)", 
-            value=projects_text,
-            height=150,
-            key="cv_projects"
-        )
-        st.session_state.cv_form_data['projects'] = [p.strip() for p in new_projects_text.split('\n') if p.strip()]
-        
-        # Strengths
-        strength_text = "\n".join(st.session_state.cv_form_data.get('strength', default_parsed['strength']))
-        new_strength_text = st.text_area(
-            "Strengths / Key Personal Qualities (One per line)", 
-            value=strength_text,
-            height=100,
-            key="cv_strength"
-        )
-        st.session_state.cv_form_data['strength'] = [s.strip() for s in new_strength_text.split('\n') if s.strip()]
-
-
-        submit_form_button = st.form_submit_button("Generate and Load CV Data", use_container_width=True)
-
-    if submit_form_button:
-        # 1. Basic validation
-        if not st.session_state.cv_form_data['name'] or not st.session_state.cv_form_data['email']:
-            st.error("Please fill in at least your **Full Name** and **Email Address**.")
-            return
-
-        # 2. Update the main session state variables (as if a file was parsed)
-        st.session_state.parsed = st.session_state.cv_form_data.copy()
-        st.session_state.parsed['name'] = st.session_state.cv_form_data['name'] # Ensure name is set for display
-        st.session_state.current_parsing_source_name = "Form_Generated" # Mark the source
-        
-        # 3. Create a placeholder full_text for Q&A (simple compilation of all fields)
-        compiled_text = ""
-        for k, v in st.session_state.cv_form_data.items():
-            if v and k not in ['error']:
-                compiled_text += f"## {k.replace('_', ' ').title()}\n\n"
-                if isinstance(v, list):
-                    compiled_text += "\n".join([f"* {item}" for item in v]) + "\n\n"
-                else:
-                    compiled_text += str(v) + "\n\n"
-        st.session_state.full_text = compiled_text
-        
-        # 4. Clear related states (since this is a new resume)
-        st.session_state.candidate_match_results = []
-        if 'resume_chatbot_history' in st.session_state: del st.session_state['resume_chatbot_history']
-
-        st.success(f"✅ CV data for **{st.session_state.parsed['name']}** successfully generated and loaded! You can now use the Chatbot, Match, and Interview Prep tabs.")
-        st.rerun() # Rerun to refresh display states
-        
-    st.markdown("---")
-    st.subheader("2. Loaded CV Data Preview and Download")
-    
-    # --- TABBED VIEW SECTION (PDF/MARKDOWN/JSON) ---
-    if st.session_state.get('parsed', {}).get('name') and st.session_state.parsed.get('error') is None:
-        
-        # Filter for non-empty/non-list fields before sending to formatter
-        filled_data_for_preview = {
-            k: v for k, v in st.session_state.parsed.items() 
-            if v and (isinstance(v, str) and v.strip() or isinstance(v, list) and v)
-        }
-        
-        # Helper function for Markdown formatting
-        def format_parsed_json_to_markdown(parsed_data):
-            """Formats the parsed JSON data into a clean, CV-like Markdown structure."""
-            md = ""
-            
-            # --- Personal Info (Header) ---
-            if parsed_data.get('name'):
-                md += f"# **{parsed_data['name']}**\n\n"
-            
-            contact_info = []
-            if parsed_data.get('email'): contact_info.append(parsed_data['email'])
-            if parsed_data.get('phone'): contact_info.append(parsed_data['phone'])
-            if parsed_data.get('linkedin'): contact_info.append(f"[LinkedIn]({parsed_data['linkedin']})")
-            if parsed_data.get('github'): contact_info.append(f"[GitHub]({parsed_data['github']})")
-            
-            if contact_info:
-                md += f"| {' | '.join(contact_info)} |\n"
-                md += "| " + " | ".join(["---"] * len(contact_info)) + " |\n\n"
-            
-            # --- Section Content ---
-            section_order = ['personal_details', 'experience', 'projects', 'education', 'certifications', 'skills', 'strength']
-            
-            for k in section_order:
-                v = parsed_data.get(k)
-                
-                # Skip contact details already handled in header
-                if k in ['name', 'email', 'phone', 'linkedin', 'github']: continue 
-
-                if v and (isinstance(v, str) and v.strip() or isinstance(v, list) and v):
-                    
-                    md += f"## **{k.replace('_', ' ').upper()}**\n"
-                    md += "---\n"
-                    
-                    if k == 'personal_details' and isinstance(v, str):
-                        md += f"{v}\n\n"
-                    elif isinstance(v, list):
-                        for item in v:
-                            if item: 
-                                # Use bullet points for list items (Experience, Skills, Projects, etc.)
-                                md += f"- {item}\n"
-                        md += "\n"
-                    else:
-                        # Fallback for any other string
-                        md += f"{v}\n\n"
-            return md
-
-
-        tab_markdown, tab_json, tab_pdf = st.tabs(["📝 Markdown View", "💾 JSON View", "⬇️ PDF/HTML Download"])
-
-        # --- Markdown View ---
-        with tab_markdown:
-            cv_markdown_preview = format_parsed_json_to_markdown(filled_data_for_preview)
-            st.markdown(cv_markdown_preview)
-
-            # Markdown Download Button
-            st.download_button(
-                label="⬇️ Download CV as Markdown (.md)",
-                data=cv_markdown_preview,
-                file_name=f"{st.session_state.parsed.get('name', 'Generated_CV').replace(' ', '_')}_CV_Document.md",
-                mime="text/markdown",
-                key="download_cv_markdown_final"
-            )
-
-
-        # --- JSON View ---
-        with tab_json:
-            st.json(st.session_state.parsed)
-            st.info("This is the raw, structured data used by the AI tools.")
-
-            # JSON Download Button
-            json_output = json.dumps(st.session_state.parsed, indent=2)
-            st.download_button(
-                label="⬇️ Download CV as JSON File",
-                data=json_output,
-                file_name=f"{st.session_state.parsed.get('name', 'Generated_CV').replace(' ', '_')}_CV_Data.json",
-                mime="application/json",
-                key="download_cv_json_final"
-            )
-
-
-        # --- PDF View (Download) ---
-        with tab_pdf:
-            
-            st.markdown("### Download CV as HTML (Print-to-PDF)")
-            st.info("Click the button below to download an HTML file. Open the file in your browser and use the browser's **'Print'** function, selecting **'Save as PDF'** to create your final CV document.")
-            
-            html_output = generate_cv_html(filled_data_for_preview)
-
-            st.download_button(
-                label="⬇️ Download CV as Print-Ready HTML File (for PDF conversion)",
-                data=html_output,
-                file_name=f"{st.session_state.parsed.get('name', 'Generated_CV').replace(' ', '_')}_CV_Document.html",
-                mime="text/html",
-                key="download_cv_html"
-            )
-            
-            st.markdown("---")
-            st.markdown("### Raw Text Data Download (for utility)")
-            st.download_button(
-                label="⬇️ Download All CV Data as Raw Text (.txt)",
-                data=st.session_state.full_text,
-                file_name=f"{st.session_state.parsed.get('name', 'Generated_CV').replace(' ', '_')}_Raw_Data.txt",
-                mime="text/plain",
-                key="download_cv_txt_final"
-            )
-            
-    else:
-        st.warning("Please fill out the form above and click 'Generate and Load CV Data' or parse a resume in the 'Resume Parsing' tab to see the preview and download options.")
-
-# --------------------------------------------------------------------------------------
-# END CV BUILDER/MANAGER TAB CONTENT
-# --------------------------------------------------------------------------------------
-
 
 # -------------------------
 # CANDIDATE DASHBOARD FUNCTION 
@@ -1974,29 +1665,18 @@ def candidate_dashboard():
     if 'filtered_jds_display' not in st.session_state: st.session_state.filtered_jds_display = []
     if 'last_selected_skills' not in st.session_state: st.session_state.last_selected_skills = []
     
-    # NEW: Initialize form data state
-    if "cv_form_data" not in st.session_state: 
-        st.session_state.cv_form_data = {
-            "name": "", "email": "", "phone": "", "linkedin": "", "github": "",
-            "skills": [], "experience": [], "education": [], "certifications": [], 
-            "projects": [], "strength": [], "personal_details": ""
-        }
-    
     # Chatbot history initialized separately for each sub-tab
     if "resume_chatbot_history" not in st.session_state: st.session_state.resume_chatbot_history = []
     if "jd_chatbot_history" not in st.session_state: st.session_state.jd_chatbot_history = {} # Keyed by JD name
 
     # --- Main Content with Tabs (NEW TAB ADDED) ---
-    tab_parsing, tab_cv_builder, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot = st.tabs(
-        ["📄 Resume Parsing", "📝 CV Builder/Manager", "✨ Parsed Data View", "📚 JD Management", "🎯 Batch JD Match", "🔍 Filter JD", "🤖 Chatbot"]
+    tab_parsing, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot = st.tabs(
+        ["📄 Resume Parsing", "✨ Parsed Data View", "📚 JD Management", "🎯 Batch JD Match", "🔍 Filter JD", "🤖 Chatbot"]
     )
     
     with tab_parsing:
         resume_parsing_tab()
         
-    with tab_cv_builder:
-        cv_management_tab_content()
-
     with tab_data_view:
         parsed_data_tab()
         
