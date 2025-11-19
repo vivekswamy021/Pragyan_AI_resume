@@ -134,6 +134,7 @@ class MockGroqClient:
                     """
                     return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_plan})})()]})
 
+
                 # --- Existing Mock Logic (JD Q&A, Resume Q&A, Cover Letter) ---
                 elif "Answer the following question about the Job Description concisely and directly." in prompt_content:
                     question_match = re.search(r'Question:\s*(.*)', prompt_content)
@@ -228,8 +229,10 @@ class MockGroqClient:
                         score = 7
                     elif 'cloud engineer' in jd_role:
                         score = 6
-                    else:
+                    elif 'software engineer' in jd_role:
                         score = 5
+                    else:
+                        score = 4
                         
                     # Calculate percentages based on the score to differentiate the rows
                     skills_p = 50 + (score * 5)
@@ -290,75 +293,6 @@ except (ImportError, ValueError, NameError) as e:
 
 
 # --- Utility Functions ---
-
-def compile_parsed_data(parsed_data):
-    """
-    Compiles the parsed dictionary data (potentially edited) back into a 
-    structured markdown/text string for display and download.
-    """
-    compiled_text = ""
-    # Define preferred display order and mapping for the CV
-    sections_order = {
-        "name": "Contact Information", 
-        "email": "Contact Information", 
-        "phone": "Contact Information", 
-        "linkedin": "Contact Information", 
-        "github": "Contact Information",
-        "personal_details": "Summary/Objective",
-        "skills": "Technical Skills",
-        "experience": "Professional Experience",
-        "projects": "Key Projects",
-        "education": "Education",
-        "certifications": "Certifications",
-        "strength": "Personal Strengths", 
-        # Add other fields here if necessary
-    }
-    
-    # Group contact info together
-    contact_info = []
-    
-    for k, v in parsed_data.items():
-        # Skip error key and other non-displayable keys
-        if k in ['error', 'excel_data']:
-            continue
-            
-        if v and k in sections_order:
-            section_title = sections_order[k]
-            
-            if section_title == "Contact Information":
-                if k == 'name':
-                    compiled_text = f"# {str(v)}\n" + compiled_text 
-                else:
-                    contact_info.append(f"{k.title()}: {str(v)}")
-                continue
-
-            # Ensure the section header exists before appending content
-            # This is a bit complex for markdown, a simpler approach is:
-            
-            if section_title not in compiled_text:
-                # Add a separator and title for non-contact sections
-                compiled_text += f"\n---\n\n## {section_title}\n\n"
-            
-            # Append content based on type
-            if isinstance(v, list):
-                # Ensure all list items are strings for clean display
-                compiled_text += "\n".join([f"* {str(item)}" for item in v]) + "\n\n"
-            else:
-                compiled_text += str(v) + "\n\n"
-
-    # Insert contact info after the name/header
-    contact_block = " | ".join(contact_info)
-    if contact_block:
-         compiled_text = compiled_text.replace("\n---\n\n## Summary/Objective", f"\n{contact_block}\n\n---\n\n## Summary/Objective")
-    
-    # Remove any stray initial section markers if the summary was missing
-    if compiled_text.startswith("#"):
-         # Clean up initial whitespace/separators
-         compiled_text = re.sub(r'#.*?\n\s*---\s*', compiled_text.split('\n')[0] + '\n', compiled_text, 1)
-
-
-    return compiled_text.strip()
-
 
 def clear_interview_state(mode):
     """Clears all session state variables related to interview preparation for a specific mode."""
@@ -545,7 +479,7 @@ def parse_resume_with_llm(text):
 
 # Updated signature to match the request
 def parse_and_store_resume(content_source, file_name_key, source_type):
-    """Handles extraction, parsing, and storage of CV data from either a file or pasted text."""
+    """Handles extraction, parsing, and storage of CV data from either a file or pasted text/form data."""
     extracted_text = ""
     excel_data = None
     file_name = "Pasted_Resume"
@@ -561,11 +495,31 @@ def parse_and_store_resume(content_source, file_name_key, source_type):
         extracted_text = content_source.strip()
         file_name = "Pasted_Text"
         st.session_state.current_parsing_source_name = file_name 
+    elif source_type == 'form':
+        # If the source is form data, content_source is the structured dictionary itself
+        parsed_data = content_source
+        file_name = f"{parsed_data.get('name', 'Form_Based_CV')}"
+        # We need to simulate a full_text version for the Q&A and Match functions
+        compiled_text = ""
+        for k, v in parsed_data.items():
+            if v and k not in ['error']:
+                compiled_text += f"## {k.replace('_', ' ').title()}\n\n"
+                if isinstance(v, list):
+                    compiled_text += "\n".join([f"* {str(item)}" for item in v]) + "\n\n"
+                else:
+                    compiled_text += str(v) + "\n\n"
+        
+        return {
+            "parsed": parsed_data, 
+            "full_text": compiled_text, 
+            "excel_data": None, 
+            "name": file_name.replace(' ', '_')
+        }
 
     if extracted_text.startswith("[Error"):
         return {"error": extracted_text, "full_text": extracted_text, "excel_data": None, "name": file_name}
     
-    # 2. Call LLM Parser
+    # 2. Call LLM Parser for file/text input
     parsed_data = parse_resume_with_llm(extracted_text)
     
     # 3. Handle LLM Parsing Error
@@ -574,7 +528,15 @@ def parse_and_store_resume(content_source, file_name_key, source_type):
         return {"error": parsed_data['error'], "full_text": extracted_text, "excel_data": excel_data, "name": error_name}
 
     # 4. Create compiled text for download/Q&A
-    compiled_text = compile_parsed_data(parsed_data)
+    compiled_text = ""
+    for k, v in parsed_data.items():
+        if v and k not in ['error']:
+            compiled_text += f"## {k.replace('_', ' ').title()}\n\n"
+            if isinstance(v, list):
+                # Ensure all list items are strings for clean display
+                compiled_text += "\n".join([f"* {str(item)}" for item in v]) + "\n\n"
+            else:
+                compiled_text += str(v) + "\n\n"
 
     # Ensure final_name uses the parsed name
     final_name = parsed_data.get('name', 'Unknown_Candidate').replace(' ', '_') 
@@ -626,11 +588,8 @@ def get_download_link(data, filename, file_format, title="Parsed Data"):
         </body>
         </html>
         """
-        # Simple HTML conversion for CV/CL (assuming input is markdown/plain text)
-        html_content = compiled_text_to_html(data, title=f"Generated CV: {filename.replace('.html', '')}")
         data_bytes = html_content.encode('utf-8')
         mime_type = "text/html"
-
     else:
         return "" 
 
@@ -638,52 +597,6 @@ def get_download_link(data, filename, file_format, title="Parsed Data"):
     
     # Return the full data URI
     return f"data:{mime_type};base64,{b64}"
-
-def compiled_text_to_html(markdown_text, title="CV Document"):
-    """Converts the compiled markdown text (CV) to basic printable HTML."""
-    
-    html_content = markdown_text
-    
-    # 1. Convert headers
-    html_content = re.sub(r'# (.*)\n', r'<h1>\1</h1>\n', html_content)
-    html_content = re.sub(r'## (.*)\n', r'<h2>\1</h2>\n', html_content)
-    
-    # 2. Convert lists
-    html_content = re.sub(r'\n\* (.*)', r'\n<li>\1</li>', html_content)
-    html_content = re.sub(r'(<li>.*)(<br>)*\n<li>', r'<ul>\1</li>\n<li>', html_content, flags=re.DOTALL)
-    html_content = re.sub(r'(<li>.*)\n\n', r'\1</li></ul>\n\n', html_content, flags=re.DOTALL)
-    
-    # 3. Bold text
-    html_content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html_content)
-    
-    # 4. Handle horizontal rules
-    html_content = html_content.replace('---', '<hr/>')
-    
-    # 5. Replace double newlines with paragraphs
-    html_content = html_content.replace('\n\n', '<p>')
-    
-    # Final cleanup and wrap
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>{title}</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; padding: 40px; line-height: 1.6; max-width: 800px; margin: auto; }}
-            h1 {{ text-align: center; color: #1E90FF; border-bottom: 3px solid #ddd; padding-bottom: 15px; margin-bottom: 0px;}}
-            h2 {{ color: #333; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-top: 25px;}}
-            p {{ margin-bottom: 10px; }}
-            ul {{ list-style-type: disc; margin-left: 20px; }}
-            hr {{ border: 0; height: 1px; background: #eee; margin: 20px 0; }}
-        </style>
-    </head>
-    <body>
-    {html_content}
-    <p style="margin-top: 30px; font-size: 10px; color: grey;">Generated by PragyanAI</p>
-    </body>
-    </html>
-    """
-
 
 def render_download_button(data_uri, filename, label, color):
     """Renders an HTML button that triggers a file download."""
@@ -933,8 +846,6 @@ def generate_gap_course_plan(gap_analysis_text, jd_role, candidate_skills):
         error_output = f"AI Generation Error: Failed to connect or receive response from LLM for course plan. Error: {e}\n{traceback.format_exc()}"
         return error_output
 
-# --- ADAPTED LLM Functions for Interview Preparation (Modified) ---
-
 def generate_interview_questions(source_data, source_type, identifier):
     """
     Generates interview questions based on either a resume section or a full JD.
@@ -1069,8 +980,6 @@ def evaluate_interview_answers(qa_list, resume_context):
     except Exception as e:
         return f"Evaluation Error: Failed to connect to LLM for scoring. Error: {e}"
 
-# --- END ADAPTED LLM Functions ---
-
 # --- Tab Content Functions ---
     
 def resume_parsing_tab():
@@ -1190,145 +1099,127 @@ def resume_parsing_tab():
             
     st.markdown("---")
         
-# --- NEW: CV Management Tab Function ---
+# --- CV Management Tab Function (New) ---
 
-def cv_management_tab_content():
-    """
-    CV Management Tab for editing parsed resume data and generating CV.
-    """
-    st.header("📝 CV Management & Editor")
-    st.markdown("Edit your parsed resume data via this form to generate an updated CV document.")
-    st.markdown("---")
-
-    is_data_loaded_and_valid = (
-        st.session_state.get('parsed', {}).get('name') is not None and 
-        st.session_state.get('parsed', {}).get('error') is None
-    )
-
-    if not is_data_loaded_and_valid:
-        st.warning("⚠️ **CV Editor Disabled:** Please successfully parse a resume in the 'Resume Parsing' tab first.")
-        if st.session_state.get('parsed', {}).get('error') is not None:
-             st.error(f"Last Parsing Error: {st.session_state.parsed['error']}")
-        return
-
-    st.info(f"Editing Parsed Data for: **{st.session_state.parsed['name']}**")
+def cv_management_tab_candidate():
+    """Form-based CV generation and saving to session state."""
+    st.header("📝 CV Management: Form-Based CV Generation")
+    st.markdown("Manually enter your CV details to generate a structured profile, bypassing the need for file parsing.")
     
-    col_edit, col_preview = st.columns([1, 1])
+    st.info("The data submitted here will overwrite the currently loaded parsed resume and will be used for all matching, Q&A, and generation tasks.")
+    
+    if 'form_cv_data' not in st.session_state:
+        # Default mock data for convenience
+        st.session_state.form_cv_data = {
+            "name": "Vivek Swamy",
+            "email": "vivek.swamy@example.com",
+            "phone": "555-1234",
+            "linkedin": "https://linkedin.com/in/vivek-swamy-mock",
+            "skills": "Python, SQL, AWS, MLOps, Docker, Terraform",
+            "education": "B.S. Computer Science, Mock University, 2020",
+            "experience": "Software Engineer, TechCorp (2022-Present); Data Analyst, TestCo (2020-2022)",
+            "projects": "MLOps Pipeline Project; Cloud Migration Tool",
+        }
 
-    with col_edit:
-        st.subheader("1. Edit Form")
-        st.markdown("Modify the fields below to update your CV.")
-        
-        # We need a copy of the parsed data to modify in the form
-        if 'editable_parsed_data' not in st.session_state:
-            st.session_state.editable_parsed_data = st.session_state.parsed.copy()
-            st.session_state.original_full_text = st.session_state.full_text
-
-        with st.form("cv_edit_form"):
-            # --- Contact Details ---
-            st.markdown("#### Contact Details")
-            st.session_state.editable_parsed_data['name'] = st.text_input(
-                "Full Name", st.session_state.editable_parsed_data.get('name', '')
-            )
-            st.session_state.editable_parsed_data['email'] = st.text_input(
-                "Email", st.session_state.editable_parsed_data.get('email', '')
-            )
-            st.session_state.editable_parsed_data['phone'] = st.text_input(
-                "Phone", st.session_state.editable_parsed_data.get('phone', '')
-            )
-            st.session_state.editable_parsed_data['linkedin'] = st.text_input(
-                "LinkedIn URL", st.session_state.editable_parsed_data.get('linkedin', '')
-            )
-            st.session_state.editable_parsed_data['github'] = st.text_input(
-                "GitHub URL", st.session_state.editable_parsed_data.get('github', '')
-            )
-
-            # --- Summary/Personal Details ---
-            st.markdown("#### Summary/Objective")
-            st.session_state.editable_parsed_data['personal_details'] = st.text_area(
-                "Summary/Objective", st.session_state.editable_parsed_data.get('personal_details', ''), height=100
-            )
-
-            # --- List Sections (Skills, Education, Experience, Certifications, Projects, Strength) ---
-            list_sections = ['skills', 'education', 'experience', 'projects', 'certifications', 'strength']
+    with st.form("form_cv_generator"):
+        st.subheader("Personal Details")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            name = st.text_input("Full Name", value=st.session_state.form_cv_data.get("name", ""))
+        with col2:
+            email = st.text_input("Email", value=st.session_state.form_cv_data.get("email", ""))
+        with col3:
+            phone = st.text_input("Phone", value=st.session_state.form_cv_data.get("phone", ""))
             
-            for section in list_sections:
-                st.markdown(f"#### {section.replace('_', ' ').title()}")
-                # Convert list to newline-separated string for editing
-                current_list = st.session_state.editable_parsed_data.get(section, [])
-                if isinstance(current_list, list):
-                    list_str = "\n".join([str(item) for item in current_list])
-                else:
-                    list_str = str(current_list)
-                    
-                edited_list_str = st.text_area(
-                    f"{section.replace('_', ' ').title()} (One item per line)", 
-                    list_str, 
-                    height=150, 
-                    key=f'cv_edit_{section}'
-                )
-                
-                # Convert back to list for storage
-                st.session_state.editable_parsed_data[section] = [
-                    item.strip() for item in edited_list_str.split('\n') if item.strip()
-                ]
+        col_link1, col_link2 = st.columns(2)
+        with col_link1:
+            linkedin = st.text_input("LinkedIn URL", value=st.session_state.form_cv_data.get("linkedin", ""))
+        with col_link2:
+            github = st.text_input("GitHub URL", value=st.session_state.form_cv_data.get("github", ""))
 
-            if st.form_submit_button("💾 Save Changes and Update CV", type="primary", use_container_width=True):
-                # Save the edited data back to the main state
-                st.session_state.parsed = st.session_state.editable_parsed_data.copy()
-                st.session_state.full_text = compile_parsed_data(st.session_state.parsed)
-                
-                # Invalidate match results and interview prep as the CV has changed
-                if 'candidate_match_results' in st.session_state: del st.session_state['candidate_match_results']
-                clear_interview_state('resume')
-                clear_interview_state('jd')
-                if 'gap_analysis_plan' in st.session_state: del st.session_state['gap_analysis_plan']
-
-                st.success("✅ CV data updated and saved! Match results cleared.")
-                st.rerun()
-
-    with col_preview:
-        st.subheader("2. Generated CV Preview (Markdown)")
-        
-        # If the user has just loaded/saved, compile the latest data
-        current_cv_markdown = compile_parsed_data(st.session_state.parsed)
-        
-        st.markdown(current_cv_markdown, unsafe_allow_html=True)
-        
         st.markdown("---")
-        st.markdown("#### Download Updated CV")
+        st.subheader("Technical Profile")
         
-        candidate_name = st.session_state.parsed.get('name', 'Candidate').replace(' ', '_')
-        base_filename = f"{candidate_name}_Generated_CV"
-        
-        html_filename = f"{base_filename}.html"
-        
-        # Use the compiled_text_to_html function to create the final download data
-        html_data_uri = get_download_link(
-            current_cv_markdown, 
-            html_filename, 
-            'html',
-            title=f"Generated CV: {candidate_name}"
+        skills_raw = st.text_area(
+            "Skills (Comma Separated, e.g., Python, AWS, Docker)",
+            value=st.session_state.form_cv_data.get("skills", ""),
+            height=80
         )
         
-        render_download_button(
-            html_data_uri, 
-            html_filename, 
-            f"📄 Download CV as HTML (Printable PDF)", 
-            'html'
+        education_raw = st.text_area(
+            "Education (One entry per line)",
+            value=st.session_state.form_cv_data.get("education", ""),
+            height=100
         )
         
+        experience_raw = st.text_area(
+            "Experience (One role/company entry per line, include dates)",
+            value=st.session_state.form_cv_data.get("experience", ""),
+            height=150
+        )
+        
+        projects_raw = st.text_area(
+            "Projects (One project entry per line, include description/tech)",
+            value=st.session_state.form_cv_data.get("projects", ""),
+            height=100
+        )
+        
+        certifications_raw = st.text_area(
+            "Certifications (One entry per line)",
+            value=st.session_state.form_cv_data.get("certifications", ""),
+            height=80
+        )
+
         st.markdown("---")
-        if st.button("↩️ Reset to Original Parsed Data", key="reset_cv_editor"):
-            # Restore original data
-            st.session_state.parsed = st.session_state.get('original_parsed_data', st.session_state.parsed).copy()
-            st.session_state.full_text = compile_parsed_data(st.session_state.parsed)
-            # Clear editable copy to force reload from parsed
-            if 'editable_parsed_data' in st.session_state: del st.session_state['editable_parsed_data']
-            st.success("CV data reset to the content of the last parsed document.")
+        submit_button = st.form_submit_button("💾 Save & Load Form-Based CV", type="primary", use_container_width=True)
+
+    if submit_button:
+        if not name or not skills_raw.strip():
+            st.error("Name and Skills are mandatory fields.")
+            return
+
+        # 1. Structure the data
+        form_data = {
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "linkedin": linkedin,
+            "github": github,
+            "personal_details": f"Contact: {email}, Phone: {phone}, LinkedIn: {linkedin}, GitHub: {github}",
+            "skills": [s.strip() for s in skills_raw.split(',') if s.strip()],
+            "education": [e.strip() for e in education_raw.split('\n') if e.strip()],
+            "experience": [exp.strip() for exp in experience_raw.split('\n') if exp.strip()],
+            "projects": [p.strip() for p in projects_raw.split('\n') if p.strip()],
+            "certifications": [c.strip() for c in certifications_raw.split('\n') if c.strip()],
+            "strength": ["Proactive", "Detail-oriented"] # Mock value or could be added to form
+        }
+        
+        # 2. Update session state for persistence
+        st.session_state.form_cv_data = {
+            "name": name, "email": email, "phone": phone, "linkedin": linkedin, "github": github,
+            "skills": skills_raw, "education": education_raw, "experience": experience_raw,
+            "projects": projects_raw, "certifications": certifications_raw
+        }
+
+        # 3. Load into main parsed state (simulating successful parsing)
+        with st.spinner(f"Loading Form Data for {name}..."):
+            result = parse_and_store_resume(form_data, file_name_key='form_cv_candidate', source_type='form')
+            
+            st.session_state.parsed = result['parsed']
+            st.session_state.full_text = result['full_text']
+            st.session_state.excel_data = result['excel_data'] 
+            st.session_state.parsed['name'] = result['name'] 
+            st.session_state.current_parsing_source_name = "Form_Based_CV"
+            
+            # Clear dependent states
+            clear_interview_state('resume')
+            clear_interview_state('jd')
+            if 'gap_analysis_plan' in st.session_state: del st.session_state['gap_analysis_plan']
+            if 'candidate_match_results' in st.session_state: del st.session_state['candidate_match_results'] # Clear matches to force re-run
+            
+            st.success(f"✅ Successfully loaded and saved form CV for **{form_data['name']}**.")
+            st.info("Please proceed to the **Batch JD Match** tab to run a fresh analysis.")
             st.rerun()
-
-# --- END CV Management Tab Function ---
 
 # --- JD Management Tab Function ---
         
@@ -1529,12 +1420,12 @@ def jd_management_tab_candidate():
     else:
         st.info("No Job Descriptions added yet.")
         
-# --- Batch Match Tab Function (unchanged) ---
+# --- Batch Match Tab Function (UPDATED) ---
 
 def jd_batch_match_tab():
-    """The Batch JD Match tab logic."""
-    st.header("🎯 Batch JD Match: Best Matches")
-    st.markdown("Compare your current resume against all saved job descriptions.")
+    """The Batch JD Match tab logic, now with ranking and display."""
+    st.header("🎯 Batch JD Match: Best Matches & Ranking")
+    st.markdown("Compare your current resume against all saved job descriptions and rank them by AI fit score.")
     
     # Determine if a resume/CV is ready
     is_resume_parsed = (
@@ -1547,7 +1438,7 @@ def jd_batch_match_tab():
     is_mock_mode = isinstance(client, MockGroqClient) and not GROQ_API_KEY
     
     if not is_resume_parsed:
-        st.warning("⚠️ Please **upload and parse your resume** in the 'Resume Parsing' tab first.")
+        st.warning("⚠️ Please **upload and parse your resume** in the 'Resume Parsing' tab or use **'CV Management'** first.")
         
         if st.session_state.get('parsed', {}).get('error') is not None:
              st.error(f"Resume Parsing Error: {st.session_state.parsed.get('error')}")
@@ -1583,7 +1474,7 @@ def jd_batch_match_tab():
         if jd_item['name'] in selected_jd_names
     ]
     
-    if st.button(f"Run Match Analysis on **{len(jds_to_match)}** Selected JD(s)"):
+    if st.button(f"Run Match Analysis on **{len(jds_to_match)}** Selected JD(s)", type="primary"):
         st.session_state.candidate_match_results = []
         if 'gap_analysis_plan' in st.session_state: del st.session_state['gap_analysis_plan']
         
@@ -1607,6 +1498,7 @@ def jd_batch_match_tab():
                     try:
                         fit_output = evaluate_jd_fit(jd_content, parsed_json) 
                         
+                        # --- Parsing the LLM structured output ---
                         overall_score_match = re.search(r'Overall Fit Score:\s*\[?\s*(\d+)\s*\]?\s*/10', fit_output, re.IGNORECASE)
                         
                         section_analysis_match = re.search(
@@ -1664,8 +1556,10 @@ def jd_batch_match_tab():
                             "gaps": "Extraction failed due to internal error."
                         })
                         
+                # 2. Sort results by numeric score (Highest first)
                 results_with_score.sort(key=lambda x: x['numeric_score'], reverse=True)
                 
+                # 3. Add Rank
                 current_rank = 1
                 current_score = -1 
                 
@@ -1682,16 +1576,68 @@ def jd_batch_match_tab():
                          del item['numeric_score'] 
                     
                 st.session_state.candidate_match_results = results_with_score
-                st.success("Batch analysis complete! Results are stored and ready for display elsewhere.")
+                st.success(f"Batch analysis complete! {len(results_with_score)} JDs analyzed.")
                 st.rerun() 
 
 
     if st.session_state.get('candidate_match_results'):
          st.markdown("---")
-         st.info(f"Match analysis results for **{len(st.session_state.candidate_match_results)}** JDs are complete and stored internally.")
+         st.subheader("Match Ranking Table")
+         
+         # Prepare data for display dataframe
+         display_data = []
+         for item in st.session_state.candidate_match_results:
+             # Look up the role in the original JD list for display
+             original_jd = next((jd for jd in st.session_state.candidate_jd_list if jd.get('name') == item['jd_name']), {})
+             jd_role = original_jd.get('role', 'N/A')
+             
+             display_data.append({
+                 "Rank": item['rank'],
+                 "Job Description Name": item['jd_name'].replace("--- Simulated JD for: ", "").replace("JD for ", ""),
+                 "Role": jd_role,
+                 "Overall Score": f"{item['overall_score']}/10",
+                 "Skills Match %": item['skills_percent'],
+                 "Experience Match %": item['experience_percent'],
+                 "Gaps Summary": item['gaps'].split('\n')[0].strip('*- ') # First line of gaps
+             })
+             
+         df_display = pd.DataFrame(display_data)
+
+         # Display the sortable table
+         st.dataframe(
+             df_display, 
+             use_container_width=True, 
+             hide_index=True,
+             column_config={
+                 "Overall Score": st.column_config.ProgressColumn(
+                     "Overall Score",
+                     help="AI Calculated Fit Score (out of 10)",
+                     format="%f/10",
+                     min_value=0,
+                     max_value=10,
+                 ),
+                 "Rank": st.column_config.NumberColumn("Rank", format="%d", help="Lowest number is the best match")
+             }
+         )
+         
+         st.markdown("---")
+         st.subheader("Detailed Match Analysis")
+         
+         selected_jd_name = st.selectbox(
+             "Select a JD for full AI Analysis & Gaps",
+             options=[item['jd_name'] for item in st.session_state.candidate_match_results],
+             key="detailed_match_select"
+         )
+         
+         selected_match = next((item for item in st.session_state.candidate_match_results if item['jd_name'] == selected_jd_name), None)
+         
+         if selected_match:
+             st.markdown(selected_match['full_analysis'])
+             
     else:
          st.markdown("---")
          st.info("Run the match analysis above to evaluate your resume against the selected Job Descriptions.")
+
 
 # --- Filter JD Tab Function (unchanged) ---
 
@@ -1849,6 +1795,8 @@ def parsed_data_tab():
         source_key = st.session_state.get('current_parsing_source_name', 'Unknown Source')
         if source_key == "Pasted_Text":
             source_display = "Pasted CV Data"
+        elif source_key == "Form_Based_CV": # New logic for form-based CV
+            source_display = "Form-Generated CV"
         else:
             source_display = source_key.replace('_', ' ').replace('-', ' ') 
 
@@ -1862,11 +1810,7 @@ def parsed_data_tab():
         
         json_data_uri = get_download_link(parsed_json_data, json_filename, 'json', title="Parsed Resume Data")
         md_data_uri = get_download_link(parsed_markdown_data, md_filename, 'markdown', title="Parsed Resume Data")
-        
-        # We need the full HTML content, not just the URI link, for the HTML tab content.
-        html_content_for_view = compiled_text_to_html(parsed_markdown_data, title=f"Parsed CV: {candidate_name}")
-        html_data_uri = get_download_link(parsed_markdown_data, html_filename, 'html', title="Parsed Resume Data") 
-
+        html_data_uri = get_download_link(parsed_markdown_data.replace('\n', '<br>').replace('##', '<h2>'), html_filename, 'html', title="Parsed Resume Data") 
         
         
         tab_markdown, tab_json, tab_download = st.tabs([
@@ -1935,7 +1879,8 @@ def parsed_data_tab():
         st.warning(f"**Status:** ❌ **No Valid Resume Data Loaded**")
         if st.session_state.get('parsed', {}).get('error') is not None:
              st.error(f"Last Parsing Error: {st.session_state.parsed['error']}")
-        st.info("Please successfully parse a resume in the **Resume Parsing** tab.")
+        st.info("Please successfully parse a resume in the **Resume Parsing** tab or submit a form in **CV Management**.")
+
 
 # --- Cover Letter Generation Tab (unchanged) ---
 
@@ -1951,7 +1896,7 @@ def generate_cover_letter_tab():
     )
     
     if not is_resume_parsed:
-        st.warning("⚠️ **Cover Letter Disabled:** Please parse a valid resume in the 'Resume Parsing' tab first.")
+        st.warning("⚠️ **Cover Letter Disabled:** Please parse a valid resume in the 'Resume Parsing' tab or use **'CV Management'** first.")
         return
         
     if not st.session_state.get('candidate_jd_list'):
@@ -2022,7 +1967,6 @@ def generate_cover_letter_tab():
         html_filename = f"{base_filename}.html"
         txt_filename = f"{base_filename}.txt"
         
-        # Use simple link for cover letter HTML download
         html_data_uri = get_download_link(
             final_letter_text, 
             html_filename, 
@@ -2057,7 +2001,7 @@ def generate_cover_letter_tab():
     elif "generated_cover_letter" not in st.session_state or not st.session_state.generated_cover_letter:
         st.info("Select a Job Description and click 'Generate Cover Letter' to begin.")
         
-# --- Interview Preparation Tab (UPDATED) ---
+# --- Interview Preparation Tab (unchanged) ---
 
 def parse_questions_from_raw(raw_questions_response):
     """Parses the structured raw LLM output into a list of Q&A dictionaries."""
@@ -2183,7 +2127,7 @@ def interview_preparation_tab():
         st.session_state.iq_mode = 'resume'
         
         if not is_resume_parsed:
-            st.warning("Please upload and successfully parse a resume first.")
+            st.warning("Please upload and successfully parse a resume in 'Resume Parsing' or use 'CV Management' first.")
             return
 
         # Generate section options dynamically
@@ -2320,7 +2264,7 @@ def gap_analysis_tab():
     )
 
     if not is_resume_parsed:
-        st.warning("⚠️ **Course Plan Disabled:** Please upload and successfully parse a resume first.")
+        st.warning("⚠️ **Course Plan Disabled:** Please upload and successfully parse a resume in 'Resume Parsing' or use 'CV Management' first.")
         return
         
     if not st.session_state.get('candidate_match_results'):
@@ -2482,7 +2426,7 @@ def resume_qa_content():
     )
     
     if not is_data_loaded_and_valid:
-        st.warning("⚠️ **Q&A Disabled:** Please parse a valid resume in the 'Resume Parsing' tab first.")
+        st.warning("⚠️ **Q&A Disabled:** Please parse a valid resume in the 'Resume Parsing' tab or use **'CV Management'** first.")
         return
     
     if "resume_chatbot_history" not in st.session_state:
@@ -2597,15 +2541,14 @@ def candidate_dashboard():
             
     st.markdown("---")
 
-    # --- Session State Initialization (Revised for Interview Tab) ---
+    # --- Session State Initialization (Revised for CV Management) ---
     if "parsed" not in st.session_state: st.session_state.parsed = {} 
     if "full_text" not in st.session_state: st.session_state.full_text = ""
     if "excel_data" not in st.session_state: st.session_state.excel_data = None
     if "candidate_uploaded_resumes" not in st.session_state: st.session_state.candidate_uploaded_resumes = []
     if "pasted_cv_text" not in st.session_state: st.session_state.pasted_cv_text = ""
     if "current_parsing_source_name" not in st.session_state: st.session_state.current_parsing_source_name = None 
-    if "editable_parsed_data" not in st.session_state: st.session_state.editable_parsed_data = {}
-    if "original_parsed_data" not in st.session_state: st.session_state.original_parsed_data = {} # To store original after parsing
+    if "form_cv_data" not in st.session_state: st.session_state.form_cv_data = {} # New state for form data persistence
     
     if "candidate_jd_list" not in st.session_state: st.session_state.candidate_jd_list = []
     if "candidate_match_results" not in st.session_state: st.session_state.candidate_match_results = []
@@ -2635,8 +2578,8 @@ def candidate_dashboard():
         # Mock initialization for job types if not correctly set elsewhere
         st.session_state.candidate_job_types = DEFAULT_JOB_TYPES 
 
-    # --- Main Content with Tabs (CV Management added) ---
-    tab_parsing, tab_cv_management, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot, tab_cover_letter, tab_interview_prep, tab_gap_analysis = st.tabs(
+    # --- Main Content with Tabs (Rearranged, new tab added) ---
+    tab_parsing, tab_cv_manage, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot, tab_cover_letter, tab_interview_prep, tab_gap_analysis = st.tabs(
         [
             "📄 Resume Parsing", 
             "📝 CV Management", # NEW TAB
@@ -2647,21 +2590,15 @@ def candidate_dashboard():
             "🤖 Chatbot", 
             "✉️ Generate Cover Letter", 
             "🎤 Interview Preparation",
-            "💡 Gap Analysis & Course Plan" 
+            "💡 Gap Analysis & Course Plan"
         ]
     )
     
-    # --- Store initial parsed data for reset (only if valid data is parsed) ---
-    if st.session_state.parsed.get('name') and st.session_state.parsed.get('error') is None:
-        # Deep copy to ensure original is preserved
-        st.session_state.original_parsed_data = st.session_state.parsed.copy() 
-
-
     with tab_parsing:
         resume_parsing_tab()
         
-    with tab_cv_management:
-        cv_management_tab_content() # NEW TAB FUNCTION
+    with tab_cv_manage:
+        cv_management_tab_candidate() # NEW TAB FUNCTION
         
     with tab_data_view:
         parsed_data_tab()
@@ -2670,7 +2607,7 @@ def candidate_dashboard():
         jd_management_tab_candidate()
         
     with tab_batch_match:
-        jd_batch_match_tab()
+        jd_batch_match_tab() # UPDATED
         
     with tab_filter_jd:
         filter_jd_tab_content()
