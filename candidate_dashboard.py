@@ -141,22 +141,22 @@ class MockGroqClient:
                     question = question_match.group(1).strip() if question_match else "a question"
                     
                     if 'role' in question.lower():
-                        return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': 'The required role in this Job Description is Cloud Engineer.'})})()]})
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'The required role in this Job Description is Cloud Engineer.'})()]})
                     elif 'experience' in question.lower():
-                        return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': 'The job requires 3+ years of experience in AWS/GCP and infrastructure automation.'})})()]})
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'The job requires 3+ years of experience in AWS/GCP and infrastructure automation.'})()]})
                     else:
-                        return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': 'Mock answer for JD question: The JD mentions Python and Docker as key skills.'})})()]})
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'Mock answer for JD question: The JD mentions Python and Docker as key skills.'})()]})
 
                 elif "Answer the following question about the resume concisely and directly." in prompt_content:
                     question_match = re.search(r'Question:\s*(.*)', prompt_content)
                     question = question_match.group(1).strip() if question_match else "a question"
                     
                     if 'name' in question.lower():
-                        return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': 'The candidate\'s name is Vivek Swamy.'})})()]})
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'The candidate\'s name is Vivek Swamy.'})()]})
                     elif 'skills' in question.lower():
-                        return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': 'Key skills include Python, SQL, AWS, and MLOps.'})})()]})
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'Key skills include Python, SQL, AWS, and MLOps.'})()]})
                     else:
-                        return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': f'Based on the mock resume data, I can provide a simulated answer to your question about {question}.'})})()]})
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': f'Based on the mock resume data, I can provide a simulated answer to your question about {question}.'})()]})
 
                 elif "You are an expert cover letter generator" in prompt_content:
                     role_match = re.search(r'Job Description Role: (.*?)[\.\n]', prompt_content)
@@ -626,8 +626,14 @@ def render_download_button(data_uri, filename, label, color):
 @st.cache_data(show_spinner="Analyzing JD for metadata...")
 def extract_jd_metadata(jd_text):
     """Mocks the extraction of key metadata (Role, Skills, Job Type) from JD text using LLM."""
-    if jd_text.startswith("[Error"):
-        return {"role": "Error", "key_skills": ["Error"], "job_type": "Error"}
+    
+    # Check if the input is an error string from extraction
+    if isinstance(jd_text, str) and jd_text.startswith("[Error"):
+        return {"role": "Extraction Error", "key_skills": ["Error"], "job_type": "Error"}
+    
+    # Ensure jd_text is a string before proceeding
+    if not isinstance(jd_text, str):
+        jd_text = str(jd_text) # Force string conversion if it somehow wasn't
     
     role_match = re.search(r'(?:Role|Position|Title|Engineer|Scientist)[:\s\n]+([\w\s/-]+)', jd_text, re.IGNORECASE)
     role = role_match.group(1).strip() if role_match else "Software Engineer (Mock)"
@@ -735,6 +741,7 @@ def generate_cover_letter_llm(jd_content, parsed_json, preferred_style="Standard
     candidate_experience = "\n".join([str(e) for e in parsed_json.get('experience', [])])
     
     jd_metadata = extract_jd_metadata(jd_content)
+    # Safely get the role from metadata (which is now guaranteed to be a dict)
     jd_role = jd_metadata.get('role', 'the position')
 
     prompt = f"""
@@ -1151,11 +1158,12 @@ def jd_management_tab_candidate():
                             jd_text = extract_jd_from_linkedin_url(url)
                             metadata = extract_jd_metadata(jd_text)
                         
-                        if jd_text.startswith("[Error"):
+                        if metadata.get('role') == 'Extraction Error': # Check for error from metadata
                             st.error(f"Failed to process {url}: {jd_text}")
                             continue
                             
                         name = f"JD for {metadata.get('role', 'Unknown Role')}"
+                        # Store metadata directly into the list item
                         st.session_state.candidate_jd_list.append({"name": name, "content": jd_text, **metadata})
                         count += 1
                             
@@ -1175,7 +1183,13 @@ def jd_management_tab_candidate():
                     for i, text in enumerate(texts):
                         if text:
                             metadata = extract_jd_metadata(text)
+                            
+                            if metadata.get('role') == 'Extraction Error': # Check for error from metadata
+                                st.error(f"Failed to extract metadata for pasted text {i+1}.")
+                                continue
+                                
                             name_base = metadata.get('role', f"Pasted JD {len(st.session_state.candidate_jd_list) + i + 1}")
+                            # Store metadata directly into the list item
                             st.session_state.candidate_jd_list.append({"name": name_base, "content": text, **metadata})
                             count += 1
                     
@@ -1213,6 +1227,12 @@ def jd_management_tab_candidate():
                             
                         if not jd_text.startswith("[Error"):
                             metadata = extract_jd_metadata(jd_text)
+                            
+                            if metadata.get('role') == 'Extraction Error': # Check for error from metadata
+                                st.error(f"Failed to extract metadata for {file.name}.")
+                                continue
+                                
+                            # Store metadata directly into the list item
                             st.session_state.candidate_jd_list.append({"name": file.name, "content": jd_text, **metadata})
                             count += 1
                         else:
@@ -1242,12 +1262,18 @@ def jd_management_tab_candidate():
                 st.rerun() 
 
         for idx, jd_item in enumerate(st.session_state.candidate_jd_list, 1):
-            title = jd_item['name']
+            # Access metadata using .get() for safety, though it should be a dict now
+            title = jd_item.get('name', f'JD {idx}')
+            role = jd_item.get('role', 'N/A')
+            job_type = jd_item.get('job_type', 'N/A')
+            key_skills = jd_item.get('key_skills', ['N/A'])
+            content = jd_item.get('content', 'No content extracted.')
+            
             display_title = title.replace("--- Simulated JD for: ", "")
-            with st.expander(f"**JD {idx}:** {display_title} | Role: {jd_item.get('role', 'N/A')}"):
-                st.markdown(f"**Job Type:** {jd_item.get('job_type', 'N/A')} | **Key Skills:** `{', '.join(jd_item.get('key_skills', ['N/A']))}`")
+            with st.expander(f"**JD {idx}:** {display_title} | Role: {role}"):
+                st.markdown(f"**Job Type:** {job_type} | **Key Skills:** `{', '.join(key_skills)}`")
                 st.markdown("---")
-                st.text(jd_item['content'])
+                st.text(content)
     else:
         st.info("No Job Descriptions added yet.")
         
@@ -1430,15 +1456,18 @@ def filter_jd_tab_content():
     
     global DEFAULT_ROLES, DEFAULT_JOB_TYPES, STARTER_KEYWORDS
     
+    # Safely extract roles, types, and skills from loaded JDs
     unique_roles = sorted(list(set(
         [item.get('role', 'General Analyst') for item in st.session_state.candidate_jd_list] + DEFAULT_ROLES
     )))
+    # Note: Using DEFAULT_JOB_TYPES as a base, ensuring all loaded types are included.
     unique_job_types = sorted(list(set(
-        [item.get('job_type', 'Full-time') for item in st.session_state.candidate_job_types] + DEFAULT_JOB_TYPES
+        [item.get('job_type', 'Full-time') for item in st.session_state.candidate_jd_list] + DEFAULT_JOB_TYPES
     )))
     
     all_unique_skills = set(STARTER_KEYWORDS)
     for jd in st.session_state.candidate_jd_list:
+        # jd_item['key_skills'] is guaranteed to be a list due to fix in JD Management
         valid_skills = [
             skill.strip() for skill in jd.get('key_skills', []) 
             if isinstance(skill, str) and skill.strip()
@@ -1492,6 +1521,7 @@ def filter_jd_tab_content():
         selected_skills_lower = [k.strip().lower() for k in selected_skills]
         
         for jd in all_jd_data:
+            # Use .get() for safe access
             jd_role = jd.get('role', 'General Analyst')
             jd_job_type = jd.get('job_type', 'Full-time')
             jd_key_skills = [
@@ -1526,7 +1556,8 @@ def filter_jd_tab_content():
         display_data = []
         for jd in filtered_jds:
             display_data.append({
-                "Job Description Title": jd['name'].replace("--- Simulated JD for: ", ""),
+                # Use .get() for safe access
+                "Job Description Title": jd.get('name', 'N/A').replace("--- Simulated JD for: ", ""),
                 "Role": jd.get('role', 'N/A'),
                 "Job Type": jd.get('job_type', 'N/A'),
                 "Key Skills": ", ".join(jd.get('key_skills', ['N/A'])[:5]) + "...",
@@ -1536,11 +1567,11 @@ def filter_jd_tab_content():
 
         st.markdown("##### Detailed View")
         for idx, jd in enumerate(filtered_jds, 1):
-            with st.expander(f"JD {idx}: {jd['name'].replace('--- Simulated JD for: ', '')} - ({jd.get('role', 'N/A')})"):
+            with st.expander(f"JD {idx}: {jd.get('name', 'N/A').replace('--- Simulated JD for: ', '')} - ({jd.get('role', 'N/A')})"):
                 st.markdown(f"**Job Type:** {jd.get('job_type', 'N/A')}")
                 st.markdown(f"**Extracted Skills:** {', '.join(jd.get('key_skills', ['N/A']))}")
                 st.markdown("---")
-                st.text(jd['content'])
+                st.text(jd.get('content', 'Content not available'))
     elif st.session_state.candidate_jd_list and apply_filters_button:
         st.info("No Job Descriptions match the selected criteria. Try broadening your filter selections.")
     elif st.session_state.candidate_jd_list and not apply_filters_button:
@@ -1671,14 +1702,14 @@ def generate_cover_letter_tab():
         st.error("❌ Please **add Job Descriptions** in the 'JD Management' tab first.")
         return
         
-    jd_names = [jd['name'] for jd in st.session_state.candidate_jd_list]
+    jd_names = [jd.get('name') for jd in st.session_state.candidate_jd_list if jd.get('name')]
     selected_jd_name = st.selectbox(
         "Select Job Description for Cover Letter",
         options=jd_names,
         key="selected_jd_for_cl"
     )
 
-    selected_jd = next((jd for jd in st.session_state.candidate_jd_list if jd['name'] == selected_jd_name), None)
+    selected_jd = next((jd for jd in st.session_state.candidate_jd_list if jd.get('name') == selected_jd_name), None)
     
     if not selected_jd:
         st.error("Selected JD not found.")
@@ -1701,7 +1732,7 @@ def generate_cover_letter_tab():
             st.session_state.generated_cover_letter = ""
             with st.spinner(f"Generating personalized cover letter for **{selected_jd['name']}**..."):
                 letter_text = generate_cover_letter_llm(
-                    jd_content=selected_jd['content'], 
+                    jd_content=selected_jd.get('content', ''), 
                     parsed_json=st.session_state.parsed,
                     preferred_style=style
                 )
@@ -1963,7 +1994,7 @@ def interview_preparation_tab():
             
         st.subheader("1. Generate Interview Questions (JD)")
         
-        jd_names = [jd['name'] for jd in st.session_state.candidate_jd_list]
+        jd_names = [jd.get('name') for jd in st.session_state.candidate_jd_list if jd.get('name')]
         selected_jd_name = st.selectbox(
             "Select Job Description",
             options=jd_names,
@@ -1971,7 +2002,7 @@ def interview_preparation_tab():
             on_change=lambda: clear_interview_state('jd')
         )
 
-        selected_jd = next((jd for jd in st.session_state.candidate_jd_list if jd['name'] == selected_jd_name), None)
+        selected_jd = next((jd for jd in st.session_state.candidate_jd_list if jd.get('name') == selected_jd_name), None)
         
         if st.button("Generate JD Questions", key='iq_btn_jd_c', use_container_width=True):
             if not selected_jd:
@@ -1985,9 +2016,9 @@ def interview_preparation_tab():
                     
                     # Call the unified generation function (Mode: jd)
                     raw_questions_response = generate_interview_questions(
-                        source_data=selected_jd['name'], 
+                        source_data=selected_jd.get('name', 'N/A'), 
                         source_type='jd', 
-                        identifier=selected_jd['content']
+                        identifier=selected_jd.get('content', '')
                     )
                     
                     if raw_questions_response.startswith("Error:"):
@@ -2011,7 +2042,7 @@ def interview_preparation_tab():
                     st.session_state.interview_qa_jd = []
 
         # Display/Evaluation Logic for JD Mode
-        display_evaluation_form('jd', st.session_state.interview_qa_jd, selected_jd['content'] if selected_jd else "")
+        display_evaluation_form('jd', st.session_state.interview_qa_jd, selected_jd.get('content', '') if selected_jd else "")
 
 
 # --------------------------------------------------------------------------------------
@@ -2045,7 +2076,7 @@ def gap_analysis_tab():
     top_jd_name = top_match['jd_name']
     
     # Extract the full JD content for context
-    top_jd_item = next((jd for jd in st.session_state.candidate_jd_list if jd['name'] == top_jd_name), None)
+    top_jd_item = next((jd for jd in st.session_state.candidate_jd_list if jd.get('name') == top_jd_name), None)
     
     if not top_jd_item:
         st.error("Could not find the full JD content for the top match. Please re-run the Batch Match.")
@@ -2237,7 +2268,7 @@ def jd_qa_content():
         st.warning("⚠️ **Q&A Disabled:** Please load Job Descriptions in the 'JD Management' tab first.")
         return
 
-    jd_names = [jd['name'] for jd in st.session_state.candidate_jd_list]
+    jd_names = [jd.get('name') for jd in st.session_state.candidate_jd_list if jd.get('name')]
     selected_jd_name = st.selectbox(
         "Select Job Description",
         options=jd_names,
@@ -2247,8 +2278,8 @@ def jd_qa_content():
     if "jd_chatbot_history" not in st.session_state:
         st.session_state.jd_chatbot_history = {} 
 
-    selected_jd = next((jd for jd in st.session_state.candidate_jd_list if jd['name'] == selected_jd_name), None)
-    jd_content = selected_jd['content'] if selected_jd else ""
+    selected_jd = next((jd for jd in st.session_state.candidate_jd_list if jd.get('name') == selected_jd_name), None)
+    jd_content = selected_jd.get('content', '') if selected_jd else ""
 
     current_jd_history = st.session_state.jd_chatbot_history.setdefault(selected_jd_name, [])
 
