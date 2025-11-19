@@ -38,7 +38,7 @@ def initialize_session_state():
     if 'generated_cover_letter' not in st.session_state: st.session_state.generated_cover_letter = "" 
     if 'cl_jd_name' not in st.session_state: st.session_state.cl_jd_name = "" 
 
-# Hiring Manager Data (Placeholder)
+    # Hiring Manager Data (Placeholder)
     if 'hiring_jds' not in st.session_state: st.session_state.hiring_jds = []
     
 def login_page():
@@ -77,7 +77,7 @@ def login_page():
                 st.error("Invalid username. Please use 'candidate', 'admin', or 'hiring'.")
 
 # -------------------------
-# MAIN EXECUTION BLOCK
+# MAIN EXECUTION BLOCK (No change needed here)
 # -------------------------
 
 if __name__ == '__main__':
@@ -86,8 +86,8 @@ if __name__ == '__main__':
     initialize_session_state()
 
     if st.session_state.logged_in:
+        # The functions are called with one argument (go_to)
         if st.session_state.user_type == "admin":
-            # Pass the go_to function for navigation (Logout)
             admin_dashboard(go_to)
         elif st.session_state.user_type == "candidate":
             candidate_dashboard(go_to)
