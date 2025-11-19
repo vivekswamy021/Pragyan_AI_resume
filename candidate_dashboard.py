@@ -99,6 +99,42 @@ class MockGroqClient:
                     """
                     return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_evaluation})})()]})
 
+                # --- Gap Analysis Mock Logic ---
+                elif "Generate a detailed course plan and suggest relevant certifications" in prompt_content:
+                    gap_match = re.search(r'Gaps Identified:\s*(.*)', prompt_content, re.DOTALL)
+                    gap_summary = gap_match.group(1).strip() if gap_match else "Missing key skills in Cloud and CI/CD."
+                    
+                    mock_plan = f"""
+                    ## 💡 Detailed Course Plan: Addressing Gaps in Cloud/CI/CD (Simulated)
+                    
+                    The goal is to cover the identified gaps: **{gap_summary}**.
+                    
+                    ### Phase 1: Foundational Cloud Skills (4 Weeks)
+                    * **Module 1 (AWS/GCP):** Core services (EC2, S3, IAM, VPC). Focus on security best practices.
+                    * **Module 2 (IaC):** Introduction to **Terraform** or CloudFormation/Deployment Manager. Hands-on simple infrastructure provisioning.
+                    
+                    ### Phase 2: Automation & DevOps (6 Weeks)
+                    * **Module 3 (CI/CD Principles):** Theory and practice of continuous integration/delivery using **GitLab CI** or Jenkins.
+                    * **Module 4 (Containerization):** Advanced Dockerfile creation and multi-container application deployment with Docker Compose.
+                    * **Module 5 (Kubernetes Basics):** Deploying and scaling applications using basic K8s objects (Pods, Deployments, Services).
+                    
+                    ### Phase 3: Project and Certification Prep (4 Weeks)
+                    * **Project:** Build a fully automated CI/CD pipeline deploying a microservice to a managed Kubernetes cluster (EKS/GKE).
+                    
+                    ---
+                    
+                    ## 🏅 Suggested Certifications
+                    
+                    * **For AWS Focus:** **AWS Certified Solutions Architect – Associate** (Covers broad cloud knowledge).
+                    * **For GCP Focus:** **Google Cloud Professional Cloud Architect** (A high-value certification).
+                    * **For DevOps/CI/CD:** **Certified Kubernetes Administrator (CKA)** or **HashiCorp Certified Terraform Associate**.
+                    
+                    ---
+                    **Next Step:** Focus on the **AWS Certified Solutions Architect** path first, as it provides the quickest return on investment for entry to mid-level cloud roles.
+                    """
+                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_plan})})()]})
+
+
                 # --- Existing Mock Logic (JD Q&A, Resume Q&A, Cover Letter) ---
                 elif "Answer the following question about the Job Description concisely and directly." in prompt_content:
                     question_match = re.search(r'Question:\s*(.*)', prompt_content)
@@ -215,7 +251,9 @@ class MockGroqClient:
                     - Mock Match Point 2
                     
                     Gaps/Areas for Improvement:
-                    - Mock Gap 1
+                    - Missing hands-on experience in **Terraform**.
+                    - Lack of project experience deploying applications to **GCP/EKS**.
+                    - Weak documentation skills in CI/CD pipeline development.
                     
                     Overall Summary: Mock summary for score {score}.
                     """
@@ -264,10 +302,9 @@ def clear_interview_state(mode):
         if 'iq_output_jd' in st.session_state: del st.session_state['iq_output_jd']
         if 'interview_qa_jd' in st.session_state: del st.session_state['interview_qa_jd']
         if 'evaluation_report_jd' in st.session_state: del st.session_state['evaluation_report_jd']
-
-    # Keep match results and cover letter separate
-    # if 'candidate_match_results' in st.session_state: st.session_state.candidate_match_results = []
-    # if 'generated_cover_letter' in st.session_state: del st.session_state['generated_cover_letter'] 
+    
+    # Also clear the gap analysis plan when interview state is cleared (as it's derived from the match)
+    if 'gap_analysis_plan' in st.session_state: del st.session_state['gap_analysis_plan']
 
 
 def get_file_type(file_name):
@@ -596,7 +633,7 @@ def extract_jd_metadata(jd_text):
     role = role_match.group(1).strip() if role_match else "Software Engineer (Mock)"
     
     # Simple regex to extract common keywords
-    skills_match = re.findall(r'(Python|Java|SQL|AWS|Docker|Kubernetes|React|Streamlit|Cloud|Data|ML|LLM|MLOps|Visualization|Deep Learning|TensorFlow|Pytorch)', jd_text, re.IGNORECASE)
+    skills_match = re.findall(r'(Python|Java|SQL|AWS|Docker|Kubernetes|React|Streamlit|Cloud|Data|ML|LLM|MLOps|Visualization|Deep Learning|TensorFlow|Pytorch|Terraform|GCP|EKS)', jd_text, re.IGNORECASE)
     
     if 'data scientist' in jd_text.lower() or 'machine learning' in jd_text.lower():
          role = "Data Scientist/ML Engineer"
@@ -622,7 +659,8 @@ def evaluate_jd_fit(job_description, parsed_json):
     if parsed_json.get('error') is not None: 
          return f"Cannot evaluate due to resume parsing errors: {parsed_json['error']}"
 
-    if isinstance(client, MockGroqClient) and not GROQ_API_KEY:
+    if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
+         # Mock Client is hardcoded to return a structured output including Gaps.
          response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": f"Evaluate how well the following resume content matches the provided job description: {job_description}"}])
          return response.choices[0].message.content.strip()
 
@@ -646,7 +684,7 @@ def evaluate_jd_fit(job_description, parsed_json):
     1.  **Overall Fit Score:** A score out of 10.
     2.  **Section Match Percentages:** A percentage score for the match in the key sections (Skills, Experience, Education).
     3.  **Strengths/Matches:** Key points where the resume aligns well with the JD.
-    4.  **Gaps/Areas for Improvement:** Key requirements in the JD that are missing or weak in the resume.
+    4.  **Gaps/Areas for Improvement:** Key requirements in the JD that are missing or weak in the resume. Focus on specific technical skills or experience areas.
     5.  **Overall Summary:** A concise summary of the fit.
     
     **Format the output strictly as follows, ensuring the scores are easily parsable (use brackets or no brackets around scores, but they must be present):**
@@ -662,8 +700,8 @@ def evaluate_jd_fit(job_description, parsed_json):
     - Point 2
     
     Gaps/Areas for Improvement:
-    - Point 1
-    - Point 2
+    - Point 1 (Specific Skill/Experience Gap)
+    - Point 2 (Specific Skill/Experience Gap)
     
     Overall Summary: [Concise summary]
     """
@@ -722,7 +760,7 @@ def generate_cover_letter_llm(jd_content, parsed_json, preferred_style="Standard
     {jd_content}
     """
     
-    if isinstance(client, MockGroqClient) and not GROQ_API_KEY:
+    if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
          response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
          return response.choices[0].message.content.strip()
 
@@ -735,6 +773,48 @@ def generate_cover_letter_llm(jd_content, parsed_json, preferred_style="Standard
         return response.choices[0].message.content.strip()
     except Exception as e:
         error_output = f"AI Generation Error: Failed to connect or receive response from LLM. Error: {e}\n{traceback.format_exc()}"
+        return error_output
+
+def generate_gap_course_plan(gap_analysis_text, jd_role, candidate_skills):
+    """
+    Generates a detailed course plan and certification suggestions to fill identified gaps.
+    """
+    global client, GROQ_MODEL, GROQ_API_KEY
+    
+    if not gap_analysis_text.strip() or "No significant gaps" in gap_analysis_text:
+        return "No specific gaps were identified in the match analysis. Focus on advanced skills in your core area."
+        
+    if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
+         # Mock client returns a hardcoded, structured plan (see MockGroqClient)
+         response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": f"Generate a detailed course plan and suggest relevant certifications for Gaps Identified: {gap_analysis_text}"}])
+         return response.choices[0].message.content.strip()
+
+    prompt = f"""
+    You are an expert career consultant. Based on the candidate's profile and the identified skill gaps for the role of **{jd_role}**, 
+    generate a detailed course plan and suggest relevant certifications.
+    
+    **Context:**
+    - Target Role: {jd_role}
+    - Candidate's Current Key Skills: {', '.join(candidate_skills)}
+    
+    **Gaps Identified:**
+    {gap_analysis_text}
+    
+    **Instructions:**
+    1.  **Course Plan:** Structure the plan into 2-3 chronological phases (e.g., Foundational, Intermediate, Advanced/Project). Include specific topics (e.g., Python Basics, Docker Networking, Terraform Modules). Suggest a rough time estimate (e.g., weeks) for each phase.
+    2.  **Certifications:** Suggest 2-3 industry-recognized certifications that directly address the identified gaps and enhance the resume for the target role.
+    3.  **Output Format:** Use Markdown. Use the headings '## Detailed Course Plan' and '## Suggested Certifications'.
+    """
+
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL, 
+            messages=[{"role": "user", "content": prompt}], 
+            temperature=0.6 
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        error_output = f"AI Generation Error: Failed to connect or receive response from LLM for course plan. Error: {e}\n{traceback.format_exc()}"
         return error_output
 
 # --- ADAPTED LLM Functions for Interview Preparation (Modified) ---
@@ -805,7 +885,7 @@ def generate_interview_questions(source_data, source_type, identifier):
     """
 
     try:
-        if isinstance(client, MockGroqClient) and not GROQ_API_KEY:
+        if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
              response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
         else:
             response = client.chat.completions.create(
@@ -861,7 +941,7 @@ def evaluate_interview_answers(qa_list, resume_context):
     """
 
     try:
-        if isinstance(client, MockGroqClient) and not GROQ_API_KEY:
+        if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
              response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
         else:
             response = client.chat.completions.create(
@@ -940,6 +1020,7 @@ def resume_parsing_tab():
                         st.session_state.parsed['name'] = result['name'] 
                         clear_interview_state('resume')
                         clear_interview_state('jd')
+                        if 'gap_analysis_plan' in st.session_state: del st.session_state['gap_analysis_plan']
                         st.success(f"✅ Successfully loaded and parsed **{result['name']}**.")
                         st.info("The parsed data is ready for matching.")
                         st.rerun() 
@@ -979,6 +1060,7 @@ def resume_parsing_tab():
                         st.session_state.parsed['name'] = result['name'] 
                         clear_interview_state('resume')
                         clear_interview_state('jd')
+                        if 'gap_analysis_plan' in st.session_state: del st.session_state['gap_analysis_plan']
                         st.success(f"✅ Successfully loaded and parsed **{result['name']}**.")
                         st.info("The parsed data is ready for matching.") 
                         st.rerun()
@@ -1056,7 +1138,7 @@ def jd_management_tab_candidate():
         ---
         """
 
-    if method == "LinkedIn URL": # This block was the one with the reported indentation error
+    if method == "LinkedIn URL": 
         with st.form("jd_url_form_candidate", clear_on_submit=True):
             url_list = st.text_area("Enter one or more URLs (comma separated)" if jd_type == "Multiple JD" else "Enter URL", key="url_list_candidate")
             if st.form_submit_button("Add JD(s) from URL", key="add_jd_url_btn_candidate"):
@@ -1154,6 +1236,7 @@ def jd_management_tab_candidate():
                 st.session_state.candidate_jd_list = []
                 if 'candidate_match_results' in st.session_state: del st.session_state['candidate_match_results']
                 if 'jd_chatbot_history' in st.session_state: del st.session_state['jd_chatbot_history']
+                if 'gap_analysis_plan' in st.session_state: del st.session_state['gap_analysis_plan']
                 clear_interview_state('jd')
                 st.success("All JDs and associated data have been cleared.")
                 st.rerun() 
@@ -1224,6 +1307,7 @@ def jd_batch_match_tab():
     
     if st.button(f"Run Match Analysis on **{len(jds_to_match)}** Selected JD(s)"):
         st.session_state.candidate_match_results = []
+        if 'gap_analysis_plan' in st.session_state: del st.session_state['gap_analysis_plan']
         
         if not jds_to_match:
             st.warning("Please select at least one Job Description to run the analysis.")
@@ -1251,6 +1335,13 @@ def jd_batch_match_tab():
                             r'--- Section Match Analysis ---\s*(.*?)\s*(?:Strengths/Matches|Overall Summary):', 
                             fit_output, re.DOTALL | re.IGNORECASE
                         )
+                        
+                        # Extract Gaps/Areas for Improvement
+                        gaps_match = re.search(
+                            r'Gaps/Areas for Improvement:\s*(.*?)\s*(?:Overall Summary|---|$)', 
+                            fit_output, re.DOTALL | re.IGNORECASE
+                        )
+                        raw_gaps = gaps_match.group(1).strip() if gaps_match else "No significant gaps identified in the LLM analysis."
                         
                         skills_percent, experience_percent, education_percent = 'N/A', 'N/A', 'N/A'
                         
@@ -1280,7 +1371,8 @@ def jd_batch_match_tab():
                             "skills_percent": skills_percent,
                             "experience_percent": experience_percent, 
                             "education_percent": education_percent, 
-                            "full_analysis": fit_output
+                            "full_analysis": fit_output,
+                            "gaps": raw_gaps
                         })
                     except Exception as e:
                         results_with_score.append({
@@ -1290,7 +1382,8 @@ def jd_batch_match_tab():
                             "skills_percent": "Error",
                             "experience_percent": "Error", 
                             "education_percent": "Error", 
-                            "full_analysis": f"Error parsing LLM analysis for {jd_name}: {e}\nFull LLM Output:\n---\n{fit_output}\n---"
+                            "full_analysis": f"Error parsing LLM analysis for {jd_name}: {e}\nFull LLM Output:\n---\n{fit_output}\n---",
+                            "gaps": "Extraction failed due to internal error."
                         })
                         
                 results_with_score.sort(key=lambda x: x['numeric_score'], reverse=True)
@@ -1341,7 +1434,7 @@ def filter_jd_tab_content():
         [item.get('role', 'General Analyst') for item in st.session_state.candidate_jd_list] + DEFAULT_ROLES
     )))
     unique_job_types = sorted(list(set(
-        [item.get('job_type', 'Full-time') for item in st.session_state.candidate_jd_list] + DEFAULT_JOB_TYPES
+        [item.get('job_type', 'Full-time') for item in st.session_state.candidate_job_types] + DEFAULT_JOB_TYPES
     )))
     
     all_unique_skills = set(STARTER_KEYWORDS)
@@ -1678,6 +1771,90 @@ def generate_cover_letter_tab():
         
 # --- Interview Preparation Tab (UPDATED) ---
 
+def parse_questions_from_raw(raw_questions_response):
+    """Parses the structured raw LLM output into a list of Q&A dictionaries."""
+    q_list = []
+    current_level = "General"
+    
+    for line in raw_questions_response.splitlines():
+        line = line.strip()
+        if line.startswith('[') and line.endswith(']'):
+            current_level = line.strip('[]')
+        elif line.lower().startswith('q') and ':' in line:
+            question_text = line[line.find(':') + 1:].strip()
+            q_list.append({
+                "question": f"({current_level}) {question_text}",
+                "answer": "", 
+                "level": current_level
+            })
+    return q_list
+
+
+def display_evaluation_form(mode, qa_data_list, context_for_eval):
+    """Handles the display of the Q&A form and evaluation logic for a given mode."""
+
+    current_qa_key = f'interview_qa_{mode}'
+    current_report_key = f'evaluation_report_{mode}'
+    
+    if qa_data_list:
+        st.markdown("---")
+        st.subheader("2. Practice and Record Answers")
+        
+        with st.form(f"interview_practice_form_{mode}"):
+            
+            # Use the actual list from session state for mutation
+            current_qa_list = st.session_state[current_qa_key]
+            
+            for i, qa_item in enumerate(current_qa_list):
+                st.markdown(f"**Question {i+1}:** {qa_item['question']}")
+                
+                # Use the unique key for persistent state
+                answer_key = f'answer_q_{mode}_{i}'
+                
+                # Set initial value from session state, ensuring persistence
+                answer = st.text_area(
+                    f"Your Answer for Q{i+1}", 
+                    value=current_qa_list[i]['answer'], 
+                    height=100,
+                    key=answer_key,
+                    label_visibility='collapsed'
+                )
+                
+                # Update session state with the latest value from the text area
+                current_qa_list[i]['answer'] = answer 
+                st.markdown("---") 
+                
+            submit_button = st.form_submit_button("Submit & Evaluate Answers", use_container_width=True, type="primary")
+
+            if submit_button:
+                
+                if all(item['answer'].strip() for item in current_qa_list):
+                    with st.spinner("Sending answers to AI Evaluator..."):
+                        try:
+                            # Use the adapted evaluation function
+                            report = evaluate_interview_answers(
+                                current_qa_list,
+                                context_for_eval # Full resume text or JD content
+                            )
+                            st.session_state[current_report_key] = report
+                            st.success("Evaluation complete! See the report below.")
+                        except Exception as e:
+                            st.error(f"Evaluation failed: {e}")
+                            st.session_state[current_report_key] = f"Evaluation failed: {e}\n{traceback.format_exc()}"
+                else:
+                    st.error("Please answer all generated questions before submitting.")
+        
+        if st.session_state.get(current_report_key):
+            st.markdown("---")
+            st.subheader("3. AI Evaluation Report")
+            st.markdown(st.session_state[current_report_key])
+            
+        st.markdown("---")
+        if st.button(f"🗑️ Clear {mode.upper()} Practice Session (Questions and Answers)", key=f"clear_interview_prep_session_{mode}"):
+            clear_interview_state(mode)
+            st.success("Practice session cleared.")
+            st.rerun()
+
 def interview_preparation_tab():
     """
     Interview Preparation Tab Logic with two sub-tabs: Resume Based and JD Based.
@@ -1837,89 +2014,111 @@ def interview_preparation_tab():
         display_evaluation_form('jd', st.session_state.interview_qa_jd, selected_jd['content'] if selected_jd else "")
 
 
-def parse_questions_from_raw(raw_questions_response):
-    """Parses the structured raw LLM output into a list of Q&A dictionaries."""
-    q_list = []
-    current_level = "General"
-    
-    for line in raw_questions_response.splitlines():
-        line = line.strip()
-        if line.startswith('[') and line.endswith(']'):
-            current_level = line.strip('[]')
-        elif line.lower().startswith('q') and ':' in line:
-            question_text = line[line.find(':') + 1:].strip()
-            q_list.append({
-                "question": f"({current_level}) {question_text}",
-                "answer": "", 
-                "level": current_level
-            })
-    return q_list
+# --------------------------------------------------------------------------------------
+# NEW TAB: GAP ANALYSIS & COURSE PLAN
+# --------------------------------------------------------------------------------------
 
+def gap_analysis_tab():
+    """
+    Tab to analyze gaps from the top matched JD and generate a course plan.
+    """
+    st.header("💡 Gap Analysis & Course Plan")
+    st.markdown("This tool analyzes your biggest skill gaps from your best-matched Job Description and suggests a course plan and certifications to close the gap.")
+    st.markdown("---")
 
-def display_evaluation_form(mode, qa_data_list, context_for_eval):
-    """Handles the display of the Q&A form and evaluation logic for a given mode."""
+    is_resume_parsed = (
+        st.session_state.get('parsed', {}).get('name') is not None and 
+        st.session_state.parsed.get('error') is None
+    )
 
-    current_qa_key = f'interview_qa_{mode}'
-    current_report_key = f'evaluation_report_{mode}'
-    
-    if qa_data_list:
-        st.markdown("---")
-        st.subheader("2. Practice and Record Answers")
+    if not is_resume_parsed:
+        st.warning("⚠️ **Course Plan Disabled:** Please upload and successfully parse a resume first.")
+        return
         
-        with st.form(f"interview_practice_form_{mode}"):
-            
-            # Use the actual list from session state for mutation
-            current_qa_list = st.session_state[current_qa_key]
-            
-            for i, qa_item in enumerate(current_qa_list):
-                st.markdown(f"**Question {i+1}:** {qa_item['question']}")
-                
-                # Use the unique key for persistent state
-                answer_key = f'answer_q_{mode}_{i}'
-                
-                # Set initial value from session state, ensuring persistence
-                answer = st.text_area(
-                    f"Your Answer for Q{i+1}", 
-                    value=current_qa_list[i]['answer'], 
-                    height=100,
-                    key=answer_key,
-                    label_visibility='collapsed'
-                )
-                
-                # Update session state with the latest value from the text area
-                current_qa_list[i]['answer'] = answer 
-                st.markdown("---") 
-                
-            submit_button = st.form_submit_button("Submit & Evaluate Answers", use_container_width=True, type="primary")
+    if not st.session_state.get('candidate_match_results'):
+        st.error("❌ **Course Plan Disabled:** Please run the **Batch JD Match** analysis first to identify your best fit JD.")
+        return
 
-            if submit_button:
-                
-                if all(item['answer'].strip() for item in current_qa_list):
-                    with st.spinner("Sending answers to AI Evaluator..."):
-                        try:
-                            # Use the adapted evaluation function
-                            report = evaluate_interview_answers(
-                                current_qa_list,
-                                context_for_eval # Full resume text or JD content
-                            )
-                            st.session_state[current_report_key] = report
-                            st.success("Evaluation complete! See the report below.")
-                        except Exception as e:
-                            st.error(f"Evaluation failed: {e}")
-                            st.session_state[current_report_key] = f"Evaluation failed: {e}\n{traceback.format_exc()}"
-                else:
-                    st.error("Please answer all generated questions before submitting.")
+    # 1. Identify the Top Matched JD
+    # Results are stored in sorted order (highest score first)
+    top_match = st.session_state.candidate_match_results[0]
+    top_jd_name = top_match['jd_name']
+    
+    # Extract the full JD content for context
+    top_jd_item = next((jd for jd in st.session_state.candidate_jd_list if jd['name'] == top_jd_name), None)
+    
+    if not top_jd_item:
+        st.error("Could not find the full JD content for the top match. Please re-run the Batch Match.")
+        return
+
+    # Extract the Gaps/Areas for Improvement section from the full analysis output
+    gaps_content = top_match.get('gaps', 'Error: Gaps analysis not found.')
+    
+    if 'gap_analysis_plan' not in st.session_state:
+        st.session_state.gap_analysis_plan = ""
+
+    st.subheader(f"1. Top Match Analysis")
+    st.info(f"The analysis focuses on your best-matching JD: **{top_jd_name}** (Score: **{top_match['overall_score']}/10**)")
+    
+    st.markdown("##### Identified Skill Gaps from AI Match Report:")
+    if "No significant gaps identified" in gaps_content or gaps_content.startswith("Error"):
+        st.warning(gaps_content)
+        gap_summary = "No immediate, specific technical gaps found. Focus on general upskilling for the target role."
+    else:
+        # Simple formatting cleanup for bulleted list
+        st.markdown(gaps_content)
+        gap_summary = gaps_content.replace('\n', ' ').strip()
         
-        if st.session_state.get(current_report_key):
-            st.markdown("---")
-            st.subheader("3. AI Evaluation Report")
-            st.markdown(st.session_state[current_report_key])
+    st.markdown("---")
+
+    st.subheader(f"2. Generate Detailed Course Plan")
+    
+    if st.button("🚀 Generate Course Plan & Certifications", use_container_width=True, type="primary"):
+        with st.spinner(f"Generating comprehensive course plan for **{top_jd_name}**..."):
             
-        st.markdown("---")
-        if st.button(f"🗑️ Clear {mode.upper()} Practice Session (Questions and Answers)", key=f"clear_interview_prep_session_{mode}"):
-            clear_interview_state(mode)
-            st.success("Practice session cleared.")
+            # Fetch candidate skills for better plan generation context
+            candidate_skills = st.session_state.parsed.get('skills', [])
+            
+            plan = generate_gap_course_plan(
+                gap_analysis_text=gap_summary,
+                jd_role=top_jd_item.get('role', 'Target Role'),
+                candidate_skills=candidate_skills
+            )
+            st.session_state.gap_analysis_plan = plan
             st.rerun()
+
+    st.markdown("---")
+    
+    if st.session_state.gap_analysis_plan:
+        st.subheader("3. AI-Generated 'How to Fill the Gap' Plan")
+        
+        if st.session_state.gap_analysis_plan.startswith("AI Generation Error") or st.session_state.gap_analysis_plan.startswith("No specific gaps"):
+            st.error(st.session_state.gap_analysis_plan)
+        else:
+            st.markdown(st.session_state.gap_analysis_plan)
+            
+        st.markdown("---")
+        
+        # Download button for the plan
+        plan_filename = f"{st.session_state.parsed['name'].replace(' ', '_')}_GapPlan_{top_jd_item.get('role', 'Job').replace('/', '_').replace(' ', '_')}.md"
+        plan_data_uri = get_download_link(st.session_state.gap_analysis_plan, plan_filename, 'markdown', title="Gap Analysis Course Plan")
+
+        col_dl, _ = st.columns([1, 3])
+        with col_dl:
+            render_download_button(
+                plan_data_uri, 
+                plan_filename, 
+                f"⬇️ Download Course Plan (.md)", 
+                'markdown'
+            )
+    else:
+        st.info("Click the 'Generate Course Plan & Certifications' button above to get your personalized study roadmap.")
+
+
+# --------------------------------------------------------------------------------------
+# END GAP ANALYSIS TAB
+# --------------------------------------------------------------------------------------
+
 
 # --------------------------------------------------------------------------------------
 # CHATBOT FUNCTIONALITY (unchanged)
@@ -2136,13 +2335,29 @@ def candidate_dashboard():
     if 'evaluation_report_jd' not in st.session_state: st.session_state.evaluation_report_jd = "" 
     # --- END INTERVIEW STATES ---
     
+    # --- NEW GAP ANALYSIS STATE ---
+    if 'gap_analysis_plan' not in st.session_state: st.session_state.gap_analysis_plan = ""
+    
     if "resume_chatbot_history" not in st.session_state: st.session_state.resume_chatbot_history = []
     if "jd_chatbot_history" not in st.session_state: st.session_state.jd_chatbot_history = {} 
+    
+    if 'candidate_job_types' not in st.session_state: 
+        # Mock initialization for job types if not correctly set elsewhere
+        st.session_state.candidate_job_types = DEFAULT_JOB_TYPES 
 
-    # --- Main Content with Tabs (Rearranged) ---
-    # Tab order: Resume Parsing, Parsed Data View, JD Management, Batch JD Match, Filter JD, Chatbot, Generate Cover Letter, Interview Preparation
-    tab_parsing, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot, tab_cover_letter, tab_interview_prep = st.tabs(
-        ["📄 Resume Parsing", "✨ Parsed Data View", "📚 JD Management", "🎯 Batch JD Match", "🔍 Filter JD", "🤖 Chatbot", "✉️ Generate Cover Letter", "🎤 Interview Preparation"]
+    # --- Main Content with Tabs (Rearranged, new tab added at the end) ---
+    tab_parsing, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot, tab_cover_letter, tab_interview_prep, tab_gap_analysis = st.tabs(
+        [
+            "📄 Resume Parsing", 
+            "✨ Parsed Data View", 
+            "📚 JD Management", 
+            "🎯 Batch JD Match", 
+            "🔍 Filter JD", 
+            "🤖 Chatbot", 
+            "✉️ Generate Cover Letter", 
+            "🎤 Interview Preparation",
+            "💡 Gap Analysis & Course Plan" # NEW TAB
+        ]
     )
     
     with tab_parsing:
@@ -2167,8 +2382,10 @@ def candidate_dashboard():
         generate_cover_letter_tab() 
         
     with tab_interview_prep:
-        interview_preparation_tab() # The updated function
+        interview_preparation_tab() 
         
+    with tab_gap_analysis:
+        gap_analysis_tab() # NEW TAB FUNCTION
 
 
 # -------------------------
