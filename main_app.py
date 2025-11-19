@@ -39,6 +39,25 @@ def initialize_session_state():
     if 'last_selected_skills' not in st.session_state: st.session_state.last_selected_skills = []
     if 'generated_cover_letter' not in st.session_state: st.session_state.generated_cover_letter = "" 
     if 'cl_jd_name' not in st.session_state: st.session_state.cl_jd_name = "" 
+    
+    # --- CV Management Tab Data (NEWLY ADDED) ---
+    if 'cv_data' not in st.session_state: 
+        st.session_state.cv_data = {
+            'personal_info': {'name': '', 'email': '', 'phone': ''},
+            'education': [],
+            'experience': [],
+            'projects': [],
+            'certifications': [],
+            'strengths_raw': '' # Initializing the key to prevent KeyError
+        }
+    
+    # FIX for existing sessions: If 'cv_data' exists but is missing the new key
+    if 'cv_data' in st.session_state and 'strengths_raw' not in st.session_state.cv_data:
+        st.session_state.cv_data['strengths_raw'] = ''
+
+    if 'form_cv_text' not in st.session_state:
+        st.session_state.form_cv_text = ""
+    # ---------------------------------------------
 
     # Hiring Manager Data (Placeholder)
     if 'hiring_jds' not in st.session_state: st.session_state.hiring_jds = []
