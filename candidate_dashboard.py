@@ -1113,9 +1113,67 @@ def resume_parsing_tab():
                     st.session_state.excel_data = result['excel_data'] 
             
     st.markdown("---")
-        
-# --- CV Management Tab Function (NEW) ---
+# ----------next tab cv management-----------------------------------        
+# --- Helper Functions for Data Formatting ---
+def create_json_data(data):
+    """Returns a JSON string of the structured CV data."""
+    # We dump the st.session_state.cv_data dictionary directly
+    return json.dumps(data, indent=4)
 
+def create_html_data(data):
+    """Returns a simple HTML string for document preview/download."""
+    
+    # Process strengths for bullet points
+    strengths_html = ''.join(f'<div class="entry">- {s.strip()}</div>' 
+                            for s in data.get('strengths_raw', '').split('\n') if s.strip())
+
+    html_content = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{data['personal_info']['name']} - CV</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; line-height: 1.6; max-width: 800px; margin: auto; padding: 20px; }}
+        h1 {{ text-align: center; border-bottom: 3px solid #333; padding-bottom: 10px; margin-bottom: 5px; }}
+        h2 {{ border-bottom: 2px solid #eee; padding-bottom: 5px; color: #555; }}
+        .contact {{ text-align: center; margin-bottom: 20px; }}
+        .section {{ margin-bottom: 20px; }}
+        .entry {{ margin-bottom: 10px; padding-left: 20px; }}
+    </style>
+</head>
+<body>
+    <h1>{data['personal_info']['name']}</h1>
+    <p class="contact">Email: {data['personal_info']['email']} | Phone: {data['personal_info']['phone']}</p>
+    
+    <div class="section">
+        <h2>Education</h2>
+        {''.join(f'<div class="entry">{item}</div>' for item in data['education'])}
+    </div>
+    
+    <div class="section">
+        <h2>Experience</h2>
+        {''.join(f'<div class="entry">{item.replace(' | ', '<br>')}</div>' for item in data['experience'])}
+    </div>
+    
+    <div class="section">
+        <h2>Projects</h2>
+        {''.join(f'<div class="entry">{item}</div>' for item in data['projects'])}
+    </div>
+    
+    <div class="section">
+        <h2>Certifications</h2>
+        {''.join(f'<div class="entry">{item}</div>' for item in data['certifications'])}
+    </div>
+    
+    <div class="section">
+        <h2>Strengths</h2>
+        {strengths_html}
+    </div>
+</body>
+</html>
+    """
+    return html_content.strip()
+    # ---------------------------------------------
 # --- CV Management Tab Function (NEW) ---
 def cv_management_tab():
     """Tab to allow form-based CV data entry with multi-format preview/download."""
