@@ -577,13 +577,29 @@ def vendor_approval_tab_content():
         st.dataframe(summary_data, use_container_width=True)
 
 
-def admin_dashboard(go_to): # <-- ADD 'go_to' HERE    
+def admin_dashboard(go_to): 
+    """The main entry point for the Admin Dashboard."""
+    
     st.title("🧑‍💼 Admin Dashboard")
-    nav_col, _ = st.columns([1, 1]) 
+    st.caption(f"Logged in as: **{st.session_state.user_type.title()}**")
+
+    # --- Header and Log Out Layout ---
+    # Using columns for the Log Out button as specified by the user
+    nav_col, _ = st.columns([1, 7]) # Adjusted column ratio for better layout
 
     with nav_col:
         if st.button("🚪 Log Out", use_container_width=True):
-            go_to("login") 
+            # 1. Clear authentication state
+            st.session_state.logged_in = False
+            st.session_state.user_type = None
+            
+            # 2. Set the target page
+            go_to("login")
+            
+            # 3. Force the application to re-run (CRITICAL step)
+            st.rerun() 
+            
+    st.markdown("---") # Visual separator after the header/logout
     
     # Initialize Admin session state variables (Defensive check)
     if "admin_jd_list" not in st.session_state: st.session_state.admin_jd_list = []
