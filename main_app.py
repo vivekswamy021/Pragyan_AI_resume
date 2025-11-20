@@ -1,5 +1,4 @@
 # app.py
-
 import streamlit as st
 from admin_dashboard import admin_dashboard
 from candidate_dashboard import candidate_dashboard
@@ -13,7 +12,9 @@ def go_to(page_name):
 
 def initialize_session_state():
     """Initializes all necessary session state variables for the entire application."""
+    # Initialize page to 'login' or 'signup'
     if 'page' not in st.session_state: st.session_state.page = "login"
+    
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
     if 'user_type' not in st.session_state: st.session_state.user_type = None
 
@@ -131,20 +132,67 @@ def login_page():
                         st.error("Invalid role selected.")
 
 
-        # 4. Sign-up Link (Styled as a small button/link below the form)
-        st.markdown(
-            """
-            <div style="margin-top: 20px;">
-                <button 
-                    style="background: none; border: 1px solid #ccc; padding: 8px 15px; border-radius: 5px; cursor: pointer; color: #333; font-size: small;"
-                    onclick="alert('This is a demo, sign-up functionality is not implemented.');"
-                >
-                    Don't have an account? Sign up here
-                </button>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        # 4. Sign-up Link (Clicking this now navigates to the sign-up page)
+        st.markdown('<div style="margin-top: 20px;">', unsafe_allow_html=True)
+        # Using a standard Streamlit button for clean navigation
+        if st.button("Don't have an account? Sign up here", key="signup_link_from_login"):
+            go_to("signup")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
+def signup_page():
+    """Handles the user registration process, matching the 'Create an Account' design."""
+    
+    # --- Custom Header ---
+    st.markdown(
+        """
+        <div style="display: flex; align-items: center; margin-bottom: 30px;">
+            <span style="font-size: 32px; margin-right: 10px;">🌐</span> 
+            <h1 style="font-size: 32px; margin: 0; font-weight: 600;">PragyanAI Job Portal <span style="font-size: 20px; color: #4CAF50;">🔗</span></h1>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    
+    st.subheader("Create an Account")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        with st.form("signup_form", clear_on_submit=False):
+            
+            # Email Input
+            st.markdown("Email")
+            email = st.text_input("Email", label_visibility="collapsed", key="signup_email", placeholder="Enter your email...")
+
+            # Password Input
+            st.markdown("Password")
+            password = st.text_input("Password", type="password", label_visibility="collapsed", key="signup_password", placeholder="Enter your password...")
+            
+            # Confirm Password Input
+            st.markdown("Confirm Password")
+            confirm_password = st.text_input("Confirm Password", type="password", label_visibility="collapsed", key="confirm_password", placeholder="Confirm your password...")
+            
+            # Sign Up Button
+            submitted = st.form_submit_button("Sign Up", use_container_width=True)
+
+            if submitted:
+                if not email or not password or not confirm_password:
+                    st.error("Please fill out all fields.")
+                elif password != confirm_password:
+                    st.error("Passwords do not match.")
+                else:
+                    # In a real app, you would register the user here.
+                    # For this demo, we simulate success and redirect to login.
+                    st.success("Account created successfully! Please log in.")
+                    go_to("login")
+                    st.rerun() 
+        
+        # Login Link
+        st.markdown('<div style="margin-top: 20px;">', unsafe_allow_html=True)
+        if st.button("Already have an account? Login here", key="login_link_from_signup"):
+            go_to("login")
+        st.markdown('</div>', unsafe_allow_html=True)
 
 
 # -------------------------
@@ -156,8 +204,10 @@ if __name__ == '__main__':
     
     initialize_session_state()
 
+    current_page = st.session_state.page
+    
     if st.session_state.logged_in:
-        # Pass the go_to function to the dashboard for navigation
+        # User is logged in, show the appropriate dashboard
         if st.session_state.user_type == "admin":
             admin_dashboard(go_to)
         elif st.session_state.user_type == "candidate":
@@ -165,7 +215,13 @@ if __name__ == '__main__':
         elif st.session_state.user_type == "hiring":
             hiring_dashboard(go_to)
         else:
-            login_page()
+            # Fallback for logged-in user with unknown type
+            st.error("Unknown user type. Logging out.")
+            st.session_state.logged_in = False
+            st.rerun()
     else:
-        # Fallback to login if not logged in
-        login_page()
+        # User is not logged in, show login or signup page
+        if current_page == "signup":
+            signup_page()
+        else: # Default to login page
+            login_page()
