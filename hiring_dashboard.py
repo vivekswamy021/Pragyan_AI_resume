@@ -8,18 +8,6 @@ def hiring_dashboard(go_to_func):
     Requires go_to_func for logout.
     """
     
-    # 1. Define the Logout Callback Function (Uses the passed-in go_to_func)
-    def logout_callback():
-        # 1. Clear authentication state
-        st.session_state.logged_in = False
-        st.session_state.user_type = None
-        
-        # 2. Set the target page using the passed function
-        go_to_func("login")
-        
-        # 3. Force the application to re-run (CRITICAL step)
-        st.rerun()
-
     # --- Dashboard Header and Logout Button ---
     col_title, nav_col = st.columns([10, 2])
     
@@ -28,8 +16,18 @@ def hiring_dashboard(go_to_func):
         st.caption("Manage JDs, review top candidates, and track interviews.")
     
     with nav_col:
-        # Place the Log Out Button with the callback
-        st.button("🚪 Log Out", use_container_width=True, on_click=logout_callback)
+        # FIX: The logout logic must be placed inside the if st.button(...) block
+        # rather than an on_click callback for immediate state changes and rerun() to work reliably.
+        if st.button("🚪 Log Out", use_container_width=True):
+            # 1. Clear authentication state
+            st.session_state.logged_in = False
+            st.session_state.user_type = None
+            
+            # 2. Set the target page using the passed function
+            go_to_func("login")
+            
+            # 3. Force the application to re-run
+            st.rerun()
             
     st.markdown("---") # Visual separator after the header/logout
 
