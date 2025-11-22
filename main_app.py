@@ -4,7 +4,7 @@ from admin_dashboard import admin_dashboard
 from candidate_dashboard import candidate_dashboard
 from hiring_dashboard import hiring_dashboard
 
-image_url = "pragyan_ai_school_cover.jpg"
+image_url = "https://github.com/vivekswamy021/Pragyan_AI_resume/blob/cba81f5602899e5983b3f760306e3a8dc34e4cc9/pragyan_ai_school_cover.jpg"
 st.image(image_url, caption="My Image from GitHub") 
 # --- Utility Functions for Navigation and State Management ---
 
