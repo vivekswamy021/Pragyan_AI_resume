@@ -14,7 +14,7 @@ LOGO_URL = "https://raw.githubusercontent.com/vivekswamy021/Pragyan_AI_resume/ma
 # --------------------------------------------------
 # 🔥 LOGO FUNCTION (used across all pages)
 # --------------------------------------------------
-def show_logo(width=160):
+def show_logo(width=260):
     st.image(LOGO_URL, width=width)
 
 
