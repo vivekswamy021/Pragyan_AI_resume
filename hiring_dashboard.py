@@ -31,7 +31,7 @@ def hiring_dashboard(go_to_func):
             
     st.markdown("---") # Visual separator after the header/logout
 
-    import streamlit as st
+import streamlit as st
 import pandas as pd
 import numpy as np
 import time
