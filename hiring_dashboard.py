@@ -1,6 +1,9 @@
 import streamlit as st
-
-import streamlit as st
+import pandas as pd
+import numpy as np
+import time
+import random
+from groq import Groq
 
 def hiring_dashboard(go_to_func):
     """
@@ -31,12 +34,7 @@ def hiring_dashboard(go_to_func):
             
     st.markdown("---") # Visual separator after the header/logout
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import time
-import random
-from groq import Groq
+
 
 # --- Configuration & Initialization ---
 st.set_page_config(layout="wide", page_title="Pragyan-AI Talent Management")
