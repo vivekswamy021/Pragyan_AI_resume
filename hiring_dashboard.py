@@ -36,13 +36,6 @@ def hiring_dashboard(go_to):
     st.markdown("---") # Visual separator after the header/logout
 
 
-import pandas as pd
-import numpy as np
-import time
-import base64
-import random
-from groq import Groq
-
 # --- Configuration & Initialization ---
 st.set_page_config(layout="wide", page_title="Talent Management System")
 
