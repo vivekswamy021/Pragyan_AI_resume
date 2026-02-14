@@ -7,15 +7,6 @@ from groq import Groq
 from dotenv import load_dotenv
 from datetime import date
 
-def hiring_dashboard(go_to_func):
-    """
-    Main function for the Hiring Manager Dashboard.
-    Requires go_to_func for logout.
-    """
-    
-    # --- Dashboard Header and Logout Button ---
-    col_title, nav_col = st.columns([10, 2])
-
 # -------------------------
 # CONFIGURATION & API SETUP
 # -------------------------
@@ -40,11 +31,9 @@ else:
 
 def hiring_pool_chatbot(question):
     """AI Chatbot to query the approved candidate pool."""
-    # Safety check for missing session state keys
     if "resumes_to_analyze" not in st.session_state or "resume_statuses" not in st.session_state:
         return "System error: Candidate database not initialized."
 
-    # Collect only candidates approved or shortlisted by the Admin
     approved_resumes = [
         res['parsed'] for res in st.session_state.resumes_to_analyze 
         if st.session_state.resume_statuses.get(res['name']) in ["Approved", "Shortlisted"]
@@ -53,7 +42,6 @@ def hiring_pool_chatbot(question):
     if not approved_resumes:
         return "No approved candidates found in the pool yet. Please wait for the Admin to approve candidates."
 
-    # Contextual prompt for the AI
     context = json.dumps(approved_resumes, indent=2)
     prompt = f"""
     You are a Recruitment Assistant for a Hiring Manager. You have access to the following approved candidate data:
@@ -77,23 +65,36 @@ def hiring_pool_chatbot(question):
 # MAIN DASHBOARD FUNCTION
 # -------------------------
 
-def hiring_dashboard(navigation_func):
+def hiring_dashboard(go_to_func):
     """
     Hiring Company Dashboard.
     Args:
-        navigation_func: The function used to change st.session_state.page (go_to)
+        go_to_func: The function used to change st.session_state.page
     """
-    st.title("🏢 Hiring Company Dashboard")
-    st.caption("Review approved talent and manage job vacancies.")
+    
+    # --- Dashboard Header and Logout Button ---
+    col_title, nav_col = st.columns([10, 2])
+    
+    with col_title:
+        st.title("🏢 Hiring Company Dashboard")
+        st.caption("Review approved talent and manage job vacancies.")
+
+    with nav_col:
+        # Logout logic handles state clearing and redirect
+        if st.button("🚪 Log Out", use_container_width=True):
+            st.session_state.logged_in = False
+            st.session_state.user_type = None
+            go_to_func("login")
+            st.rerun()
     
     st.markdown("---")
 
-    # Ensure shared session states exist to prevent TypeErrors
+    # --- Safety Initialization ---
     if 'admin_jd_list' not in st.session_state: st.session_state.admin_jd_list = []
     if 'resumes_to_analyze' not in st.session_state: st.session_state.resumes_to_analyze = []
     if 'resume_statuses' not in st.session_state: st.session_state.resume_statuses = {}
 
-    # Define Tabs
+    # --- Dashboard Tabs ---
     tab_postings, tab_candidates, tab_chatbot, tab_stats = st.tabs([
         "📝 My Job Postings", 
         "👥 Review Approved Talent", 
@@ -118,10 +119,9 @@ def hiring_dashboard(navigation_func):
                             "content": jd_text,
                             "job_type": job_type,
                             "role": role_title,
-                            "key_skills": [], # Admin logic usually populates this, but can be empty
+                            "key_skills": [], 
                             "date_posted": date.today().strftime("%Y-%m-%d")
                         }
-                        # Add to the global Admin list so it appears in candidate batch matching
                         st.session_state.admin_jd_list.append(new_jd)
                         st.success(f"Job Posting for '{role_title}' is now live!")
                         st.rerun()
@@ -146,9 +146,7 @@ def hiring_dashboard(navigation_func):
     # --- TAB 2: Review Candidates ---
     with tab_candidates:
         st.header("Approved Candidate Queue")
-        st.write("Candidates shown here have been verified and approved by the Admin.")
         
-        # Filter pool: Resumes that are Approved or Shortlisted
         review_pool = [
             res for res in st.session_state.resumes_to_analyze 
             if st.session_state.resume_statuses.get(res['name']) in ["Approved", "Shortlisted"]
@@ -157,7 +155,6 @@ def hiring_dashboard(navigation_func):
         if not review_pool:
             st.warning("No candidates have been approved for review yet.")
         else:
-            # Filter by JD dropdown
             assigned_jds = list(set([res.get('applied_jd', 'General Pool') for res in review_pool]))
             selected_filter = st.selectbox("Filter by Specific Job Posting", ["All Candidates"] + assigned_jds)
 
@@ -175,8 +172,6 @@ def hiring_dashboard(navigation_func):
             
             if display_data:
                 st.table(display_data)
-                
-                st.markdown("### Detailed Candidate Profiles")
                 for res in review_pool:
                     if selected_filter == "All Candidates" or res.get('applied_jd') == selected_filter:
                         with st.expander(f"📄 View Resume Details: {res['name']}"):
@@ -187,24 +182,20 @@ def hiring_dashboard(navigation_func):
     # --- TAB 3: Hiring Chatbot ---
     with tab_chatbot:
         st.header("Recruitment Assistant Chatbot")
-        st.write("Ask questions about your currently approved talent pool.")
-        
-        user_query = st.text_input("Ask about candidates:", placeholder="e.g. 'Show me candidates with Python skills' or 'Who has a Master's degree?'")
+        user_query = st.text_input("Ask about candidates:", placeholder="e.g. 'Show me candidates with Python skills'")
         
         if st.button("Search Talent Pool", type="primary"):
             if user_query:
                 with st.spinner("AI is analyzing the candidate pool..."):
                     answer = hiring_pool_chatbot(user_query)
-                    st.markdown("---")
                     st.markdown("### 🤖 Hiring Assistant Response:")
                     st.write(answer)
             else:
-                st.error("Please enter a question about your talent pool.")
+                st.error("Please enter a question.")
 
     # --- TAB 4: Hiring Stats ---
     with tab_stats:
         st.header("Hiring Metrics")
-        
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Live Vacancies", len(st.session_state.admin_jd_list))
@@ -214,26 +205,3 @@ def hiring_dashboard(navigation_func):
         with col3:
             shortlisted_count = sum(1 for s in st.session_state.resume_statuses.values() if s == "Shortlisted")
             st.metric("Shortlisted", shortlisted_count)
-
-# -------------------------
-# APP ROUTING (Inside main_app.py)
-# -------------------------
-# To integrate this, ensure your main app looks like this:
-# if st.session_state.page == "hiring_dashboard":
-#     hiring_dashboard(go_to)
-    
-    with nav_col:
-        # FIX: The logout logic must be placed inside the if st.button(...) block
-        # rather than an on_click callback for immediate state changes and rerun() to work reliably.
-        if st.button("🚪 Log Out", use_container_width=True):
-            # 1. Clear authentication state
-            st.session_state.logged_in = False
-            st.session_state.user_type = None
-            
-            # 2. Set the target page using the passed function
-            go_to_func("login")
-            
-            # 3. Force the application to re-run
-            st.rerun()
-            
-    st.markdown("---") # Visual separator after the header/logout
