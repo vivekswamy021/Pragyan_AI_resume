@@ -34,3 +34,7 @@ def hiring_dashboard():
             st.rerun()
             
     st.markdown("---") # Visual separator after the header/logout
+
+if __name__ == "__main__":
+    main()
+     
