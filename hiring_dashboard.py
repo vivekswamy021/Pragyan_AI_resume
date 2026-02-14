@@ -86,13 +86,6 @@ def hiring_dashboard(navigation_func):
     st.title("🏢 Hiring Company Dashboard")
     st.caption("Review approved talent and manage job vacancies.")
     
-    # Navigation Block
-    nav_col, _ = st.columns([1, 5])
-    with nav_col:
-        if st.button("🚪 Log Out", use_container_width=True, key="hiring_logout"):
-            navigation_func("login")
-            st.rerun()
-
     st.markdown("---")
 
     # Ensure shared session states exist to prevent TypeErrors
