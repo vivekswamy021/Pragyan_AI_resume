@@ -6,7 +6,7 @@ import base64
 import random
 from groq import Groq
 
-def hiring_dashboard(go_to):
+def hiring_dashboard():
     """
     Main function for the Hiring Manager Dashboard.
     Requires go_to_func for logout.
