@@ -26,50 +26,13 @@ else:
     client = Groq(api_key=GROQ_API_KEY)
 
 # -------------------------
-# SHARED LOGIC / AI HELPER
-# -------------------------
-
-def hiring_pool_chatbot(question):
-    """AI Chatbot to query the approved candidate pool."""
-    if "resumes_to_analyze" not in st.session_state or "resume_statuses" not in st.session_state:
-        return "System error: Candidate database not initialized."
-
-    approved_resumes = [
-        res['parsed'] for res in st.session_state.resumes_to_analyze 
-        if st.session_state.resume_statuses.get(res['name']) in ["Approved", "Shortlisted"]
-    ]
-    
-    if not approved_resumes:
-        return "No approved candidates found in the pool yet. Please wait for the Admin to approve candidates."
-
-    context = json.dumps(approved_resumes, indent=2)
-    prompt = f"""
-    You are a Recruitment Assistant for a Hiring Manager. You have access to the following approved candidate data:
-    {context}
-    
-    Based ONLY on this data, answer the following hiring manager question concisely.
-    Question: {question}
-    """
-    
-    try:
-        response = client.chat.completions.create(
-            model=GROQ_MODEL,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        return f"Error querying candidate pool: {e}"
-
-# -------------------------
 # MAIN DASHBOARD FUNCTION
 # -------------------------
 
 def hiring_dashboard(go_to_func):
     """
-    Hiring Company Dashboard.
-    Args:
-        go_to_func: The function used to change st.session_state.page
+    Main function for the Hiring Manager Dashboard.
+    Requires go_to_func for logout and navigation.
     """
     
     # --- Dashboard Header and Logout Button ---
@@ -77,11 +40,11 @@ def hiring_dashboard(go_to_func):
     
     with col_title:
         st.title("🏢 Hiring Company Dashboard")
-        st.caption("Review approved talent and manage job vacancies.")
+        st.caption("Manage your job vacancies and track hiring metrics.")
 
     with nav_col:
         # Logout logic handles state clearing and redirect
-        if st.button("🚪 Log Out", use_container_width=True):
+        if st.button("🚪 Log Out", use_container_width=True, key="hiring_logout_btn"):
             st.session_state.logged_in = False
             st.session_state.user_type = None
             go_to_func("login")
@@ -89,16 +52,15 @@ def hiring_dashboard(go_to_func):
     
     st.markdown("---")
 
-    # --- Safety Initialization ---
-    if 'admin_jd_list' not in st.session_state: st.session_state.admin_jd_list = []
-    if 'resumes_to_analyze' not in st.session_state: st.session_state.resumes_to_analyze = []
-    if 'resume_statuses' not in st.session_state: st.session_state.resume_statuses = {}
+    # --- Safety Initialization of Shared Session States ---
+    if 'admin_jd_list' not in st.session_state: 
+        st.session_state.admin_jd_list = []
+    if 'resume_statuses' not in st.session_state: 
+        st.session_state.resume_statuses = {}
 
-    # --- Dashboard Tabs ---
-    tab_postings, tab_candidates, tab_chatbot, tab_stats = st.tabs([
+    # --- Dashboard Tabs (Remaining 2 Tabs) ---
+    tab_postings, tab_stats = st.tabs([
         "📝 My Job Postings", 
-        "👥 Review Approved Talent", 
-        "🤖 AI Hiring Assistant",
         "📊 Hiring Analytics"
     ])
 
@@ -106,6 +68,7 @@ def hiring_dashboard(go_to_func):
     with tab_postings:
         st.header("Manage Vacancies")
         
+        # Form to add new JDs
         with st.expander("➕ Create New Job Posting"):
             with st.form("hiring_jd_form", clear_on_submit=True):
                 role_title = st.text_input("Job Role Title", placeholder="e.g. Senior Data Scientist")
@@ -122,6 +85,7 @@ def hiring_dashboard(go_to_func):
                             "key_skills": [], 
                             "date_posted": date.today().strftime("%Y-%m-%d")
                         }
+                        # Add to shared list so candidates can see it
                         st.session_state.admin_jd_list.append(new_jd)
                         st.success(f"Job Posting for '{role_title}' is now live!")
                         st.rerun()
@@ -132,76 +96,47 @@ def hiring_dashboard(go_to_func):
         if not st.session_state.admin_jd_list:
             st.info("You haven't posted any jobs yet.")
         else:
+            # Display current JDs with a delete option
             for i, jd in enumerate(st.session_state.admin_jd_list):
                 with st.container(border=True):
                     col_a, col_b = st.columns([4, 1])
                     with col_a:
                         st.subheader(f"{jd['name']}")
                         st.caption(f"Type: {jd.get('job_type', 'N/A')} | Posted: {jd.get('date_posted', 'N/A')}")
+                        with st.expander("View Description"):
+                            st.write(jd['content'])
                     with col_b:
                         if st.button("🗑️ Delete", key=f"del_jd_{i}"):
                             st.session_state.admin_jd_list.pop(i)
                             st.rerun()
 
-    # --- TAB 2: Review Candidates ---
-    with tab_candidates:
-        st.header("Approved Candidate Queue")
-        
-        review_pool = [
-            res for res in st.session_state.resumes_to_analyze 
-            if st.session_state.resume_statuses.get(res['name']) in ["Approved", "Shortlisted"]
-        ]
-
-        if not review_pool:
-            st.warning("No candidates have been approved for review yet.")
-        else:
-            assigned_jds = list(set([res.get('applied_jd', 'General Pool') for res in review_pool]))
-            selected_filter = st.selectbox("Filter by Specific Job Posting", ["All Candidates"] + assigned_jds)
-
-            display_data = []
-            for res in review_pool:
-                if selected_filter == "All Candidates" or res.get('applied_jd') == selected_filter:
-                    status = st.session_state.resume_statuses.get(res['name'])
-                    display_data.append({
-                        "Candidate Name": res['name'],
-                        "Assigned Role": res.get('applied_jd', 'N/A'),
-                        "Current Status": status,
-                        "Email": res['parsed'].get('email', 'N/A'),
-                        "Phone": res['parsed'].get('phone', 'N/A')
-                    })
-            
-            if display_data:
-                st.table(display_data)
-                for res in review_pool:
-                    if selected_filter == "All Candidates" or res.get('applied_jd') == selected_filter:
-                        with st.expander(f"📄 View Resume Details: {res['name']}"):
-                            st.json(res['parsed'])
-            else:
-                st.info("No candidates found for this specific filter.")
-
-    # --- TAB 3: Hiring Chatbot ---
-    with tab_chatbot:
-        st.header("Recruitment Assistant Chatbot")
-        user_query = st.text_input("Ask about candidates:", placeholder="e.g. 'Show me candidates with Python skills'")
-        
-        if st.button("Search Talent Pool", type="primary"):
-            if user_query:
-                with st.spinner("AI is analyzing the candidate pool..."):
-                    answer = hiring_pool_chatbot(user_query)
-                    st.markdown("### 🤖 Hiring Assistant Response:")
-                    st.write(answer)
-            else:
-                st.error("Please enter a question.")
-
-    # --- TAB 4: Hiring Stats ---
+    # --- TAB 2: Hiring Stats ---
     with tab_stats:
-        st.header("Hiring Metrics")
-        col1, col2, col3 = st.columns(3)
+        st.header("Hiring Metrics Overview")
+        
+        # Calculate totals from session state
+        total_postings = len(st.session_state.admin_jd_list)
+        approved_count = sum(1 for s in st.session_state.resume_statuses.values() if s == "Approved")
+        shortlisted_count = sum(1 for s in st.session_state.resume_statuses.values() if s == "Shortlisted")
+        rejected_count = sum(1 for s in st.session_state.resume_statuses.values() if s == "Rejected")
+
+        col1, col2, col3, col4 = st.columns(4)
+        
         with col1:
-            st.metric("Live Vacancies", len(st.session_state.admin_jd_list))
+            st.metric("Live Vacancies", total_postings)
         with col2:
-            approved_count = sum(1 for s in st.session_state.resume_statuses.values() if s == "Approved")
             st.metric("Approved Talent", approved_count)
         with col3:
-            shortlisted_count = sum(1 for s in st.session_state.resume_statuses.values() if s == "Shortlisted")
             st.metric("Shortlisted", shortlisted_count)
+        with col4:
+            st.metric("Rejected", rejected_count)
+            
+        st.markdown("---")
+        st.subheader("Application Funnel")
+        
+        # Simple data representation for the funnel
+        funnel_data = pd.DataFrame({
+            "Stage": ["Approved", "Shortlisted", "Rejected"],
+            "Count": [approved_count, shortlisted_count, rejected_count]
+        })
+        st.bar_chart(funnel_data.set_index("Stage"))
