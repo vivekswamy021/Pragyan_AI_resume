@@ -33,7 +33,7 @@ def hiring_dashboard(go_to):
             # 3. Force the application to re-run
             st.rerun()
             
-    st.markdown("---") # Visual separator after the header/logout
+    #st.markdown("---") # Visual separator after the header/logout
 
 # --- Configuration & Initialization ---
 st.set_page_config(layout="wide", page_title="Talent Management System")
