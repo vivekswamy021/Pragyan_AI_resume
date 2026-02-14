@@ -16,16 +16,6 @@ def hiring_dashboard(go_to_func):
     # --- Dashboard Header and Logout Button ---
     col_title, nav_col = st.columns([10, 2])
 
-
-import streamlit as st
-import os
-import json
-import re
-import pandas as pd
-from groq import Groq
-from dotenv import load_dotenv
-from datetime import date
-
 # -------------------------
 # CONFIGURATION & API SETUP
 # -------------------------
