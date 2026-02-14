@@ -152,6 +152,7 @@ def login_page():
                 st.session_state.authenticated = True
                 st.session_state.role = selected_role.lower().replace(" ", "_")
                 st.success(f"Successfully logged in as {selected_role}!")
+                st.rerun()
             else:
                 st.error("Please enter a username and password.")
 
@@ -959,11 +960,27 @@ BSc Computer Science | University Name | 2014-2018
 
 # --- Hiring Company Dashboard Functions ---
 
-def hiring_company_dashboard():
-    """Hiring Company Dashboard Layout and Features."""
-    display_dashboard_header("Hiring Company Dashboard")
-
-    st.sidebar.button("Logout", on_click=mock_logout, type="secondary")
+def hiring_dashboard():
+    """Main function for the Hiring Manager Dashboard."""
+    
+    # --- Dashboard Header and Logout Button ---
+    col_title, nav_col = st.columns([10, 2])
+    
+    with col_title:
+        st.title("👨‍💼 Hiring Manager Dashboard")
+        st.caption("Manage JDs, review top candidates, and track interviews.")
+    
+    with nav_col:
+        # Replaced go_to_func with the app's existing session state handling
+        if st.button("🚪 Log Out", use_container_width=True):
+            # 1. Clear authentication state
+            st.session_state.authenticated = False
+            st.session_state.role = None
+            
+            # 2. Force the application to re-run and show login page
+            st.rerun()
+            
+    st.markdown("---") # Visual separator after the header/logout
 
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "📝 Create JD",
@@ -2094,8 +2111,6 @@ def hiring_company_dashboard():
         else:
             st.warning("Please select at least one candidate to export contact details.")
 
-
-
 # --- Main App Execution ---
 
 def main():
@@ -2113,7 +2128,7 @@ def main():
         elif st.session_state.role == "candidate":
             candidate_dashboard()
         elif st.session_state.role == "hiring_company":
-            hiring_company_dashboard()
+            hiring_dashboard() # Calls your updated function name!
 
 if __name__ == "__main__":
     main()
