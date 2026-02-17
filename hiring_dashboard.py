@@ -97,9 +97,11 @@ def hiring_dashboard(go_to_func):
         st.session_state.company_cv_bank = []
 
     # --- Dashboard Tabs ---
-    tab_jd_mgmt, tab_upload_cvs, tab_stats = st.tabs([
+    # Added "🔍 Explore CV" next to "Upload the CVs"
+    tab_jd_mgmt, tab_upload_cvs, tab_explore_cv, tab_stats = st.tabs([
         "📄 JD Management", 
         "📁 Upload the CVs", 
+        "🔍 Explore CV",
         "📊 Hiring Analytics"
     ])
 
@@ -220,7 +222,8 @@ def hiring_dashboard(go_to_func):
                             "File Name": ind_file.name,
                             "Content Length": len(content),
                             "Upload Type": "Individual",
-                            "Date Uploaded": date.today().strftime("%Y-%m-%d")
+                            "Date Uploaded": date.today().strftime("%Y-%m-%d"),
+                            "Content": content # Storing raw text for LLM features
                         })
                         st.success(f"CV '{ind_file.name}' successfully added to the Digital Bank!")
                 else:
@@ -240,7 +243,8 @@ def hiring_dashboard(go_to_func):
                                 "File Name": file.name,
                                 "Content Length": len(content),
                                 "Upload Type": "Bulk",
-                                "Date Uploaded": date.today().strftime("%Y-%m-%d")
+                                "Date Uploaded": date.today().strftime("%Y-%m-%d"),
+                                "Content": content # Storing raw text
                             })
                         st.success(f"Successfully added {len(bulk_files)} CVs to the Digital Bank!")
                 else:
@@ -255,15 +259,134 @@ def hiring_dashboard(go_to_func):
                 st.info("Your Digital CV Bank is currently empty. Upload CVs using the Individual or Bulk tabs.")
             else:
                 cv_df = pd.DataFrame(st.session_state.company_cv_bank)
-                # Display DataFrame without the raw content length for a cleaner UI
                 st.dataframe(cv_df[["File Name", "Upload Type", "Date Uploaded"]], use_container_width=True)
                 
-                # Option to clear the bank
                 if st.button("🗑️ Clear Digital CV Bank", type="secondary"):
                     st.session_state.company_cv_bank = []
                     st.rerun()
 
-    # --- TAB 3: Hiring Analytics ---
+    # --- TAB 3: Explore CV ---
+    with tab_explore_cv:
+        st.header("Explore & Analyze CVs")
+        st.markdown("Use advanced tools to query, filter, and summarize your Digital CV Bank.")
+
+        if not st.session_state.company_cv_bank:
+            st.warning("Please upload CVs in the 'Upload the CVs' tab to use these features.")
+        else:
+            explore_filter, explore_llm, explore_query, explore_organize, explore_summarise = st.tabs([
+                "🔍 Filter CVs by", 
+                "🧠 LLM Analysis", 
+                "❓ Query Inform", 
+                "📁 Organize CV", 
+                "📝 Summarise CV"
+            ])
+
+            # 1. Filter CVs
+            with explore_filter:
+                st.subheader("Filter CVs")
+                filter_keyword = st.text_input("Search by Keyword (e.g., Python, Manager)", key="filter_kw")
+                filter_type = st.multiselect("Filter by Upload Type", ["Individual", "Bulk"], default=["Individual", "Bulk"])
+                
+                if st.button("Apply Filters", key="btn_apply_filter"):
+                    filtered_cvs = []
+                    for cv in st.session_state.company_cv_bank:
+                        if cv['Upload Type'] in filter_type:
+                            if not filter_keyword or filter_keyword.lower() in str(cv.get('Content', '')).lower():
+                                filtered_cvs.append(cv)
+                    
+                    st.write(f"Found {len(filtered_cvs)} matching CV(s).")
+                    if filtered_cvs:
+                        st.dataframe(pd.DataFrame(filtered_cvs)[["File Name", "Upload Type", "Date Uploaded"]], use_container_width=True)
+
+            # 2. LLM Analysis
+            with explore_llm:
+                st.subheader("Run LLM on CV Bank")
+                st.markdown("Prompt the AI to analyze the entire CV bank for specific criteria.")
+                llm_prompt = st.text_area("Custom AI Prompt", placeholder="e.g., Which of these candidates has the strongest background in cloud architecture?")
+                
+                if st.button("Run Global Analysis", key="btn_llm_run"):
+                    if llm_prompt:
+                        with st.spinner("AI is reviewing the CV Bank..."):
+                            try:
+                                # Prepare context (limiting to names and snippets if too large, but doing full text here for demo)
+                                bank_context = [{"File": cv['File Name'], "Content": str(cv.get('Content', ''))[:1000] + "..."} for cv in st.session_state.company_cv_bank]
+                                prompt = f"CV Data:\n{json.dumps(bank_context)}\n\nQuery: {llm_prompt}"
+                                
+                                res = client.chat.completions.create(
+                                    model=GROQ_MODEL, 
+                                    messages=[{"role": "user", "content": prompt}]
+                                )
+                                st.write(res.choices[0].message.content)
+                            except Exception as e:
+                                st.error(f"LLM Error: {e}")
+                    else:
+                        st.error("Please enter a prompt.")
+
+            # 3. Query Inform
+            with explore_query:
+                st.subheader("Query Inform")
+                query_target = st.radio("Target Selection", ["Individual CV", "Bulk (All CVs)"], horizontal=True)
+                
+                selected_cv_name = None
+                if query_target == "Individual CV":
+                    cv_names = [cv['File Name'] for cv in st.session_state.company_cv_bank]
+                    selected_cv_name = st.selectbox("Select CV to query", cv_names, key="query_cv_select")
+
+                query_text = st.text_input("What do you want to know?", placeholder="e.g., What is the candidate's highest degree?")
+                
+                if st.button("Run Query", key="btn_run_query"):
+                    if query_text:
+                        with st.spinner("Querying..."):
+                            try:
+                                if query_target == "Individual CV" and selected_cv_name:
+                                    target_cv = next(cv for cv in st.session_state.company_cv_bank if cv['File Name'] == selected_cv_name)
+                                    context = target_cv.get('Content', 'No content')
+                                else:
+                                    context = json.dumps([{"File": cv['File Name'], "Content": str(cv.get('Content', ''))[:500]} for cv in st.session_state.company_cv_bank])
+                                
+                                prompt = f"Context:\n{context}\n\nAnswer the following question based on the context: {query_text}"
+                                res = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
+                                st.info(res.choices[0].message.content)
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+                    else:
+                        st.error("Please enter a query.")
+
+            # 4. Organize - CV
+            with explore_organize:
+                st.subheader("Organize CV Repository")
+                sort_by = st.selectbox("Sort CVs By", ["Date Uploaded (Newest First)", "Date Uploaded (Oldest First)", "File Name (A-Z)"])
+                
+                cv_list = st.session_state.company_cv_bank.copy()
+                if sort_by == "Date Uploaded (Newest First)":
+                    cv_list.sort(key=lambda x: x['Date Uploaded'], reverse=True)
+                elif sort_by == "Date Uploaded (Oldest First)":
+                    cv_list.sort(key=lambda x: x['Date Uploaded'])
+                elif sort_by == "File Name (A-Z)":
+                    cv_list.sort(key=lambda x: x['File Name'])
+                
+                st.dataframe(pd.DataFrame(cv_list)[["File Name", "Upload Type", "Date Uploaded"]], use_container_width=True)
+
+            # 5. Summarise CV - Analysis
+            with explore_summarise:
+                st.subheader("Summarise CV Analysis")
+                cv_options = [cv['File Name'] for cv in st.session_state.company_cv_bank]
+                cv_to_summarise = st.selectbox("Select CV to Summarize", cv_options, key="summarise_cv_select")
+                
+                if st.button("Generate Summary", key="btn_gen_summary"):
+                    if cv_to_summarise:
+                        with st.spinner("Generating summary..."):
+                            try:
+                                target_cv = next(cv for cv in st.session_state.company_cv_bank if cv['File Name'] == cv_to_summarise)
+                                prompt = f"Provide a brief, professional 4-bullet point summary highlighting the key skills and experience in this CV:\n\n{target_cv.get('Content', '')}"
+                                res = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
+                                
+                                st.markdown(f"### Summary for {cv_to_summarise}")
+                                st.write(res.choices[0].message.content)
+                            except Exception as e:
+                                st.error(f"Error generating summary: {e}")
+
+    # --- TAB 4: Hiring Analytics ---
     with tab_stats:
         st.header("Hiring Metrics Overview")
         app_count = len(st.session_state.resume_statuses)
