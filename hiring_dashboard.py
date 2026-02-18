@@ -6,10 +6,9 @@ import pandas as pd
 import tempfile
 from groq import Groq
 from dotenv import load_dotenv
-from datetime import date, datetime
+from datetime import date
 import pdfplumber
 import docx
-import base64
 
 # -------------------------
 # CONFIGURATION & API SETUP
@@ -70,62 +69,36 @@ def get_file_content(uploaded_file):
     return text
 
 def evaluate_cv_against_jd_swot(cv_text, jd_text):
-    """Deep match analysis of a CV against a JD using LLM (SWOT)."""
+    """
+    Performs a deep match analysis of a CV against a JD using LLM.
+    Returns Score, Contact Info, and SWOT Analysis.
+    """
     prompt = f"""
     Act as a Senior Recruiter. Analyze the Candidate CV against the Job Description (JD).
     
-    JD: {jd_text[:2000]}...
-    CV: {cv_text[:3000]}...
+    JD: {jd_text[:2000]}... (truncated)
+    CV: {cv_text[:3000]}... (truncated)
     
-    Output strictly JSON:
-    {{
-        "match_score": 0-100,
-        "contact_info": {{"name": "", "email": "", "phone": ""}},
-        "swot": {{"strengths": [], "weaknesses": [], "opportunities": [], "threats": []}},
-        "summary": "1 sentence summary"
-    }}
+    Provide the output strictly as a valid JSON object with these keys:
+    1. "match_score": Integer (0-100) representing fit.
+    2. "contact_info": Object with keys "name", "email", "phone". Extract from CV or use "N/A".
+    3. "swot": Object with keys "strengths" (list), "weaknesses" (list), "opportunities" (list), "threats" (list).
+    4. "summary": A brief 1-sentence summary of the fit.
     """
     try:
         response = client.chat.completions.create(
-            model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}], temperature=0.1
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1
         )
         content = response.choices[0].message.content
         match = re.search(r'\{.*\}', content, re.DOTALL)
-        return json.loads(match.group(0)) if match else {"error": "JSON Error"}
+        if match:
+            return json.loads(match.group(0))
+        else:
+            return {"error": "Could not parse JSON"}
     except Exception as e:
         return {"error": str(e)}
-
-def evaluate_screening_data(screening_data, jd_text):
-    """Evaluates screening responses against JD expectations."""
-    prompt = f"""
-    Evaluate this candidate based on their screening interview responses against the JD.
-    
-    Job Description: {jd_text[:1000]}...
-    
-    Screening Data:
-    - Current Salary: {screening_data.get('curr_ctc')}
-    - Expected Salary: {screening_data.get('exp_ctc')}
-    - Notice Period: {screening_data.get('notice')} (Buyout available: {screening_data.get('buyout')})
-    - Tech Skills Exp: {screening_data.get('tech_exp')}
-    - Project Brief: {screening_data.get('projects')}
-    - Roles & Resp: {screening_data.get('roles')}
-    
-    Output strictly JSON:
-    {{
-        "screening_score": 0-100,
-        "recommendation": "Shortlist" or "Reject" or "Hold",
-        "reasoning": "Brief explanation of the score based on salary fit, notice period, and technical depth."
-    }}
-    """
-    try:
-        response = client.chat.completions.create(
-            model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}], temperature=0.2
-        )
-        content = response.choices[0].message.content
-        match = re.search(r'\{.*\}', content, re.DOTALL)
-        return json.loads(match.group(0)) if match else {"screening_score": 0, "recommendation": "Error", "reasoning": "LLM Parsing Failed"}
-    except:
-        return {"screening_score": 0, "recommendation": "Error", "reasoning": "LLM API Error"}
 
 # -------------------------
 # MAIN DASHBOARD FUNCTION
@@ -136,7 +109,7 @@ def hiring_dashboard(go_to_func):
     
     with col_title:
         st.title("🏢 Hiring Company Dashboard")
-        st.caption("Manage JDs, CVs, Screening, and Hiring Analytics.")
+        st.caption("Manage Job Descriptions, candidate CVs, and track hiring metrics.")
 
     with nav_col:
         if st.button("🚪 Log Out", use_container_width=True, key="hiring_logout_btn"):
@@ -147,20 +120,26 @@ def hiring_dashboard(go_to_func):
     
     st.markdown("---")
 
-    # --- Safety Initialization ---
-    if 'admin_jd_list' not in st.session_state: st.session_state.admin_jd_list = []
-    if 'company_cv_bank' not in st.session_state: st.session_state.company_cv_bank = []
-    if 'match_results_cache' not in st.session_state: st.session_state.match_results_cache = []
-    if 'screened_candidates' not in st.session_state: st.session_state.screened_candidates = [] # Stores screening results
+    # --- Safety Initialization of Shared Session States ---
+    if 'admin_jd_list' not in st.session_state: 
+        st.session_state.admin_jd_list = []
+    if 'resume_statuses' not in st.session_state: 
+        st.session_state.resume_statuses = {}
+    if 'company_cv_bank' not in st.session_state:
+        st.session_state.company_cv_bank = []
+    if 'match_results_cache' not in st.session_state:
+        st.session_state.match_results_cache = {}
+    if 'screening_data' not in st.session_state:
+        st.session_state.screening_data = []
 
     # --- Dashboard Tabs ---
     tab_jd_mgmt, tab_upload_cvs, tab_explore_cv, tab_specific_jd, tab_screening, tab_stats = st.tabs([
         "📄 JD Management", 
         "📁 Upload the CVs", 
         "🔍 Explore CV",
-        "🎯 For Specific JD",
-        "🕵️ Screen & Schedule", # NEW TAB
-        "📊 Analytics"
+        "🎯 For Specific JD", 
+        "📋 Basic Screening", # NEW TAB
+        "📊 Hiring Analytics"
     ])
 
     # --- TAB 1: JD Management ---
@@ -172,24 +151,30 @@ def hiring_dashboard(go_to_func):
             st.subheader("Create New Job Description")
             method = st.selectbox("Choose Method", ["Upload Doc", "From Linkedin", "Paste Content", "AI Assisted Form Based"])
             
+            # Method 1: Upload Doc
             if method == "Upload Doc":
                 uploaded_file = st.file_uploader("Upload JD (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"])
                 if st.button("Process & Save Document"):
                     if uploaded_file:
-                        content = get_file_content(uploaded_file)
-                        meta = extract_jd_metadata(content)
-                        st.session_state.admin_jd_list.append({
-                            "name": meta.get("role", uploaded_file.name),
-                            "content": content,
-                            "job_type": meta.get("job_type", "Full-time"),
-                            "date_posted": date.today().strftime("%Y-%m-%d")
-                        })
-                        st.success("JD saved!")
+                        with st.spinner("Extracting content..."):
+                            content = get_file_content(uploaded_file)
+                            meta = extract_jd_metadata(content)
+                            st.session_state.admin_jd_list.append({
+                                "name": meta.get("role", uploaded_file.name),
+                                "content": content,
+                                "job_type": meta.get("job_type", "Full-time"),
+                                "date_posted": date.today().strftime("%Y-%m-%d")
+                            })
+                            st.success("JD uploaded and processed successfully!")
+                    else:
+                        st.error("Please upload a file.")
 
+            # Method 2: From Linkedin
             elif method == "From Linkedin":
                 url = st.text_input("Paste Linkedin Job URL")
                 if st.button("Import from Linkedin"):
                     if "linkedin.com/jobs" in url:
+                        st.info("Simulating Linkedin extraction...")
                         content = f"Job imported from {url}. Required: Experience in Python and SQL."
                         st.session_state.admin_jd_list.append({
                             "name": "Linkedin Role",
@@ -198,278 +183,352 @@ def hiring_dashboard(go_to_func):
                             "date_posted": date.today().strftime("%Y-%m-%d")
                         })
                         st.success("Linkedin JD imported!")
+                    else:
+                        st.error("Invalid URL format.")
 
+            # Method 3: Paste Content
             elif method == "Paste Content":
                 role_input = st.text_input("Role Title")
                 content_input = st.text_area("Paste JD Text", height=250)
                 if st.button("Save Pasted JD"):
-                    st.session_state.admin_jd_list.append({
-                        "name": role_input,
-                        "content": content_input,
-                        "job_type": "Full-time",
-                        "date_posted": date.today().strftime("%Y-%m-%d")
-                    })
-                    st.success("JD saved!")
+                    if role_input and content_input:
+                        st.session_state.admin_jd_list.append({
+                            "name": role_input,
+                            "content": content_input,
+                            "job_type": "Full-time",
+                            "date_posted": date.today().strftime("%Y-%m-%d")
+                        })
+                        st.success("JD saved!")
+                    else:
+                        st.error("Fields cannot be empty.")
 
+            # Method 4: AI Assisted Form Based
             elif method == "AI Assisted Form Based":
                 with st.form("ai_form"):
                     role_f = st.text_input("Target Role")
                     exp_f = st.slider("Min Experience (Years)", 0, 15, 2)
                     skills_f = st.text_input("Required Skills (comma separated)")
                     mission_f = st.text_area("Company Mission/Context")
-                    if st.form_submit_button("Generate & Save"):
-                        with st.spinner("Generating..."):
-                            prompt = f"Create a JD for {role_f}, {exp_f}yrs exp, Skills: {skills_f}. Context: {mission_f}"
+                    
+                    if st.form_submit_button("✨ Generate & Save with AI"):
+                        with st.spinner("Generating detailed JD..."):
+                            prompt = f"Create a professional JD for {role_f} with {exp_f} years exp. Skills: {skills_f}. Context: {mission_f}"
                             res = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
+                            ai_content = res.choices[0].message.content
                             st.session_state.admin_jd_list.append({
                                 "name": role_f,
-                                "content": res.choices[0].message.content,
+                                "content": ai_content,
                                 "job_type": "Full-time",
                                 "date_posted": date.today().strftime("%Y-%m-%d")
                             })
-                            st.success("AI JD Saved!")
+                            st.success("AI JD Generated and Saved!")
 
         with view_tab:
-            if not st.session_state.admin_jd_list: st.info("No active JDs.")
-            for i, jd in enumerate(st.session_state.admin_jd_list):
-                with st.container(border=True):
-                    c1, c2 = st.columns([5, 1])
-                    c1.subheader(jd['name'])
-                    if c2.button("🗑️", key=f"del_{i}"):
-                        st.session_state.admin_jd_list.pop(i)
-                        st.rerun()
-                    with st.expander("View"): st.write(jd['content'])
+            if not st.session_state.admin_jd_list:
+                st.info("No active JDs.")
+            else:
+                for i, jd in enumerate(st.session_state.admin_jd_list):
+                    with st.container(border=True):
+                        c1, c2 = st.columns([5, 1])
+                        c1.subheader(jd['name'])
+                        c1.caption(f"Posted: {jd.get('date_posted')} | Type: {jd.get('job_type')}")
+                        if c2.button("🗑️", key=f"del_{i}"):
+                            st.session_state.admin_jd_list.pop(i)
+                            st.rerun()
+                        with st.expander("Show Full Description"):
+                            st.write(jd['content'])
 
     # --- TAB 2: Upload the CVs ---
     with tab_upload_cvs:
         st.header("Candidate CV Management")
-        cv_ind, cv_bulk, cv_bank = st.tabs(["👤 Individual", "📚 Bulk", "💾 Digital CV Bank"])
+        cv_ind_tab, cv_bulk_tab, cv_bank_tab = st.tabs(["👤 Individual", "📚 Bulk", "💾 Digital CV Bank"])
         
-        with cv_ind:
-            ind_file = st.file_uploader("Select CV", type=["pdf", "docx", "txt"], key="ind_cv")
-            if st.button("Upload CV", key="btn_ind"):
+        # Individual Upload
+        with cv_ind_tab:
+            st.subheader("Upload a Single Candidate CV")
+            ind_file = st.file_uploader("Select Candidate CV (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"], key="ind_cv_upload")
+            if st.button("Upload & Save CV", key="btn_ind_cv"):
                 if ind_file:
-                    content = get_file_content(ind_file)
-                    st.session_state.company_cv_bank.append({
-                        "File Name": ind_file.name, "Content": content, "Upload Type": "Individual", 
-                        "Date Uploaded": date.today().strftime("%Y-%m-%d")
-                    })
-                    st.success("Uploaded!")
-
-        with cv_bulk:
-            bulk_files = st.file_uploader("Select Multiple CVs", type=["pdf", "docx", "txt"], accept_multiple_files=True, key="bulk_cv")
-            if st.button("Upload All", key="btn_bulk"):
-                if bulk_files:
-                    for f in bulk_files:
-                        content = get_file_content(f)
+                    with st.spinner("Processing CV..."):
+                        content = get_file_content(ind_file)
                         st.session_state.company_cv_bank.append({
-                            "File Name": f.name, "Content": content, "Upload Type": "Bulk", 
-                            "Date Uploaded": date.today().strftime("%Y-%m-%d")
+                            "File Name": ind_file.name,
+                            "Content Length": len(content),
+                            "Upload Type": "Individual",
+                            "Date Uploaded": date.today().strftime("%Y-%m-%d"),
+                            "Content": content
                         })
-                    st.success(f"{len(bulk_files)} CVs Uploaded!")
+                        st.success(f"CV '{ind_file.name}' successfully added to the Digital Bank!")
+                else:
+                    st.error("Please choose a file to upload.")
 
-        with cv_bank:
-            if st.session_state.company_cv_bank:
-                st.dataframe(pd.DataFrame(st.session_state.company_cv_bank)[["File Name", "Date Uploaded"]], use_container_width=True)
-                if st.button("Clear Bank"):
+        # Bulk Upload
+        with cv_bulk_tab:
+            st.subheader("Bulk Upload Candidate CVs")
+            bulk_files = st.file_uploader("Select Multiple CVs (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"], accept_multiple_files=True, key="bulk_cv_upload")
+            if st.button("Upload & Save All CVs", key="btn_bulk_cv"):
+                if bulk_files:
+                    with st.spinner(f"Processing {len(bulk_files)} CVs..."):
+                        for file in bulk_files:
+                            content = get_file_content(file)
+                            st.session_state.company_cv_bank.append({
+                                "File Name": file.name,
+                                "Content Length": len(content),
+                                "Upload Type": "Bulk",
+                                "Date Uploaded": date.today().strftime("%Y-%m-%d"),
+                                "Content": content
+                            })
+                        st.success(f"Successfully added {len(bulk_files)} CVs to the Digital Bank!")
+                else:
+                    st.error("Please select at least one file to upload.")
+
+        # Digital CV Bank
+        with cv_bank_tab:
+            st.subheader("Digital CV Bank")
+            if not st.session_state.company_cv_bank:
+                st.info("Your Digital CV Bank is currently empty.")
+            else:
+                cv_df = pd.DataFrame(st.session_state.company_cv_bank)
+                st.dataframe(cv_df[["File Name", "Upload Type", "Date Uploaded"]], use_container_width=True)
+                if st.button("🗑️ Clear Digital CV Bank", type="secondary"):
                     st.session_state.company_cv_bank = []
                     st.rerun()
-            else: st.info("Empty Bank.")
 
     # --- TAB 3: Explore CV ---
     with tab_explore_cv:
-        st.header("Explore CVs")
+        st.header("Explore & Analyze CVs")
         if not st.session_state.company_cv_bank:
-            st.warning("Upload CVs first.")
+            st.warning("Please upload CVs in the 'Upload the CVs' tab to use these features.")
         else:
-            exp_tabs = st.tabs(["Filter", "LLM", "Query", "Organize", "Summarise"])
-            with exp_tabs[0]:
-                kw = st.text_input("Keyword Search")
-                if st.button("Filter"):
-                    res = [cv for cv in st.session_state.company_cv_bank if kw.lower() in cv.get('Content','').lower()]
-                    st.write(f"Found {len(res)}")
-                    if res: st.dataframe(pd.DataFrame(res)[["File Name", "Date Uploaded"]])
-            
-            with exp_tabs[4]: # Summarise
-                cv_sel = st.selectbox("Select CV", [cv['File Name'] for cv in st.session_state.company_cv_bank])
-                if st.button("Summarize"):
-                    target = next(c for c in st.session_state.company_cv_bank if c['File Name'] == cv_sel)
-                    res = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role":"user", "content": f"Summarize:\n{target['Content'][:3000]}"}])
-                    st.write(res.choices[0].message.content)
+            explore_filter, explore_llm, explore_query, explore_organize, explore_summarise = st.tabs([
+                "🔍 Filter CVs by", "🧠 LLM Analysis", "❓ Query Inform", "📁 Organize CV", "📝 Summarise CV"
+            ])
+
+            with explore_filter:
+                filter_keyword = st.text_input("Search by Keyword", key="filter_kw")
+                filter_type = st.multiselect("Filter by Upload Type", ["Individual", "Bulk"], default=["Individual", "Bulk"])
+                if st.button("Apply Filters", key="btn_apply_filter"):
+                    filtered_cvs = [cv for cv in st.session_state.company_cv_bank 
+                                    if cv['Upload Type'] in filter_type and 
+                                    (not filter_keyword or filter_keyword.lower() in str(cv.get('Content', '')).lower())]
+                    st.write(f"Found {len(filtered_cvs)} matching CV(s).")
+                    if filtered_cvs:
+                        st.dataframe(pd.DataFrame(filtered_cvs)[["File Name", "Upload Type", "Date Uploaded"]], use_container_width=True)
+
+            with explore_llm:
+                llm_prompt = st.text_area("Custom AI Prompt", placeholder="e.g., Which candidates have leadership experience?")
+                if st.button("Run Global Analysis", key="btn_llm_run"):
+                    if llm_prompt:
+                        with st.spinner("AI is reviewing the CV Bank..."):
+                            try:
+                                bank_context = [{"File": cv['File Name'], "Content": str(cv.get('Content', ''))[:1000]} for cv in st.session_state.company_cv_bank]
+                                prompt = f"CV Data:\n{json.dumps(bank_context)}\n\nQuery: {llm_prompt}"
+                                res = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
+                                st.write(res.choices[0].message.content)
+                            except Exception as e:
+                                st.error(f"LLM Error: {e}")
+
+            with explore_query:
+                query_target = st.radio("Target Selection", ["Individual CV", "Bulk (All CVs)"], horizontal=True)
+                selected_cv_name = None
+                if query_target == "Individual CV":
+                    cv_names = [cv['File Name'] for cv in st.session_state.company_cv_bank]
+                    selected_cv_name = st.selectbox("Select CV to query", cv_names, key="query_cv_select")
+                query_text = st.text_input("Question:", placeholder="e.g., Degree details?")
+                if st.button("Run Query", key="btn_run_query"):
+                    if query_text:
+                        with st.spinner("Querying..."):
+                            try:
+                                if query_target == "Individual CV" and selected_cv_name:
+                                    target_cv = next(cv for cv in st.session_state.company_cv_bank if cv['File Name'] == selected_cv_name)
+                                    context = target_cv.get('Content', 'No content')
+                                else:
+                                    context = json.dumps([{"File": cv['File Name'], "Content": str(cv.get('Content', ''))[:500]} for cv in st.session_state.company_cv_bank])
+                                prompt = f"Context:\n{context}\n\nAnswer: {query_text}"
+                                res = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
+                                st.info(res.choices[0].message.content)
+                            except Exception as e:
+                                st.error(f"Error: {e}")
+
+            with explore_organize:
+                sort_by = st.selectbox("Sort CVs By", ["Date Uploaded (Newest First)", "Date Uploaded (Oldest First)", "File Name (A-Z)"])
+                cv_list = st.session_state.company_cv_bank.copy()
+                if sort_by == "Date Uploaded (Newest First)": cv_list.sort(key=lambda x: x['Date Uploaded'], reverse=True)
+                elif sort_by == "Date Uploaded (Oldest First)": cv_list.sort(key=lambda x: x['Date Uploaded'])
+                elif sort_by == "File Name (A-Z)": cv_list.sort(key=lambda x: x['File Name'])
+                st.dataframe(pd.DataFrame(cv_list)[["File Name", "Upload Type", "Date Uploaded"]], use_container_width=True)
+
+            with explore_summarise:
+                cv_options = [cv['File Name'] for cv in st.session_state.company_cv_bank]
+                cv_to_summarise = st.selectbox("Select CV to Summarize", cv_options, key="summarise_cv_select")
+                if st.button("Generate Summary", key="btn_gen_summary"):
+                    if cv_to_summarise:
+                        with st.spinner("Generating summary..."):
+                            target_cv = next(cv for cv in st.session_state.company_cv_bank if cv['File Name'] == cv_to_summarise)
+                            prompt = f"Summarize this CV in 4 bullet points:\n\n{target_cv.get('Content', '')}"
+                            res = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
+                            st.write(res.choices[0].message.content)
 
     # --- TAB 4: For Specific JD ---
     with tab_specific_jd:
-        st.header("Match CVs to JD")
-        if not st.session_state.company_cv_bank or not st.session_state.admin_jd_list:
-            st.warning("Need both CVs and JDs.")
+        st.header("🎯 Match CVs Against Specific JD")
+        if not st.session_state.company_cv_bank:
+            st.warning("Please upload CVs in the 'Upload the CVs' tab first.")
+        elif not st.session_state.admin_jd_list:
+            st.warning("Please create Job Descriptions in the 'JD Management' tab first.")
         else:
-            jd_sel = st.selectbox("Select JD", [jd['name'] for jd in st.session_state.admin_jd_list])
-            sel_jd_ content = next(jd['content'] for jd in st.session_state.admin_jd_list if jd['name'] == jd_sel)
+            jd_names = [jd['name'] for jd in st.session_state.admin_jd_list]
+            selected_jd_name = st.selectbox("Select Active Job Description", jd_names, key="match_jd_select")
+            selected_jd = next((jd for jd in st.session_state.admin_jd_list if jd['name'] == selected_jd_name), None)
             
-            if st.button("🚀 Match & Rank"):
-                results = []
-                prog = st.progress(0)
-                for i, cv in enumerate(st.session_state.company_cv_bank):
-                    anl = evaluate_cv_against_jd_swot(cv.get('Content',''), sel_jd_content)
-                    if "error" not in anl:
-                        results.append({
-                            "Name": anl.get('contact_info',{}).get('name','Unknown'),
-                            "Email": anl.get('contact_info',{}).get('email','N/A'),
-                            "Phone": anl.get('contact_info',{}).get('phone','N/A'),
-                            "Match Score": anl.get('match_score', 0),
-                            "Summary": anl.get('summary',''),
-                            "SWOT": anl.get('swot',{}),
-                            "CV Link": f"https://drive.google.com/search?q={cv['File Name']}" # Mock Link
-                        })
-                    prog.progress((i+1)/len(st.session_state.company_cv_bank))
-                
-                results.sort(key=lambda x: x['Match Score'], reverse=True)
-                st.session_state.match_results_cache = results
-                st.success("Done!")
+            if selected_jd:
+                with st.expander("View Selected JD Content"):
+                    st.text(selected_jd['content'])
 
-            if st.session_state.match_results_cache:
-                df = pd.DataFrame(st.session_state.match_results_cache)
-                st.dataframe(df[["Name", "Match Score", "Email", "Summary"]], use_container_width=True)
-                
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Download Results CSV", csv, "matches.csv", "text/csv")
+                if st.button("🚀 Analyze & Rank CVs", type="primary"):
+                    match_results = []
+                    progress_bar = st.progress(0)
+                    total_cvs = len(st.session_state.company_cv_bank)
 
-                for r in st.session_state.match_results_cache:
-                    with st.expander(f"{r['Match Score']}% - {r['Name']}"):
-                        st.write(f"**Strengths:** {', '.join(r['SWOT'].get('strengths',[]))}")
-                        st.write(f"**Weaknesses:** {', '.join(r['SWOT'].get('weaknesses',[]))}")
-
-    # --- TAB 5: Screen & Schedule (NEW) ---
-    with tab_screening:
-        st.header("🕵️ Screening & Scheduling")
-        
-        screen_ conduct, screen_manage, screen_export = st.tabs(["Conduct Screening", "Rank & Schedule", "Export Data"])
-        
-        # 1. Conduct Screening Form
-        with screen_ conduct:
-            if not st.session_state.company_cv_bank:
-                st.warning("Upload CVs to start screening.")
-            else:
-                col_sel_cand, col_sel_jd = st.columns(2)
-                with col_sel_cand:
-                    cand_names = [cv['File Name'] for cv in st.session_state.company_cv_bank]
-                    target_cand_file = st.selectbox("Select Candidate", cand_names)
-                with col_sel_jd:
-                    jd_opts = [jd['name'] for jd in st.session_state.admin_jd_list]
-                    target_jd_name = st.selectbox("Select Position (JD)", jd_opts) if jd_opts else None
-
-                st.markdown("### 📝 Profile & Basic Details")
-                with st.form("screening_form"):
-                    c1, c2, c3 = st.columns(3)
-                    with c1:
-                        curr_comp = st.text_input("Current Company")
-                        curr_ctc = st.text_input("Current Salary (CTC)")
-                    with c2:
-                        exp_ctc = st.text_input("Expected Salary")
-                        notice = st.selectbox("Notice Period", ["Immediate", "15 Days", "30 Days", "60 Days", "90 Days"])
-                    with c3:
-                        buyout = st.radio("Buyout Option Available?", ["Yes", "No"])
-                        loc_pref = st.text_input("Current & Pref. Location")
-
-                    st.markdown("### 🧠 Technical Quiz & Experience")
-                    tech_exp = st.text_area("Duration of experience in Key Skills (e.g. Python: 3y, AWS: 2y)")
-                    projects_brief = st.text_area("Brief on Key Projects Done (Type of projects)")
-                    roles_resp = st.text_area("Key Roles & Responsibilities across companies")
-                    achievements = st.text_area("Key Achievements")
-
-                    submitted = st.form_submit_button("Submit & Evaluate Candidate")
+                    for idx, cv in enumerate(st.session_state.company_cv_bank):
+                        progress_bar.progress((idx + 1) / total_cvs)
+                        analysis = evaluate_cv_against_jd_swot(cv.get('Content', ''), selected_jd.get('content', ''))
+                        
+                        if "error" not in analysis:
+                            match_results.append({
+                                "CV Name": cv['File Name'],
+                                "Match Score": analysis.get('match_score', 0),
+                                "Summary": analysis.get('summary', 'N/A'),
+                                "Email": analysis.get('contact_info', {}).get('email', 'N/A'),
+                                "Phone": analysis.get('contact_info', {}).get('phone', 'N/A'),
+                                "SWOT": analysis.get('swot', {}),
+                                "Name": analysis.get('contact_info', {}).get('name', 'N/A')
+                            })
                     
-                    if submitted and target_jd_name:
-                        # Find JD content
-                        jd_txt = next(j['content'] for j in st.session_state.admin_jd_list if j['name'] == target_jd_name)
-                        
-                        # Prepare data payload
-                        screen_payload = {
-                            "candidate_file": target_cand_file,
-                            "applied_for": target_jd_name,
-                            "curr_ctc": curr_ctc, "exp_ctc": exp_ctc, "notice": notice, "buyout": buyout,
-                            "tech_exp": tech_exp, "projects": projects_brief, "roles": roles_resp
+                    match_results.sort(key=lambda x: x['Match Score'], reverse=True)
+                    st.session_state.match_results_cache = match_results
+                    st.success("Analysis Complete!")
+
+                if st.session_state.get('match_results_cache'):
+                    st.divider()
+                    st.subheader(f"🏆 Ranking Results for: {selected_jd_name}")
+                    results = st.session_state.match_results_cache
+                    df_display = pd.DataFrame(results)[["Match Score", "Name", "CV Name", "Email", "Phone", "Summary"]]
+                    st.dataframe(df_display, use_container_width=True)
+
+                    csv = df_display.to_csv(index=False).encode('utf-8')
+                    st.download_button(label="📥 Download Contact List (CSV)", data=csv, file_name=f"Matches_{selected_jd_name}.csv", mime='text/csv')
+
+                    st.markdown("### 🧠 Deep Analysis: SWOT")
+                    for item in results:
+                        score_color = ":green" if item['Match Score'] > 75 else ":orange" if item['Match Score'] > 50 else ":red"
+                        with st.expander(f"{score_color}[{item['Match Score']}% Match] {item['Name']} ({item['CV Name']})"):
+                            swot = item.get('SWOT', {})
+                            c1, c2 = st.columns(2)
+                            with c1:
+                                st.markdown(":green[**Strengths**]")
+                                for s in swot.get('strengths', []): st.markdown(f"- {s}")
+                                st.markdown(":red[**Weaknesses**]")
+                                for w in swot.get('weaknesses', []): st.markdown(f"- {w}")
+                            with c2:
+                                st.markdown(":blue[**Opportunities**]")
+                                for o in swot.get('opportunities', []): st.markdown(f"- {o}")
+                                st.markdown(":orange[**Threats**]")
+                                for t in swot.get('threats', []): st.markdown(f"- {t}")
+
+    # --- TAB 5: Basic Screening (NEW) ---
+    with tab_screening:
+        st.header("Screen - Basic Screening")
+        st.markdown("Log initial screening details for candidates in your database.")
+
+        if not st.session_state.company_cv_bank:
+            st.info("No candidates available. Please upload CVs first.")
+        else:
+            col_sel, col_hist = st.columns([2, 1])
+            
+            with col_sel:
+                st.subheader("📝 Candidate Profile Details")
+                
+                # 1. Select Candidate
+                cv_names = [cv['File Name'] for cv in st.session_state.company_cv_bank]
+                selected_candidate_cv = st.selectbox("Select Candidate to Screen", cv_names, key="screen_candidate_select")
+                
+                with st.form("screening_form", clear_on_submit=True):
+                    # 2. Profile Details Form
+                    st.markdown("#### Employment & Compensation")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        current_company = st.text_input("Current Company")
+                        current_salary = st.text_input("Current Salary (CTC)", placeholder="e.g., 12 LPA")
+                    with c2:
+                        expected_salary = st.text_input("Expected Salary (ECTC)", placeholder="e.g., 15 LPA")
+                        notice_period = st.selectbox("Notice Period", ["Immediate", "15 Days", "30 Days", "60 Days", "90 Days", "Negotiable"])
+                    
+                    notice_buyout = st.radio("Notice Period Buyout Option Available?", ["Yes", "No"], horizontal=True)
+                    
+                    st.markdown("#### Location & Relocation")
+                    c3, c4 = st.columns(2)
+                    with c3:
+                        current_loc = st.text_input("Current Working Location")
+                    with c4:
+                        pref_loc = st.text_input("Preferred Job Location")
+                    
+                    # Logic note: We can't conditionally show the checkbox *inside* the form dynamically based on un-submitted input easily in Streamlit without reruns.
+                    # Instead, we just ask it or make it general.
+                    relocation_needed = st.checkbox("Candidate is willing to relocate (if applicable)")
+
+                    st.markdown("---")
+                    if st.form_submit_button("💾 Save Screening Details"):
+                        # Logic to save details
+                        entry = {
+                            "Candidate": selected_candidate_cv,
+                            "Company": current_company,
+                            "Current CTC": current_salary,
+                            "Expected CTC": expected_salary,
+                            "Notice Period": notice_period,
+                            "Buyout": notice_buyout,
+                            "Current Loc": current_loc,
+                            "Pref Loc": pref_loc,
+                            "Relocate": "Yes" if relocation_needed else "No",
+                            "Date Screened": date.today().strftime("%Y-%m-%d")
                         }
-                        
-                        with st.spinner("AI is evaluating screening responses..."):
-                            # Get Name/Email/Phone from CV Content using Regex or Mock
-                            target_cv_content = next(c['Content'] for c in st.session_state.company_cv_bank if c['File Name'] == target_cand_file)
-                            
-                            # Simple extraction for demo (In prod, use LLM or specific regex)
-                            name_match = re.search(r"Name:\s*(.*)", target_cv_content, re.IGNORECASE)
-                            cand_real_name = name_match.group(1) if name_match else target_cand_file.split('.')[0]
-                            
-                            # AI Evaluation
-                            eval_res = evaluate_screening_data(screen_payload, jd_txt)
-                            
-                            # Save result
-                            final_record = {
-                                "Name": cand_real_name,
-                                "Applied Role": target_jd_name,
-                                "Screening Score": eval_res.get('screening_score', 0),
-                                "Recommendation": eval_res.get('recommendation', 'N/A'),
-                                "Reasoning": eval_res.get('reasoning', ''),
-                                "Email": "extracted@example.com", # Placeholder
-                                "Phone": "+91 98765 43210", # Placeholder
-                                "CV Link": f"https://drive.google.com/file/d/{target_cand_file}", # Mock Drive Link
-                                "Profile Summary": f"Exp: {tech_exp[:50]}... | Notice: {notice}",
-                                "Status": "Screened"
-                            }
-                            st.session_state.screened_candidates.append(final_record)
-                            st.success(f"Candidate Evaluated! Score: {final_record['Screening Score']}/100 - {final_record['Recommendation']}")
+                        st.session_state.screening_data.append(entry)
+                        st.success(f"Screening details saved for {selected_candidate_cv}!")
 
-        # 2. Rank & Schedule
-        with screen_manage:
-            st.subheader("Manage Screened Candidates")
-            if not st.session_state.screened_candidates:
-                st.info("No candidates screened yet.")
-            else:
-                # Convert to DF for sorting/filtering
-                df_screen = pd.DataFrame(st.session_state.screened_candidates)
-                df_screen = df_screen.sort_values(by="Screening Score", ascending=False)
-                
-                # Display Interactive Table
-                st.dataframe(
-                    df_screen[["Name", "Applied Role", "Screening Score", "Recommendation", "Notice Period", "Expected Salary"]],
-                    use_container_width=True
-                )
-                
-                # Action Buttons for Top Candidate
-                st.markdown("### Actions")
-                c1, c2 = st.columns(2)
-                with c1:
-                    cand_to_action = st.selectbox("Select Candidate to Action", df_screen["Name"].unique())
-                
-                with c2:
-                    st.write("") # Spacer
-                    st.write("") 
-                    action_type = st.selectbox("Action Type", ["Schedule Tech Round", "Schedule F2F", "Schedule AI Interview"])
-                
-                if st.button(f"📅 Send Invite ({action_type})"):
-                    # Mock Agentic Action
-                    st.toast(f"✅ Agent Activated: Email sent to {cand_to_action} for {action_type}. Calendar blocked.")
-                    st.balloons()
+            with col_hist:
+                st.subheader("📋 Screened Candidates")
+                if st.session_state.screening_data:
+                    # Convert list of dicts to DataFrame for display
+                    screen_df = pd.DataFrame(st.session_state.screening_data)
+                    # Display a simplified view
+                    st.dataframe(
+                        screen_df[["Candidate", "Notice Period", "Expected CTC"]], 
+                        use_container_width=True,
+                        hide_index=True
+                    )
+                    
+                    with st.expander("View Full Screening Data"):
+                        st.dataframe(screen_df, use_container_width=True)
+                else:
+                    st.info("No candidates screened yet.")
 
-        # 3. Export Data
-        with screen_export:
-            st.subheader("Download Reports")
-            if st.session_state.screened_candidates:
-                df_export = pd.DataFrame(st.session_state.screened_candidates)
-                csv_data = df_export.to_csv(index=False).encode('utf-8')
-                
-                st.download_button(
-                    label="📥 Download Screened Candidates (CSV)",
-                    data=csv_data,
-                    file_name="Screened_Candidates_Report.csv",
-                    mime="text/csv"
-                )
-                st.write("Includes: Name, Contact, Match Score, Profile Brief, and Drive Links.")
-            else:
-                st.warning("No data to export.")
-
-    # --- TAB 6: Analytics ---
+    # --- TAB 6: Hiring Analytics ---
     with tab_stats:
-        st.header("Overview")
-        m1, m2 = st.columns(2)
-        m1.metric("CVs in Bank", len(st.session_state.company_cv_bank))
-        m2.metric("Candidates Screened", len(st.session_state.screened_candidates))
+        st.header("Hiring Metrics Overview")
+        # Existing stats logic
+        app_count = len(st.session_state.resume_statuses)
+        approved = sum(1 for s in st.session_state.resume_statuses.values() if s == "Approved")
+        shortlisted = sum(1 for s in st.session_state.resume_statuses.values() if s == "Shortlisted")
+        
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Live Vacancies", len(st.session_state.admin_jd_list))
+        m2.metric("CVs in Bank", len(st.session_state.company_cv_bank))
+        m3.metric("Screened Profiles", len(st.session_state.screening_data))
+        m4.metric("Approved Candidates", approved)
+        
+        st.markdown("---")
+        if st.session_state.resume_statuses:
+            df = pd.DataFrame(list(st.session_state.resume_statuses.items()), columns=["Candidate", "Status"])
+            st.bar_chart(df['Status'].value_counts())
+        else:
+            st.info("Awaiting candidate applications.")
