@@ -149,6 +149,17 @@ def hiring_dashboard(go_to_func):
     if 'screening_data' not in st.session_state: 
         st.session_state.screening_data = []
 
+    # 🔴 FIX: Initialize Screening Form Keys to avoid StreamlitAPIException
+    screening_keys = [
+        "scr_name", "scr_email", "scr_phone", "scr_company", 
+        "scr_curr_ctc", "scr_exp_ctc", "scr_notice", "scr_buyout", 
+        "scr_curr_loc", "scr_job_loc", "scr_tech_skills", "scr_exp_dur", 
+        "scr_proj_brief", "scr_roles_resp", "scr_achievements", "scr_relocate", "scr_ai_score"
+    ]
+    for key in screening_keys:
+        if key not in st.session_state:
+            st.session_state[key] = "" if "score" not in key else 0
+
     # --- Dashboard Tabs ---
     tab_jd_mgmt, tab_upload_cvs, tab_explore_cv, tab_specific_jd, tab_screening, tab_stats = st.tabs([
         "📄 JD Management", 
@@ -168,7 +179,6 @@ def hiring_dashboard(go_to_func):
             st.subheader("Create New Job Description")
             method = st.selectbox("Choose Method", ["Upload Doc", "From Linkedin", "Paste Content", "AI Assisted Form Based"])
             
-            # --- Method 1: Upload Doc ---
             if method == "Upload Doc":
                 uploaded_file = st.file_uploader("Upload JD (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"])
                 if st.button("Process & Save Document"):
@@ -186,7 +196,6 @@ def hiring_dashboard(go_to_func):
                     else:
                         st.error("Please upload a file.")
 
-            # --- Method 2: From Linkedin ---
             elif method == "From Linkedin":
                 url = st.text_input("Paste Linkedin Job URL")
                 if st.button("Import from Linkedin"):
@@ -203,7 +212,6 @@ def hiring_dashboard(go_to_func):
                     else:
                         st.error("Invalid URL format.")
 
-            # --- Method 3: Paste Content ---
             elif method == "Paste Content":
                 role_input = st.text_input("Role Title")
                 content_input = st.text_area("Paste JD Text", height=250)
@@ -219,7 +227,6 @@ def hiring_dashboard(go_to_func):
                     else:
                         st.error("Fields cannot be empty.")
 
-            # --- Method 4: AI Assisted Form Based ---
             elif method == "AI Assisted Form Based":
                 with st.form("ai_form"):
                     role_f = st.text_input("Target Role")
@@ -477,7 +484,7 @@ def hiring_dashboard(go_to_func):
         screen_tab_info, screen_tab_quiz, screen_tab_schedule = st.tabs([
             "📋 Basic Info", 
             "📝 Tech & Roles Quiz",
-            "🗓️ Schedule & Evaluate" # NEW Sub-Tab
+            "🗓️ Schedule & Evaluate" 
         ])
 
         # --- Subtab 1: Basic Info ---
@@ -485,40 +492,42 @@ def hiring_dashboard(go_to_func):
             with st.container(border=True):
                 st.subheader("Candidate Details")
                 c1, c2, c3 = st.columns(3)
-                with c1: st.session_state.scr_name = st.text_input("Candidate Name", key="scr_name")
-                with c2: st.session_state.scr_email = st.text_input("Email ID", key="scr_email")
-                with c3: st.session_state.scr_phone = st.text_input("Phone Number", key="scr_phone")
+                # We use st.text_input directly. Streamlit updates the session state automatically.
+                st.text_input("Candidate Name", key="scr_name")
+                st.text_input("Email ID", key="scr_email")
+                st.text_input("Phone Number", key="scr_phone")
 
                 st.subheader("Employment Details")
                 c4, c5, c6 = st.columns(3)
-                with c4: st.session_state.scr_company = st.text_input("Current Company", key="scr_company")
-                with c5: st.session_state.scr_curr_ctc = st.text_input("Current Salary (CTC)", key="scr_cur_ctc")
-                with c6: st.session_state.scr_exp_ctc = st.text_input("Expected Salary (CTC)", key="scr_exp_ctc")
+                st.text_input("Current Company", key="scr_company")
+                st.text_input("Current Salary (CTC)", key="scr_cur_ctc")
+                st.text_input("Expected Salary (CTC)", key="scr_exp_ctc")
 
                 st.subheader("Notice & Location")
                 c7, c8 = st.columns(2)
-                with c7: st.session_state.scr_notice = st.selectbox("Notice Period", ["Immediate", "15 Days", "30 Days", "60 Days", "90 Days"], key="scr_notice")
-                with c8: st.session_state.scr_buyout = st.radio("Notice Buyout Option?", ["Yes", "No", "Negotiable"], horizontal=True, key="scr_buyout")
+                st.selectbox("Notice Period", ["Immediate", "15 Days", "30 Days", "60 Days", "90 Days", "Serving Notice"], key="scr_notice")
+                st.radio("Notice Buyout Option?", ["Yes", "No", "Negotiable"], horizontal=True, key="scr_buyout")
 
                 c9, c10 = st.columns(2)
-                with c9: st.session_state.scr_curr_loc = st.text_input("Current Working Location", key="scr_cur_loc")
-                with c10: st.session_state.scr_job_loc = st.text_input("Job Location", key="scr_job_loc")
+                st.text_input("Current Working Location", key="scr_cur_loc")
+                st.text_input("Job Location", key="scr_job_loc")
 
-                st.session_state.scr_relocate = "N/A"
                 if st.session_state.scr_curr_loc and st.session_state.scr_job_loc:
                     if st.session_state.scr_curr_loc.lower() != st.session_state.scr_job_loc.lower():
                         st.warning("Location Mismatch")
-                        st.session_state.scr_relocate = st.radio("Relocate?", ["Yes", "No"], horizontal=True, key="scr_relocate")
+                        st.radio("Relocate?", ["Yes", "No"], horizontal=True, key="scr_relocate")
+                    else:
+                        st.session_state.scr_relocate = "N/A"
 
         # --- Subtab 2: Tech Quiz ---
         with screen_tab_quiz:
             with st.container(border=True):
                 st.subheader("Technical & Role Assessment")
-                st.session_state.scr_tech_skills = st.text_area("Tech Skills", placeholder="e.g., Python, AWS", key="scr_tech_skills")
-                st.session_state.scr_exp_dur = st.text_input("Key Skill Duration", placeholder="e.g., 5 yrs Python", key="scr_exp_dur")
-                st.session_state.scr_proj_brief = st.text_area("Project Brief", height=100, key="scr_proj_brief")
-                st.session_state.scr_roles_resp = st.text_area("Roles & Responsibilities", height=100, key="scr_roles_resp")
-                st.session_state.scr_achievements = st.text_area("Achievements", height=100, key="scr_achievements")
+                st.text_area("Tech Skills", placeholder="e.g., Python, AWS", key="scr_tech_skills")
+                st.text_input("Key Skill Duration", placeholder="e.g., 5 yrs Python", key="scr_exp_dur")
+                st.text_area("Project Brief", height=100, key="scr_proj_brief")
+                st.text_area("Roles & Responsibilities", height=100, key="scr_roles_resp")
+                st.text_area("Achievements", height=100, key="scr_achievements")
 
         # --- Subtab 3: Schedule & Evaluate (NEW) ---
         with screen_tab_schedule:
