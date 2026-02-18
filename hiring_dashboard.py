@@ -151,13 +151,14 @@ def hiring_dashboard(go_to_func):
 
     # Initialize Screening Form Keys and Status
     if 'scr_status' not in st.session_state:
-        st.session_state.scr_status = "Pending" # Pending, Approved, Rejected
+        st.session_state.scr_status = "Pending" 
 
     screening_keys = [
         "scr_name", "scr_email", "scr_phone", "scr_company", 
         "scr_curr_ctc", "scr_exp_ctc", "scr_notice", "scr_buyout", 
         "scr_curr_loc", "scr_job_loc", "scr_tech_skills", "scr_exp_dur", 
-        "scr_proj_brief", "scr_roles_resp", "scr_achievements", "scr_relocate", "scr_ai_score"
+        "scr_proj_brief", "scr_roles_resp", "scr_achievements", "scr_relocate", "scr_ai_score",
+        "scr_applied_jd" # Added for tracking
     ]
     for key in screening_keys:
         if key not in st.session_state:
@@ -276,11 +277,9 @@ def hiring_dashboard(go_to_func):
         st.header("Candidate CV Management")
         cv_ind_tab, cv_bulk_tab, cv_bank_tab = st.tabs(["👤 Individual", "📚 Bulk", "💾 Digital CV Bank"])
         
-        # --- Individual Upload ---
         with cv_ind_tab:
             st.subheader("Upload a Single Candidate CV")
             ind_file = st.file_uploader("Select Candidate CV (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"], key="ind_cv_upload")
-            
             if st.button("Upload & Save CV", key="btn_ind_cv"):
                 if ind_file:
                     with st.spinner("Processing CV..."):
@@ -296,11 +295,9 @@ def hiring_dashboard(go_to_func):
                 else:
                     st.error("Please choose a file to upload.")
 
-        # --- Bulk Upload ---
         with cv_bulk_tab:
             st.subheader("Bulk Upload Candidate CVs")
             bulk_files = st.file_uploader("Select Multiple CVs (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"], accept_multiple_files=True, key="bulk_cv_upload")
-            
             if st.button("Upload & Save All CVs", key="btn_bulk_cv"):
                 if bulk_files:
                     with st.spinner(f"Processing {len(bulk_files)} CVs..."):
@@ -317,17 +314,14 @@ def hiring_dashboard(go_to_func):
                 else:
                     st.error("Please select at least one file to upload.")
 
-        # --- Digital CV Bank ---
         with cv_bank_tab:
             st.subheader("Digital CV Bank")
             st.markdown("Overview of all locally uploaded candidate resumes.")
-            
             if not st.session_state.company_cv_bank:
                 st.info("Your Digital CV Bank is currently empty. Upload CVs using the Individual or Bulk tabs.")
             else:
                 cv_df = pd.DataFrame(st.session_state.company_cv_bank)
                 st.dataframe(cv_df[["File Name", "Upload Type", "Date Uploaded"]], use_container_width=True)
-                
                 if st.button("🗑️ Clear Digital CV Bank", type="secondary"):
                     st.session_state.company_cv_bank = []
                     st.rerun()
@@ -335,8 +329,6 @@ def hiring_dashboard(go_to_func):
     # --- TAB 3: Explore CV ---
     with tab_explore_cv:
         st.header("Explore & Analyze CVs")
-        st.markdown("Use advanced tools to query, filter, and summarize your Digital CV Bank.")
-
         if not st.session_state.company_cv_bank:
             st.warning("Please upload CVs in the 'Upload the CVs' tab to use these features.")
         else:
@@ -348,7 +340,6 @@ def hiring_dashboard(go_to_func):
                 st.subheader("Filter CVs")
                 filter_keyword = st.text_input("Search by Keyword", key="filter_kw")
                 filter_type = st.multiselect("Filter by Upload Type", ["Individual", "Bulk"], default=["Individual", "Bulk"])
-                
                 if st.button("Apply Filters", key="btn_apply_filter"):
                     filtered_cvs = []
                     for cv in st.session_state.company_cv_bank:
@@ -420,8 +411,6 @@ def hiring_dashboard(go_to_func):
     # --- TAB 4: For Specific JD ---
     with tab_specific_jd:
         st.header("🎯 Match CVs Against Specific JD")
-        st.markdown("Select a job description to rank your CV bank, perform deep analysis, and export data.")
-
         if not st.session_state.company_cv_bank:
             st.warning("Please upload CVs in the 'Upload the CVs' tab first.")
         elif not st.session_state.admin_jd_list:
@@ -490,10 +479,11 @@ def hiring_dashboard(go_to_func):
         st.header("📞 Candidate Screening Workflow")
         st.markdown("Record screenings, assess responses, and schedule next steps.")
 
-        screen_tab_info, screen_tab_quiz, screen_tab_schedule = st.tabs([
+        screen_tab_info, screen_tab_quiz, screen_tab_schedule, screen_tab_track = st.tabs([
             "📋 Basic Info", 
             "📝 Tech & Roles Quiz",
-            "🗓️ Schedule & Evaluate" 
+            "🗓️ Schedule & Evaluate",
+            "📊 Candidate Profile Track" # NEW SUB-TAB
         ])
 
         # --- Subtab 1: Basic Info ---
@@ -502,6 +492,10 @@ def hiring_dashboard(go_to_func):
                 st.subheader("Candidate Details")
                 st.caption(f"Status: **{st.session_state.scr_status}**")
                 
+                # New JD Selection
+                jd_options = [jd['name'] for jd in st.session_state.admin_jd_list]
+                st.selectbox("Applying For (Select JD)", ["General Pool"] + jd_options, key="scr_applied_jd")
+
                 c1, c2, c3 = st.columns(3)
                 st.text_input("Candidate Name", key="scr_name")
                 st.text_input("Email ID", key="scr_email")
@@ -546,15 +540,14 @@ def hiring_dashboard(go_to_func):
                 if st.button("❌ Reject Candidate", use_container_width=True):
                     st.session_state.scr_status = "Rejected"
                     
-                    # Save Rejected Record
                     rec = {
                         "Name": st.session_state.scr_name, "Email": st.session_state.scr_email,
+                        "Applied JD": st.session_state.scr_applied_jd,
                         "Stage": "Screening", "Status": "Rejected", "Date": date.today().strftime("%Y-%m-%d")
                     }
                     st.session_state.screening_data.append(rec)
                     st.error(f"Candidate {st.session_state.scr_name} has been rejected.")
                     
-                    # Reset form for next
                     if st.button("Clear Form & Next Candidate"):
                         clear_screening_form()
                         st.rerun()
@@ -567,7 +560,7 @@ def hiring_dashboard(go_to_func):
                     else:
                         st.error("Please fill in basic Name/Email in Tab 1 first.")
 
-        # --- Subtab 3: Schedule & Evaluate (NEW) ---
+        # --- Subtab 3: Schedule & Evaluate ---
         with screen_tab_schedule:
             st.header("Schedule & Evaluate Candidate")
             
@@ -596,7 +589,6 @@ def hiring_dashboard(go_to_func):
                 # B. Evaluation & Ranking
                 st.subheader("🤖 AI Evaluation & Ranking")
                 if st.button("Run AI Score Analysis"):
-                    # Construct data packet for scoring
                     candidate_packet = {
                         "Notice Period": st.session_state.scr_notice,
                         "Tech Skills": st.session_state.scr_tech_skills,
@@ -613,19 +605,19 @@ def hiring_dashboard(go_to_func):
                 # C. Save & Dump to CSV
                 st.divider()
                 if st.button("💾 Save & Add to Master List", type="primary"):
-                    # Gather all data
                     full_record = {
                         "Name": st.session_state.scr_name,
                         "Email": st.session_state.scr_email,
                         "Phone": st.session_state.scr_phone,
+                        "Applied JD": st.session_state.scr_applied_jd,
                         "Company": st.session_state.scr_company,
                         "Notice Period": st.session_state.scr_notice,
                         "Current Loc": st.session_state.scr_curr_loc,
                         "Brief Profile": f"Exp in {st.session_state.scr_tech_skills}. {st.session_state.scr_exp_dur}",
                         "Match Score (AI)": st.session_state.get('scr_ai_score', 'N/A'),
-                        "CV Link": "https://drive.google.com/...", # Placeholder or link to uploaded file
+                        "CV Link": "https://drive.google.com/...", 
                         "Date": date.today().strftime("%Y-%m-%d"),
-                        "Status": "Tech Round Scheduled"
+                        "Status": "Tech Round Scheduled" # Initial status for tracking
                     }
                     st.session_state.screening_data.append(full_record)
                     st.success(f"Candidate {st.session_state.scr_name} added to Master List!")
@@ -634,20 +626,76 @@ def hiring_dashboard(go_to_func):
                         clear_screening_form()
                         st.rerun()
 
-            # D. Download Master List (Always Visible)
-            if st.session_state.screening_data:
+        # --- Subtab 4: Candidate Profile Track (NEW) ---
+        with screen_tab_track:
+            st.header("📊 Candidate Profile Tracker")
+            st.markdown("Track the progress of applied candidates through the hiring pipeline.")
+
+            if not st.session_state.screening_data:
+                st.info("No candidates in the tracking system yet. Complete a screening to add candidates.")
+            else:
+                # 1. Filter by JD
+                all_jds_in_data = list(set([d.get("Applied JD", "General Pool") for d in st.session_state.screening_data]))
+                selected_track_jd = st.selectbox("Select JD to Track", ["All JDs"] + all_jds_in_data)
+
+                # 2. Filter Data
+                track_data = st.session_state.screening_data
+                if selected_track_jd != "All JDs":
+                    track_data = [d for d in track_data if d.get("Applied JD") == selected_track_jd]
+
+                # 3. Status Pipeline
+                pipeline_stages = [
+                    "Applied", "Basic Screening", "Selected for 1st Round", 
+                    "Schedule AI Round (Tech)", "Schedule AI Round (HR)", 
+                    "Selected for Face to Face", "Rejected", "Offer Released"
+                ]
+
+                # 4. Display Candidates & Update Status
+                for idx, candidate in enumerate(track_data):
+                    with st.expander(f"{candidate['Name']} | Status: {candidate.get('Status', 'Applied')}"):
+                        c1, c2, c3 = st.columns([2, 2, 1])
+                        
+                        with c1:
+                            st.write(f"**Email:** {candidate['Email']}")
+                            st.write(f"**Phone:** {candidate['Phone']}")
+                            st.write(f"**Applied JD:** {candidate.get('Applied JD', 'N/A')}")
+                        
+                        with c2:
+                            st.write(f"**Brief Profile:** {candidate.get('Brief Profile', 'N/A')}")
+                            st.write(f"**Match Score:** {candidate.get('Match Score (AI)', 'N/A')}")
+                            st.markdown(f"[View CV Link]({candidate.get('CV Link', '#')})")
+
+                        with c3:
+                            current_status = candidate.get('Status', 'Applied')
+                            # Handle case where current status might not be in our predefined list
+                            try:
+                                default_idx = pipeline_stages.index(current_status)
+                            except ValueError:
+                                default_idx = 0
+                                
+                            new_status = st.selectbox(
+                                "Update Progress", 
+                                pipeline_stages, 
+                                index=default_idx, 
+                                key=f"status_update_{idx}"
+                            )
+                            
+                            if new_status != current_status:
+                                candidate['Status'] = new_status
+                                st.success(f"Updated to: {new_status}")
+                                st.rerun()
+
+                # 5. Master CSV Download (Contextual to this tab)
                 st.divider()
-                st.markdown("### 📥 Export Master Data")
-                df_master = pd.DataFrame(st.session_state.screening_data)
-                st.dataframe(df_master, use_container_width=True)
-                
-                csv_master = df_master.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="Download Master CSV (Contact & Scores)",
-                    data=csv_master,
-                    file_name="Master_Screening_List.csv",
-                    mime="text/csv"
-                )
+                if track_data:
+                    df_track = pd.DataFrame(track_data)
+                    csv_track = df_track.to_csv(index=False).encode('utf-8')
+                    st.download_button(
+                        label="📥 Download Tracked Candidates CSV",
+                        data=csv_track,
+                        file_name="Candidate_Tracking_Report.csv",
+                        mime="text/csv"
+                    )
 
     # --- TAB 6: Hiring Analytics ---
     with tab_stats:
