@@ -102,6 +102,7 @@ def score_screening_response(screening_record):
     1. Check if Notice Period is < 30 days or Buyout available (High Score).
     2. Check if Tech Skills are populated (High Score).
     3. Check if Relocation is 'Yes' or 'N/A' (High Score).
+    4. Check Video Confidence score if available.
     
     Return a single integer score from 0 to 100. Just the number.
     """
@@ -116,6 +117,19 @@ def score_screening_response(screening_record):
         return int(match.group(0)) if match else 50
     except:
         return 50
+
+def generate_video_question(skills):
+    """Generates a video screening question based on skills."""
+    prompt = f"Generate 1 concise, challenging video interview question for a candidate with these skills: {skills}. Just the question."
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7
+        )
+        return response.choices[0].message.content.strip()
+    except:
+        return "Tell us about a challenging project you worked on."
 
 # -------------------------
 # MAIN DASHBOARD FUNCTION
@@ -137,28 +151,27 @@ def hiring_dashboard(go_to_func):
     
     st.markdown("---")
 
-    # --- Safety Initialization of Shared Session States ---
-    if 'admin_jd_list' not in st.session_state: 
-        st.session_state.admin_jd_list = []
-    if 'resume_statuses' not in st.session_state: 
-        st.session_state.resume_statuses = {}
-    if 'company_cv_bank' not in st.session_state:
-        st.session_state.company_cv_bank = []
-    if 'match_results_cache' not in st.session_state:
-        st.session_state.match_results_cache = {}
-    if 'screening_data' not in st.session_state: 
-        st.session_state.screening_data = []
+    # --- Safety Initialization ---
+    if 'admin_jd_list' not in st.session_state: st.session_state.admin_jd_list = []
+    if 'resume_statuses' not in st.session_state: st.session_state.resume_statuses = {}
+    if 'company_cv_bank' not in st.session_state: st.session_state.company_cv_bank = []
+    if 'match_results_cache' not in st.session_state: st.session_state.match_results_cache = {}
+    if 'screening_data' not in st.session_state: st.session_state.screening_data = []
 
-    # 🔴 FIX: Initialize Screening Form Keys to avoid StreamlitAPIException
+    # Initialize Screening Form Keys
     screening_keys = [
         "scr_name", "scr_email", "scr_phone", "scr_company", 
         "scr_curr_ctc", "scr_exp_ctc", "scr_notice", "scr_buyout", 
         "scr_curr_loc", "scr_job_loc", "scr_tech_skills", "scr_exp_dur", 
-        "scr_proj_brief", "scr_roles_resp", "scr_achievements", "scr_relocate", "scr_ai_score"
+        "scr_proj_brief", "scr_roles_resp", "scr_achievements", "scr_relocate", "scr_ai_score",
+        "scr_video_conf", "scr_video_comm", "scr_video_notes" # New video keys
     ]
     for key in screening_keys:
         if key not in st.session_state:
-            st.session_state[key] = "" if "score" not in key else 0
+            st.session_state[key] = "" if "score" not in key and "conf" not in key and "comm" not in key else 0
+
+    if 'current_video_q' not in st.session_state:
+        st.session_state.current_video_q = "Tell us about yourself and your background."
 
     # --- Dashboard Tabs ---
     tab_jd_mgmt, tab_upload_cvs, tab_explore_cv, tab_specific_jd, tab_screening, tab_stats = st.tabs([
@@ -267,11 +280,9 @@ def hiring_dashboard(go_to_func):
         st.header("Candidate CV Management")
         cv_ind_tab, cv_bulk_tab, cv_bank_tab = st.tabs(["👤 Individual", "📚 Bulk", "💾 Digital CV Bank"])
         
-        # --- Individual Upload ---
         with cv_ind_tab:
             st.subheader("Upload a Single Candidate CV")
             ind_file = st.file_uploader("Select Candidate CV (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"], key="ind_cv_upload")
-            
             if st.button("Upload & Save CV", key="btn_ind_cv"):
                 if ind_file:
                     with st.spinner("Processing CV..."):
@@ -287,11 +298,9 @@ def hiring_dashboard(go_to_func):
                 else:
                     st.error("Please choose a file to upload.")
 
-        # --- Bulk Upload ---
         with cv_bulk_tab:
             st.subheader("Bulk Upload Candidate CVs")
             bulk_files = st.file_uploader("Select Multiple CVs (PDF, DOCX, TXT)", type=["pdf", "docx", "txt"], accept_multiple_files=True, key="bulk_cv_upload")
-            
             if st.button("Upload & Save All CVs", key="btn_bulk_cv"):
                 if bulk_files:
                     with st.spinner(f"Processing {len(bulk_files)} CVs..."):
@@ -308,17 +317,14 @@ def hiring_dashboard(go_to_func):
                 else:
                     st.error("Please select at least one file to upload.")
 
-        # --- Digital CV Bank ---
         with cv_bank_tab:
             st.subheader("Digital CV Bank")
             st.markdown("Overview of all locally uploaded candidate resumes.")
-            
             if not st.session_state.company_cv_bank:
                 st.info("Your Digital CV Bank is currently empty. Upload CVs using the Individual or Bulk tabs.")
             else:
                 cv_df = pd.DataFrame(st.session_state.company_cv_bank)
                 st.dataframe(cv_df[["File Name", "Upload Type", "Date Uploaded"]], use_container_width=True)
-                
                 if st.button("🗑️ Clear Digital CV Bank", type="secondary"):
                     st.session_state.company_cv_bank = []
                     st.rerun()
@@ -339,7 +345,6 @@ def hiring_dashboard(go_to_func):
                 st.subheader("Filter CVs")
                 filter_keyword = st.text_input("Search by Keyword", key="filter_kw")
                 filter_type = st.multiselect("Filter by Upload Type", ["Individual", "Bulk"], default=["Individual", "Bulk"])
-                
                 if st.button("Apply Filters", key="btn_apply_filter"):
                     filtered_cvs = []
                     for cv in st.session_state.company_cv_bank:
@@ -476,14 +481,15 @@ def hiring_dashboard(go_to_func):
                                 st.markdown(f":orange[**Threats**]")
                                 for t in swot.get('threats', []): st.markdown(f"- {t}")
 
-    # --- TAB 5: Basic Screening (UPDATED) ---
+    # --- TAB 5: Basic Screening (UPDATED with Video) ---
     with tab_screening:
         st.header("📞 Candidate Screening Workflow")
         st.markdown("Record screenings, assess responses, and schedule next steps.")
 
-        screen_tab_info, screen_tab_quiz, screen_tab_schedule = st.tabs([
+        screen_tab_info, screen_tab_quiz, screen_tab_video, screen_tab_schedule = st.tabs([
             "📋 Basic Info", 
             "📝 Tech & Roles Quiz",
+            "📹 Video Screening", # NEW SUB-TAB
             "🗓️ Schedule & Evaluate" 
         ])
 
@@ -492,7 +498,6 @@ def hiring_dashboard(go_to_func):
             with st.container(border=True):
                 st.subheader("Candidate Details")
                 c1, c2, c3 = st.columns(3)
-                # We use st.text_input directly. Streamlit updates the session state automatically.
                 st.text_input("Candidate Name", key="scr_name")
                 st.text_input("Email ID", key="scr_email")
                 st.text_input("Phone Number", key="scr_phone")
@@ -523,17 +528,46 @@ def hiring_dashboard(go_to_func):
         with screen_tab_quiz:
             with st.container(border=True):
                 st.subheader("Technical & Role Assessment")
-                st.text_area("Tech Skills", placeholder="e.g., Python, AWS", key="scr_tech_skills")
+                st.text_area("Tech Skills (Comma separated)", placeholder="e.g., Python, AWS", key="scr_tech_skills")
                 st.text_input("Key Skill Duration", placeholder="e.g., 5 yrs Python", key="scr_exp_dur")
                 st.text_area("Project Brief", height=100, key="scr_proj_brief")
                 st.text_area("Roles & Responsibilities", height=100, key="scr_roles_resp")
                 st.text_area("Achievements", height=100, key="scr_achievements")
 
-        # --- Subtab 3: Schedule & Evaluate (NEW) ---
+        # --- Subtab 3: Video Screening (NEW) ---
+        with screen_tab_video:
+            st.subheader("📹 Video Screening Interview")
+            st.info("Simulate a video screening environment. Interviewer can ask questions generated by AI.")
+            
+            v_col1, v_col2 = st.columns([1, 1])
+            
+            with v_col1:
+                st.markdown("#### 1. AI Question Generator")
+                if st.button("🎲 Generate Interview Question"):
+                    skills = st.session_state.scr_tech_skills if st.session_state.scr_tech_skills else "General Behavioral"
+                    with st.spinner("AI is thinking..."):
+                        q = generate_video_question(skills)
+                        st.session_state.current_video_q = q
+                
+                st.info(f"**Question:** {st.session_state.current_video_q}")
+                
+                st.markdown("#### 2. Interviewer Rating")
+                st.slider("Communication Skills (1-10)", 1, 10, 5, key="scr_video_comm")
+                st.slider("Confidence Level (1-10)", 1, 10, 5, key="scr_video_conf")
+                st.text_area("Interviewer Notes", height=100, placeholder="Observations...", key="scr_video_notes")
+
+            with v_col2:
+                st.markdown("#### 3. Live Video Feed (Simulation)")
+                # This creates a camera input widget. In a real app, this accesses the webcam.
+                # Here it serves as the interface for the interviewer to see the candidate/themselves.
+                img_file = st.camera_input("Candidate Camera Feed")
+                if img_file:
+                    st.success("Snapshot captured for record.")
+
+        # --- Subtab 4: Schedule & Evaluate ---
         with screen_tab_schedule:
             st.header("Schedule & Evaluate Candidate")
             
-            # A. Scheduling
             with st.expander("🗓️ Schedule Interview Round", expanded=True):
                 sch_col1, sch_col2 = st.columns(2)
                 with sch_col1:
@@ -546,7 +580,6 @@ def hiring_dashboard(go_to_func):
                 
                 if st.button("📧 Schedule & Send Invite (Agentic Action)"):
                     if st.session_state.scr_email:
-                        # Simulation of Agentic Tool
                         st.success(f"✅ Invite Sent to **{st.session_state.scr_name}** ({st.session_state.scr_email}) for **{round_type}** on {interview_date} at {interview_time}.")
                         st.info("📅 Event added to Calendar (Simulated).")
                     else:
@@ -554,16 +587,16 @@ def hiring_dashboard(go_to_func):
 
             st.divider()
 
-            # B. Evaluation & Ranking
             st.subheader("🤖 AI Evaluation & Ranking")
             if st.button("Run AI Score Analysis"):
                 if st.session_state.scr_name:
-                    # Construct data packet for scoring
                     candidate_packet = {
                         "Notice Period": st.session_state.scr_notice,
                         "Tech Skills": st.session_state.scr_tech_skills,
                         "Relocation": st.session_state.scr_relocate,
-                        "Roles": st.session_state.scr_roles_resp
+                        "Roles": st.session_state.scr_roles_resp,
+                        "Video Confidence": st.session_state.scr_video_conf,
+                        "Video Communication": st.session_state.scr_video_comm
                     }
                     
                     with st.spinner("AI is analyzing screening responses against expectations..."):
@@ -574,11 +607,9 @@ def hiring_dashboard(go_to_func):
                 else:
                     st.error("Please fill in candidate details first.")
 
-            # C. Save & Dump to CSV
             st.divider()
             if st.button("💾 Save & Add to Master List", type="primary"):
                 if st.session_state.scr_name and st.session_state.scr_email:
-                    # Gather all data
                     full_record = {
                         "Name": st.session_state.scr_name,
                         "Email": st.session_state.scr_email,
@@ -587,8 +618,9 @@ def hiring_dashboard(go_to_func):
                         "Notice Period": st.session_state.scr_notice,
                         "Current Loc": st.session_state.scr_curr_loc,
                         "Brief Profile": f"Exp in {st.session_state.scr_tech_skills}. {st.session_state.scr_exp_dur}",
+                        "Video Notes": st.session_state.scr_video_notes,
                         "Match Score (AI)": st.session_state.get('scr_ai_score', 'N/A'),
-                        "CV Link": "https://drive.google.com/...", # Placeholder or link to uploaded file
+                        "CV Link": "https://drive.google.com/...", 
                         "Date": date.today().strftime("%Y-%m-%d")
                     }
                     st.session_state.screening_data.append(full_record)
@@ -596,12 +628,10 @@ def hiring_dashboard(go_to_func):
                 else:
                     st.error("Missing basic candidate info.")
 
-            # D. Download Master List
             if st.session_state.screening_data:
                 st.markdown("### 📥 Export Master Data")
                 df_master = pd.DataFrame(st.session_state.screening_data)
                 st.dataframe(df_master, use_container_width=True)
-                
                 csv_master = df_master.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="Download Master CSV (Contact & Scores)",
