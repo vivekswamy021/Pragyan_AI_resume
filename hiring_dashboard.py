@@ -129,17 +129,16 @@ def hiring_dashboard(go_to_func):
         st.session_state.company_cv_bank = []
     if 'match_results_cache' not in st.session_state:
         st.session_state.match_results_cache = {}
-    if 'screening_data' not in st.session_state: # New state for screening records
+    if 'screening_data' not in st.session_state: 
         st.session_state.screening_data = []
 
     # --- Dashboard Tabs ---
-    # Added "📞 Basic Screening" next to "For Specific JD"
     tab_jd_mgmt, tab_upload_cvs, tab_explore_cv, tab_specific_jd, tab_screening, tab_stats = st.tabs([
         "📄 JD Management", 
         "📁 Upload the CVs", 
         "🔍 Explore CV",
         "🎯 For Specific JD", 
-        "📞 Basic Screening", # NEW TAB
+        "📞 Basic Screening", 
         "📊 Hiring Analytics"
     ])
 
@@ -176,7 +175,6 @@ def hiring_dashboard(go_to_func):
                 if st.button("Import from Linkedin"):
                     if "linkedin.com/jobs" in url:
                         st.info("Simulating Linkedin extraction...")
-                        # Mock extraction logic
                         content = f"Job imported from {url}. Required: Experience in Python and SQL."
                         st.session_state.admin_jd_list.append({
                             "name": "Linkedin Role",
@@ -396,7 +394,6 @@ def hiring_dashboard(go_to_func):
         elif not st.session_state.admin_jd_list:
             st.warning("Please create Job Descriptions in the 'JD Management' tab first.")
         else:
-            # 1. Select JD
             jd_names = [jd['name'] for jd in st.session_state.admin_jd_list]
             selected_jd_name = st.selectbox("Select Active Job Description", jd_names, key="match_jd_select")
             selected_jd = next((jd for jd in st.session_state.admin_jd_list if jd['name'] == selected_jd_name), None)
@@ -405,7 +402,6 @@ def hiring_dashboard(go_to_func):
                 with st.expander("View Selected JD Content"):
                     st.text(selected_jd['content'])
 
-                # 2. Run Matching Logic
                 if st.button("🚀 Analyze & Rank CVs", type="primary"):
                     match_results = []
                     progress_bar = st.progress(0)
@@ -430,7 +426,6 @@ def hiring_dashboard(go_to_func):
                     st.session_state.match_results_cache = match_results
                     st.success("Analysis Complete!")
 
-                # 3. Display Results
                 if st.session_state.get('match_results_cache'):
                     st.divider()
                     st.subheader(f"🏆 Ranking Results for: {selected_jd_name}")
@@ -457,69 +452,95 @@ def hiring_dashboard(go_to_func):
                                 st.markdown(f":orange[**Threats**]")
                                 for t in swot.get('threats', []): st.markdown(f"- {t}")
 
-    # --- TAB 5: Basic Screening (NEW) ---
+    # --- TAB 5: Basic Screening (UPDATED) ---
     with tab_screening:
         st.header("📞 Candidate Screening Interview Form")
         st.markdown("Record initial screening details for candidates.")
 
-        # --- Dynamic Form Logic (Using containers instead of st.form for interactivity) ---
-        with st.container(border=True):
-            st.subheader("Candidate Details")
-            c1, c2, c3 = st.columns(3)
-            with c1: s_name = st.text_input("Candidate Name")
-            with c2: s_email = st.text_input("Email ID")
-            with c3: s_phone = st.text_input("Phone Number")
+        # --- Nested Tabs for Screening ---
+        screen_tab_info, screen_tab_quiz = st.tabs(["📋 Basic Info", "📝 Tech & Roles Quiz"])
 
-            st.subheader("Employment Details")
-            c4, c5, c6 = st.columns(3)
-            with c4: s_company = st.text_input("Current Company")
-            with c5: s_curr_ctc = st.text_input("Current Salary (CTC)")
-            with c6: s_exp_ctc = st.text_input("Expected Salary (CTC)")
+        # Create a container or dictionary to hold form values from both tabs is tricky across tabs.
+        # Best approach: Use a single st.form across columns or session state. 
+        # But st.form cannot span tabs.
+        # Solution: Use st.session_state keys for all inputs and a single button outside.
 
-            st.subheader("Notice Period & Relocation")
-            c7, c8 = st.columns(2)
-            with c7: s_notice = st.selectbox("Notice Period", ["Immediate", "15 Days", "30 Days", "45 Days", "60 Days", "90 Days", "Serving Notice"])
-            with c8: s_buyout = st.radio("Notice Buyout Option Available?", ["Yes", "No", "Negotiable"], horizontal=True)
+        with screen_tab_info:
+            with st.container(border=True):
+                st.subheader("Candidate Details")
+                c1, c2, c3 = st.columns(3)
+                with c1: s_name = st.text_input("Candidate Name", key="scr_name")
+                with c2: s_email = st.text_input("Email ID", key="scr_email")
+                with c3: s_phone = st.text_input("Phone Number", key="scr_phone")
 
-            c9, c10 = st.columns(2)
-            with c9: 
-                s_curr_loc = st.text_input("Current Working Location", key="curr_loc")
-            with c10: 
-                s_job_loc = st.text_input("Job Location", key="job_loc")
+                st.subheader("Employment Details")
+                c4, c5, c6 = st.columns(3)
+                with c4: s_company = st.text_input("Current Company", key="scr_company")
+                with c5: s_curr_ctc = st.text_input("Current Salary (CTC)", key="scr_cur_ctc")
+                with c6: s_exp_ctc = st.text_input("Expected Salary (CTC)", key="scr_exp_ctc")
 
-            # Dynamic Relocation Check Logic
-            relocation_needed = False
-            if s_curr_loc and s_job_loc:
-                if s_curr_loc.strip().lower() != s_job_loc.strip().lower():
-                    relocation_needed = True
-                    st.warning(f"📍 Location Mismatch Detected: {s_curr_loc} vs {s_job_loc}")
-                    s_relocate = st.radio("Is the candidate willing to relocate?", ["Yes", "No", "Depends on Offer"], horizontal=True)
-                else:
-                    s_relocate = "Not Required (Same Location)"
-            else:
+                st.subheader("Notice Period & Relocation")
+                c7, c8 = st.columns(2)
+                with c7: s_notice = st.selectbox("Notice Period", ["Immediate", "15 Days", "30 Days", "45 Days", "60 Days", "90 Days", "Serving Notice"], key="scr_notice")
+                with c8: s_buyout = st.radio("Notice Buyout Option Available?", ["Yes", "No", "Negotiable"], horizontal=True, key="scr_buyout")
+
+                c9, c10 = st.columns(2)
+                with c9: s_curr_loc = st.text_input("Current Working Location", key="scr_cur_loc")
+                with c10: s_job_loc = st.text_input("Job Location", key="scr_job_loc")
+
+                relocation_needed = False
                 s_relocate = "N/A"
+                if s_curr_loc and s_job_loc:
+                    if s_curr_loc.strip().lower() != s_job_loc.strip().lower():
+                        relocation_needed = True
+                        st.warning(f"📍 Location Mismatch Detected: {s_curr_loc} vs {s_job_loc}")
+                        s_relocate = st.radio("Is the candidate willing to relocate?", ["Yes", "No", "Depends on Offer"], horizontal=True, key="scr_relocate")
+                    else:
+                        s_relocate = "Not Required (Same Location)"
 
-            st.markdown("###")
-            if st.button("💾 Save Screening Data", type="primary"):
-                if s_name and s_email:
-                    screening_record = {
-                        "Name": s_name,
-                        "Email": s_email,
-                        "Phone": s_phone,
-                        "Company": s_company,
-                        "Current CTC": s_curr_ctc,
-                        "Expected CTC": s_exp_ctc,
-                        "Notice Period": s_notice,
-                        "Notice Buyout": s_buyout,
-                        "Current Loc": s_curr_loc,
-                        "Job Loc": s_job_loc,
-                        "Relocation": s_relocate,
-                        "Date": date.today().strftime("%Y-%m-%d")
-                    }
-                    st.session_state.screening_data.append(screening_record)
-                    st.success(f"Screening details for {s_name} saved successfully!")
-                else:
-                    st.error("Please enter at least Candidate Name and Email.")
+        with screen_tab_quiz:
+            with st.container(border=True):
+                st.subheader("Technical & Role Assessment")
+                
+                s_tech_skills = st.text_area("Tech Skills (Comma separated)", placeholder="e.g., Python, AWS, React...", key="scr_tech_skills")
+                
+                s_exp_duration = st.text_input("Duration of Experience in Key Skills", placeholder="e.g., 5 years in Python, 2 in AWS", key="scr_exp_dur")
+                
+                st.markdown("#### Project & Role Details")
+                s_proj_brief = st.text_area("Brief on Projects Done (What kind of projects?)", height=100, key="scr_proj_brief")
+                
+                s_roles_resp = st.text_area("Roles & Responsibilities (Across Companies)", height=150, placeholder="Describe day-to-day duties...", key="scr_roles_resp")
+                
+                s_achievements = st.text_area("Key Achievements & Roles", height=100, placeholder="Awards, key deliveries, leadership...", key="scr_achievements")
+
+        st.markdown("###")
+        # Global Save Button for the Screening Tab
+        if st.button("💾 Save All Screening Data", type="primary"):
+            if st.session_state.scr_name and st.session_state.scr_email:
+                screening_record = {
+                    "Name": st.session_state.scr_name,
+                    "Email": st.session_state.scr_email,
+                    "Phone": st.session_state.scr_phone,
+                    "Company": st.session_state.scr_company,
+                    "Current CTC": st.session_state.scr_cur_ctc,
+                    "Expected CTC": st.session_state.scr_exp_ctc,
+                    "Notice Period": st.session_state.scr_notice,
+                    "Notice Buyout": st.session_state.scr_buyout,
+                    "Current Loc": st.session_state.scr_cur_loc,
+                    "Job Loc": st.session_state.scr_job_loc,
+                    "Relocation": s_relocate,
+                    # Quiz Data
+                    "Tech Skills": st.session_state.scr_tech_skills,
+                    "Key Skill Duration": st.session_state.scr_exp_dur,
+                    "Projects Brief": st.session_state.scr_proj_brief,
+                    "Roles & Resp": st.session_state.scr_roles_resp,
+                    "Achievements": st.session_state.scr_achievements,
+                    "Date": date.today().strftime("%Y-%m-%d")
+                }
+                st.session_state.screening_data.append(screening_record)
+                st.success(f"Screening details for {st.session_state.scr_name} saved successfully!")
+            else:
+                st.error("Please enter at least Candidate Name and Email in the 'Basic Info' tab.")
 
         # Display Screening History
         st.divider()
@@ -528,9 +549,8 @@ def hiring_dashboard(go_to_func):
             df_screen = pd.DataFrame(st.session_state.screening_data)
             st.dataframe(df_screen, use_container_width=True)
             
-            # Download Button
             csv_screen = df_screen.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Screening Data", data=csv_screen, file_name="Screening_Data.csv", mime="text/csv")
+            st.download_button("📥 Download Screening Data", data=csv_screen, file_name="Screening_Data_Full.csv", mime="text/csv")
         else:
             st.info("No screening records yet.")
 
