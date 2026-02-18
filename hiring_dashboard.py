@@ -6,7 +6,7 @@ import pandas as pd
 import tempfile
 from groq import Groq
 from dotenv import load_dotenv
-from datetime import date
+from datetime import date, datetime
 import pdfplumber
 import docx
 
@@ -69,16 +69,11 @@ def get_file_content(uploaded_file):
     return text
 
 def evaluate_cv_against_jd_swot(cv_text, jd_text):
-    """
-    Performs a deep match analysis of a CV against a JD using LLM.
-    Returns Score, Contact Info, and SWOT Analysis.
-    """
+    """Performs a deep match analysis of a CV against a JD using LLM."""
     prompt = f"""
     Act as a Senior Recruiter. Analyze the Candidate CV against the Job Description (JD).
-    
     JD: {jd_text[:2000]}... (truncated)
     CV: {cv_text[:3000]}... (truncated)
-    
     Provide the output strictly as a valid JSON object with these keys:
     1. "match_score": Integer (0-100) representing fit.
     2. "contact_info": Object with keys "name", "email", "phone". Extract from CV or use "N/A".
@@ -93,12 +88,34 @@ def evaluate_cv_against_jd_swot(cv_text, jd_text):
         )
         content = response.choices[0].message.content
         match = re.search(r'\{.*\}', content, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        else:
-            return {"error": "Could not parse JSON"}
+        return json.loads(match.group(0)) if match else {"error": "Could not parse JSON"}
     except Exception as e:
         return {"error": str(e)}
+
+def score_screening_response(screening_record):
+    """Scores a candidate's screening data against general hiring expectations."""
+    context = json.dumps(screening_record, indent=2)
+    prompt = f"""
+    Evaluate this screening candidate data for a generic software role.
+    Data: {context}
+    
+    1. Check if Notice Period is < 30 days or Buyout available (High Score).
+    2. Check if Tech Skills are populated (High Score).
+    3. Check if Relocation is 'Yes' or 'N/A' (High Score).
+    
+    Return a single integer score from 0 to 100. Just the number.
+    """
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0
+        )
+        score_text = response.choices[0].message.content.strip()
+        match = re.search(r'\d+', score_text)
+        return int(match.group(0)) if match else 50
+    except:
+        return 50
 
 # -------------------------
 # MAIN DASHBOARD FUNCTION
@@ -454,105 +471,135 @@ def hiring_dashboard(go_to_func):
 
     # --- TAB 5: Basic Screening (UPDATED) ---
     with tab_screening:
-        st.header("📞 Candidate Screening Interview Form")
-        st.markdown("Record initial screening details for candidates.")
+        st.header("📞 Candidate Screening Workflow")
+        st.markdown("Record screenings, assess responses, and schedule next steps.")
 
-        # --- Nested Tabs for Screening ---
-        screen_tab_info, screen_tab_quiz = st.tabs(["📋 Basic Info", "📝 Tech & Roles Quiz"])
+        screen_tab_info, screen_tab_quiz, screen_tab_schedule = st.tabs([
+            "📋 Basic Info", 
+            "📝 Tech & Roles Quiz",
+            "🗓️ Schedule & Evaluate" # NEW Sub-Tab
+        ])
 
-        # Create a container or dictionary to hold form values from both tabs is tricky across tabs.
-        # Best approach: Use a single st.form across columns or session state. 
-        # But st.form cannot span tabs.
-        # Solution: Use st.session_state keys for all inputs and a single button outside.
-
+        # --- Subtab 1: Basic Info ---
         with screen_tab_info:
             with st.container(border=True):
                 st.subheader("Candidate Details")
                 c1, c2, c3 = st.columns(3)
-                with c1: s_name = st.text_input("Candidate Name", key="scr_name")
-                with c2: s_email = st.text_input("Email ID", key="scr_email")
-                with c3: s_phone = st.text_input("Phone Number", key="scr_phone")
+                with c1: st.session_state.scr_name = st.text_input("Candidate Name", key="scr_name")
+                with c2: st.session_state.scr_email = st.text_input("Email ID", key="scr_email")
+                with c3: st.session_state.scr_phone = st.text_input("Phone Number", key="scr_phone")
 
                 st.subheader("Employment Details")
                 c4, c5, c6 = st.columns(3)
-                with c4: s_company = st.text_input("Current Company", key="scr_company")
-                with c5: s_curr_ctc = st.text_input("Current Salary (CTC)", key="scr_cur_ctc")
-                with c6: s_exp_ctc = st.text_input("Expected Salary (CTC)", key="scr_exp_ctc")
+                with c4: st.session_state.scr_company = st.text_input("Current Company", key="scr_company")
+                with c5: st.session_state.scr_curr_ctc = st.text_input("Current Salary (CTC)", key="scr_cur_ctc")
+                with c6: st.session_state.scr_exp_ctc = st.text_input("Expected Salary (CTC)", key="scr_exp_ctc")
 
-                st.subheader("Notice Period & Relocation")
+                st.subheader("Notice & Location")
                 c7, c8 = st.columns(2)
-                with c7: s_notice = st.selectbox("Notice Period", ["Immediate", "15 Days", "30 Days", "45 Days", "60 Days", "90 Days", "Serving Notice"], key="scr_notice")
-                with c8: s_buyout = st.radio("Notice Buyout Option Available?", ["Yes", "No", "Negotiable"], horizontal=True, key="scr_buyout")
+                with c7: st.session_state.scr_notice = st.selectbox("Notice Period", ["Immediate", "15 Days", "30 Days", "60 Days", "90 Days"], key="scr_notice")
+                with c8: st.session_state.scr_buyout = st.radio("Notice Buyout Option?", ["Yes", "No", "Negotiable"], horizontal=True, key="scr_buyout")
 
                 c9, c10 = st.columns(2)
-                with c9: s_curr_loc = st.text_input("Current Working Location", key="scr_cur_loc")
-                with c10: s_job_loc = st.text_input("Job Location", key="scr_job_loc")
+                with c9: st.session_state.scr_curr_loc = st.text_input("Current Working Location", key="scr_cur_loc")
+                with c10: st.session_state.scr_job_loc = st.text_input("Job Location", key="scr_job_loc")
 
-                relocation_needed = False
-                s_relocate = "N/A"
-                if s_curr_loc and s_job_loc:
-                    if s_curr_loc.strip().lower() != s_job_loc.strip().lower():
-                        relocation_needed = True
-                        st.warning(f"📍 Location Mismatch Detected: {s_curr_loc} vs {s_job_loc}")
-                        s_relocate = st.radio("Is the candidate willing to relocate?", ["Yes", "No", "Depends on Offer"], horizontal=True, key="scr_relocate")
-                    else:
-                        s_relocate = "Not Required (Same Location)"
+                st.session_state.scr_relocate = "N/A"
+                if st.session_state.scr_curr_loc and st.session_state.scr_job_loc:
+                    if st.session_state.scr_curr_loc.lower() != st.session_state.scr_job_loc.lower():
+                        st.warning("Location Mismatch")
+                        st.session_state.scr_relocate = st.radio("Relocate?", ["Yes", "No"], horizontal=True, key="scr_relocate")
 
+        # --- Subtab 2: Tech Quiz ---
         with screen_tab_quiz:
             with st.container(border=True):
                 st.subheader("Technical & Role Assessment")
-                
-                s_tech_skills = st.text_area("Tech Skills (Comma separated)", placeholder="e.g., Python, AWS, React...", key="scr_tech_skills")
-                
-                s_exp_duration = st.text_input("Duration of Experience in Key Skills", placeholder="e.g., 5 years in Python, 2 in AWS", key="scr_exp_dur")
-                
-                st.markdown("#### Project & Role Details")
-                s_proj_brief = st.text_area("Brief on Projects Done (What kind of projects?)", height=100, key="scr_proj_brief")
-                
-                s_roles_resp = st.text_area("Roles & Responsibilities (Across Companies)", height=150, placeholder="Describe day-to-day duties...", key="scr_roles_resp")
-                
-                s_achievements = st.text_area("Key Achievements & Roles", height=100, placeholder="Awards, key deliveries, leadership...", key="scr_achievements")
+                st.session_state.scr_tech_skills = st.text_area("Tech Skills", placeholder="e.g., Python, AWS", key="scr_tech_skills")
+                st.session_state.scr_exp_dur = st.text_input("Key Skill Duration", placeholder="e.g., 5 yrs Python", key="scr_exp_dur")
+                st.session_state.scr_proj_brief = st.text_area("Project Brief", height=100, key="scr_proj_brief")
+                st.session_state.scr_roles_resp = st.text_area("Roles & Responsibilities", height=100, key="scr_roles_resp")
+                st.session_state.scr_achievements = st.text_area("Achievements", height=100, key="scr_achievements")
 
-        st.markdown("###")
-        # Global Save Button for the Screening Tab
-        if st.button("💾 Save All Screening Data", type="primary"):
-            if st.session_state.scr_name and st.session_state.scr_email:
-                screening_record = {
-                    "Name": st.session_state.scr_name,
-                    "Email": st.session_state.scr_email,
-                    "Phone": st.session_state.scr_phone,
-                    "Company": st.session_state.scr_company,
-                    "Current CTC": st.session_state.scr_cur_ctc,
-                    "Expected CTC": st.session_state.scr_exp_ctc,
-                    "Notice Period": st.session_state.scr_notice,
-                    "Notice Buyout": st.session_state.scr_buyout,
-                    "Current Loc": st.session_state.scr_cur_loc,
-                    "Job Loc": st.session_state.scr_job_loc,
-                    "Relocation": s_relocate,
-                    # Quiz Data
-                    "Tech Skills": st.session_state.scr_tech_skills,
-                    "Key Skill Duration": st.session_state.scr_exp_dur,
-                    "Projects Brief": st.session_state.scr_proj_brief,
-                    "Roles & Resp": st.session_state.scr_roles_resp,
-                    "Achievements": st.session_state.scr_achievements,
-                    "Date": date.today().strftime("%Y-%m-%d")
-                }
-                st.session_state.screening_data.append(screening_record)
-                st.success(f"Screening details for {st.session_state.scr_name} saved successfully!")
-            else:
-                st.error("Please enter at least Candidate Name and Email in the 'Basic Info' tab.")
-
-        # Display Screening History
-        st.divider()
-        st.subheader("📋 Screening History")
-        if st.session_state.screening_data:
-            df_screen = pd.DataFrame(st.session_state.screening_data)
-            st.dataframe(df_screen, use_container_width=True)
+        # --- Subtab 3: Schedule & Evaluate (NEW) ---
+        with screen_tab_schedule:
+            st.header("Schedule & Evaluate Candidate")
             
-            csv_screen = df_screen.to_csv(index=False).encode('utf-8')
-            st.download_button("📥 Download Screening Data", data=csv_screen, file_name="Screening_Data_Full.csv", mime="text/csv")
-        else:
-            st.info("No screening records yet.")
+            # A. Scheduling
+            with st.expander("🗓️ Schedule Interview Round", expanded=True):
+                sch_col1, sch_col2 = st.columns(2)
+                with sch_col1:
+                    round_type = st.selectbox("Interview Type", ["Tech Round 1", "Tech Round 2", "Managerial Round", "Face to Face", "AI Automated Round"])
+                    interview_date = st.date_input("Interview Date", min_value=date.today())
+                    interview_time = st.time_input("Interview Time")
+                with sch_col2:
+                    interviewer_email = st.text_input("Interviewer Email", placeholder="tech.lead@company.com")
+                    meeting_link = st.text_input("Meeting Link (Zoom/Teams/Meet)")
+                
+                if st.button("📧 Schedule & Send Invite (Agentic Action)"):
+                    if st.session_state.scr_email:
+                        # Simulation of Agentic Tool
+                        st.success(f"✅ Invite Sent to **{st.session_state.scr_name}** ({st.session_state.scr_email}) for **{round_type}** on {interview_date} at {interview_time}.")
+                        st.info("📅 Event added to Calendar (Simulated).")
+                    else:
+                        st.error("Candidate Email is missing in 'Basic Info' tab.")
+
+            st.divider()
+
+            # B. Evaluation & Ranking
+            st.subheader("🤖 AI Evaluation & Ranking")
+            if st.button("Run AI Score Analysis"):
+                if st.session_state.scr_name:
+                    # Construct data packet for scoring
+                    candidate_packet = {
+                        "Notice Period": st.session_state.scr_notice,
+                        "Tech Skills": st.session_state.scr_tech_skills,
+                        "Relocation": st.session_state.scr_relocate,
+                        "Roles": st.session_state.scr_roles_resp
+                    }
+                    
+                    with st.spinner("AI is analyzing screening responses against expectations..."):
+                        ai_score = score_screening_response(candidate_packet)
+                        st.session_state.scr_ai_score = ai_score
+                    
+                    st.metric("AI Match Score", f"{ai_score}/100", delta="Ready for Next Round" if ai_score > 70 else "Review Needed")
+                else:
+                    st.error("Please fill in candidate details first.")
+
+            # C. Save & Dump to CSV
+            st.divider()
+            if st.button("💾 Save & Add to Master List", type="primary"):
+                if st.session_state.scr_name and st.session_state.scr_email:
+                    # Gather all data
+                    full_record = {
+                        "Name": st.session_state.scr_name,
+                        "Email": st.session_state.scr_email,
+                        "Phone": st.session_state.scr_phone,
+                        "Company": st.session_state.scr_company,
+                        "Notice Period": st.session_state.scr_notice,
+                        "Current Loc": st.session_state.scr_curr_loc,
+                        "Brief Profile": f"Exp in {st.session_state.scr_tech_skills}. {st.session_state.scr_exp_dur}",
+                        "Match Score (AI)": st.session_state.get('scr_ai_score', 'N/A'),
+                        "CV Link": "https://drive.google.com/...", # Placeholder or link to uploaded file
+                        "Date": date.today().strftime("%Y-%m-%d")
+                    }
+                    st.session_state.screening_data.append(full_record)
+                    st.success(f"Candidate {st.session_state.scr_name} added to Master List!")
+                else:
+                    st.error("Missing basic candidate info.")
+
+            # D. Download Master List
+            if st.session_state.screening_data:
+                st.markdown("### 📥 Export Master Data")
+                df_master = pd.DataFrame(st.session_state.screening_data)
+                st.dataframe(df_master, use_container_width=True)
+                
+                csv_master = df_master.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="Download Master CSV (Contact & Scores)",
+                    data=csv_master,
+                    file_name="Master_Screening_List.csv",
+                    mime="text/csv"
+                )
 
     # --- TAB 6: Hiring Analytics ---
     with tab_stats:
