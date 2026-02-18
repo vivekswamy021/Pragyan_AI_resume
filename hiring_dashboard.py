@@ -122,18 +122,18 @@ def score_screening_response(screening_record):
 # -------------------------
 
 def hiring_dashboard(go_to_func):
-    col_title, nav_col = st.columns([10, 2])
+    # col_title, nav_col = st.columns([10, 2])
     
-    with col_title:
-        st.title("🏢 Hiring Company Dashboard")
-        st.caption("Manage Job Descriptions, candidate CVs, and track hiring metrics.")
+    # with col_title:
+    st.title("🏢 Hiring Company Dashboard")
+    st.caption("Manage Job Descriptions, candidate CVs, and track hiring metrics.")
 
-    with nav_col:
-        if st.button("🚪 Log Out", use_container_width=True, key="hiring_logout_btn"):
-            st.session_state.logged_in = False
-            st.session_state.user_type = None
-            go_to_func("login")
-            st.rerun()
+    # with nav_col:
+    #     if st.button("🚪 Log Out", use_container_width=True, key="hiring_logout_btn"):
+    #         st.session_state.logged_in = False
+    #         st.session_state.user_type = None
+    #         go_to_func("login")
+    #         st.rerun()
     
     st.markdown("---")
 
@@ -158,7 +158,7 @@ def hiring_dashboard(go_to_func):
         "scr_curr_ctc", "scr_exp_ctc", "scr_notice", "scr_buyout", 
         "scr_curr_loc", "scr_job_loc", "scr_tech_skills", "scr_exp_dur", 
         "scr_proj_brief", "scr_roles_resp", "scr_achievements", "scr_relocate", "scr_ai_score",
-        "scr_applied_jd" # Added for tracking
+        "scr_applied_jd" 
     ]
     for key in screening_keys:
         if key not in st.session_state:
@@ -483,7 +483,7 @@ def hiring_dashboard(go_to_func):
             "📋 Basic Info", 
             "📝 Tech & Roles Quiz",
             "🗓️ Schedule & Evaluate",
-            "📊 Candidate Profile Track" # NEW SUB-TAB
+            "📊 Candidate Profile Track"
         ])
 
         # --- Subtab 1: Basic Info ---
