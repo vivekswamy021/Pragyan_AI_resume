@@ -4,7 +4,7 @@ from candidate_dashboard import candidate_dashboard
 
 from hiring_dashboard import hiring_dashboard
 
-
+import streamlit as st
 
 # 🔥 SET YOUR LOGO HERE (GitHub RAW IMAGE LINK)
 
