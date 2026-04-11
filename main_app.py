@@ -1,10 +1,13 @@
 import streamlit as st
+
+# Attempting to import the dashboard functions
+# Make sure these .py files exist in the same directory!
 try:
     from admin_dashboard import admin_dashboard
     from candidate_dashboard import candidate_dashboard
     from hiring_dashboard import hiring_dashboard
 except ImportError as e:
-    st.error(f"Error: Missing module file. {e}")
+    st.error(f"Module Import Error: {e}. Please ensure admin_dashboard.py, candidate_dashboard.py, and hiring_dashboard.py are in the same folder.")
     st.stop()
 
 # ------------------------------
@@ -79,6 +82,7 @@ def initialize_session_state():
     # Hiring Manager
     if 'hiring_jds' not in st.session_state: st.session_state.hiring_jds = []
 
+
 # --------------------------------------------------
 # 👤 PROFILE SIDEBAR FUNCTION
 # --------------------------------------------------
@@ -129,6 +133,7 @@ def render_profile_sidebar():
                     st.success("Password changed!")
                 else:
                     st.error("Check password match.")
+
 
 # --------------------------------------------------
 # LOGIN & SIGNUP PAGES
@@ -184,6 +189,7 @@ def signup_page():
             go_to("login")
             st.rerun()
 
+
 # --------------------------------------------------
 # MAIN EXECUTION
 # --------------------------------------------------
@@ -195,7 +201,6 @@ if __name__ == '__main__':
     if st.session_state.logged_in:
         render_profile_sidebar()
         
-        # --- COMMON HEADER SECTION ---
         role_display = st.session_state.user_type.capitalize()
         if st.session_state.user_type == "hiring": role_display = "Hiring Manager"
         
@@ -210,10 +215,13 @@ if __name__ == '__main__':
         # --- ROUTING TO DASHBOARDS ---
         if st.session_state.user_type == "admin":
             admin_dashboard(go_to)
+
         elif st.session_state.user_type == "candidate":
             candidate_dashboard(go_to)
+
         elif st.session_state.user_type == "hiring":
             hiring_dashboard(go_to)
+
     else:
         if st.session_state.page == "signup":
             signup_page()
