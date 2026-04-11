@@ -6,10 +6,12 @@ import openpyxl
 import json
 import tempfile
 from groq import Groq
+from gtts import gTTS 
 import traceback
 import re 
 from dotenv import load_dotenv 
 from datetime import date 
+import csv 
 from streamlit.runtime.uploaded_file_manager import UploadedFile
 
 # -------------------------
@@ -17,6 +19,12 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # -------------------------
 
 GROQ_MODEL = "llama-3.1-8b-instant"
+# Options for LLM functions (Kept for completeness)
+section_options = ["name", "email", "phone", "skills", "education", "experience", "certifications", "projects", "strength", "personal_details", "github", "linkedin", "full resume"]
+question_section_options = ["skills","experience", "certifications", "projects", "education"] 
+DEFAULT_JOB_TYPES = ["Full-time", "Contract", "Internship", "Remote", "Part-time"]
+DEFAULT_ROLES = ["Software Engineer", "Data Scientist", "Product Manager", "HR Manager", "Marketing Specialist", "Operations Analyst"]
+
 # Load environment variables (mocked if running standalone)
 load_dotenv()
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
@@ -81,7 +89,7 @@ def extract_content(file_type, file_path):
     except Exception as e:
         return f"Fatal Extraction Error: Failed to read file content ({file_type}). Error: {e}"
 
-
+# NEW LLM function to extract structured metadata from JD
 @st.cache_data(show_spinner="Extracting JD metadata...")
 def extract_jd_metadata(jd_text):
     """Extracts structured metadata (Role, Job Type, Key Skills) from raw JD text."""
@@ -142,8 +150,6 @@ def parse_with_llm(text, return_type='json'):
     - Experience, - Certifications, 
     - Projects, - Strength, 
     - Personal Details, - Github, - LinkedIn
-    
-    Also, provide a key called **'summary'** which is a single, brief paragraph (3-4 sentences max) summarizing the candidate's career highlights and most relevant skills.
     
     Resume Text: {text}
     
@@ -274,24 +280,22 @@ def parse_and_store_resume(file_input, file_name_key='default', source_type='fil
     }
 
 
-def update_resume_metadata(resume_name, new_status, applied_jd, submitted_date, resume_list_index):
+def update_resume_status(resume_name, new_status, applied_jd, submitted_date, resume_list_index):
     """Callback function to update the status and metadata of a specific resume."""
-    # Update Status
     st.session_state.resume_statuses[resume_name] = new_status
     
-    # Update Metadata (Applied JD and Date)
     if 0 <= resume_list_index < len(st.session_state.resumes_to_analyze):
         st.session_state.resumes_to_analyze[resume_list_index]['applied_jd'] = applied_jd
         st.session_state.resumes_to_analyze[resume_list_index]['submitted_date'] = submitted_date
-        st.toast(f"Status for **{resume_name}** updated to **{new_status}**.")
+        st.success(f"Status and metadata for **{resume_name}** updated to **{new_status}**.")
     else:
-        st.error(f"Error: Could not find resume index {resume_list_index} for metadata update.")
+        st.error(f"Error: Could not find resume index {resume_list_index} for update.")
         
 # --- Approval Tab Content Functions (Used within admin_dashboard) ---
 
 def candidate_approval_tab_content():
     st.header("👤 Candidate Approval")
-    st.markdown("### Review and Set Status for Submitted Resumes")
+    st.markdown("### Resume Status List")
     
     if "resumes_to_analyze" not in st.session_state or not st.session_state.resumes_to_analyze:
         st.info("No resumes have been uploaded and parsed in the 'Resume Analysis' tab yet.")
@@ -304,48 +308,15 @@ def candidate_approval_tab_content():
         resume_name = resume_data['name']
         current_status = st.session_state.resume_statuses.get(resume_name, "Pending")
         
-        # --- Extract details from parsed JSON ---
-        parsed_data = resume_data.get('parsed', {})
-        candidate_email = parsed_data.get('email', 'N/A')
-        candidate_phone = parsed_data.get('phone', 'N/A')
-        
-        # Find highest education/university
-        education_list = parsed_data.get('education', [])
-        university_info = "N/A"
-        if education_list:
-            # Simple heuristic: take the first item, often the highest degree or most recent
-            university_info = education_list[0] 
-            # Trim if too long
-            if len(university_info) > 60:
-                 university_info = university_info[:57] + "..."
-
-        brief_summary = parsed_data.get('summary', 'AI summary pending or failed during parsing.')
-        
-        # --- Current Metadata (Used for display and form defaults) ---
         current_applied_jd = resume_data.get('applied_jd', 'N/A (Pending Assignment)')
         current_submitted_date = resume_data.get('submitted_date', date.today().strftime("%Y-%m-%d"))
 
-        # --- Display and Action Block for Individual Candidate ---
         with st.container(border=True):
-            st.markdown(f"### **Candidate:** {resume_name} (Status: **{current_status}**)")
+            st.markdown(f"**Resume:** **{resume_name}**")
             
-            # Contact Info & Education
-            col_contact, col_education = st.columns(2)
-            with col_contact:
-                st.markdown(f"**📧 Email:** `{candidate_email}`")
-                st.markdown(f"**📱 Phone:** `{candidate_phone}`")
-            with col_education:
-                st.markdown(f"**🎓 Education:** `{university_info}`")
-                st.markdown(f"**Applied JD:** `{current_applied_jd}`")
-                
-            st.markdown("---")
-            st.markdown(f"**Brief Resume Info:** *{brief_summary}*")
-            st.markdown("---")
+            col_jd_input, col_date_input = st.columns(2)
             
-            # NEW: JD Selection and Date Input Block (No generic status selector/updater)
-            col_jd_select, col_date_input = st.columns([1, 1])
-            
-            with col_jd_select:
+            with col_jd_input:
                 try:
                     default_value = current_applied_jd if current_applied_jd != "N/A (Pending Assignment)" else "Select JD"
                     jd_default_index = jd_options.index(default_value)
@@ -370,45 +341,42 @@ def candidate_approval_tab_content():
                     value=date_obj,
                     key=f"date_input_{resume_name}_{idx}"
                 )
+                
+            st.markdown(f"**Current Status:** **{current_status}**")
             
             st.markdown("---")
             
-            # Dedicated Approve/Reject/Pending Buttons for Quick Actions
-            col_quick_approve, col_quick_reject, col_quick_pending, _ = st.columns([1, 1, 1, 5])
+            col1, col2 = st.columns([3, 1])
             
-            jd_to_save = new_applied_jd if new_applied_jd != "Select JD" else "N/A (Pending Assignment)"
-            date_to_save = new_submitted_date.strftime("%Y-%m-%d")
-
-            # Function to run status update and RERUN
-            def run_update_and_rerun(status_to_set):
-                update_resume_metadata(
-                    resume_name, 
-                    status_to_set, 
-                    jd_to_save, 
-                    date_to_save,
-                    idx
+            with col1:
+                st.markdown("Set Status:")
+                new_status = st.selectbox(
+                    "Set Status",
+                    ["Pending", "Approved", "Rejected", "Shortlisted"],
+                    index=["Pending", "Approved", "Rejected", "Shortlisted"].index(current_status),
+                    key=f"status_select_{resume_name}_{idx}",
+                    label_visibility="collapsed"
                 )
-                st.rerun()
 
-            with col_quick_approve:
-                # Approve button
-                if st.button("✅ Approve", key=f"quick_approve_{resume_name}_{idx}", use_container_width=True):
-                    run_update_and_rerun("Approved")
-
-            with col_quick_reject:
-                # Reject button
-                if st.button("❌ Reject", key=f"quick_reject_{resume_name}_{idx}", use_container_width=True):
-                    run_update_and_rerun("Rejected")
-
-            with col_quick_pending:
-                 # Pending button
-                if st.button("🟡 Pending", key=f"quick_pending_{resume_name}_{idx}", use_container_width=True):
-                    run_update_and_rerun("Pending")
-
+            with col2:
+                if st.button("Update", key=f"update_btn_{resume_name}_{idx}"):
+                    
+                    if new_applied_jd == "Select JD" and len(jd_options) > 1:
+                        jd_to_save = "N/A (Pending Assignment)"
+                    else:
+                        jd_to_save = new_applied_jd
+                        
+                    update_resume_status(
+                        resume_name, 
+                        new_status, 
+                        jd_to_save, 
+                        new_submitted_date.strftime("%Y-%m-%d"),
+                        idx
+                    )
+                    st.rerun() 
             
     st.markdown("---")
             
-    # --- Summary of All Resumes (Updated to reflect latest status) ---
     summary_data = []
     for resume_data in st.session_state.resumes_to_analyze:
         name = resume_data['name']
@@ -432,51 +400,28 @@ def vendor_approval_tab_content():
     if "vendor_statuses" not in st.session_state:
         st.session_state.vendor_statuses = {}
         
-    # --- START of Vendor Submission Form ---
-    # Using clear_on_submit=True to clear input widgets after successful submission.
-    form_key = "add_vendor_form"
-    with st.form(form_key, clear_on_submit=True): 
-        st.markdown("#### Vendor Company Details")
+    with st.form("add_vendor_form"):
         col1, col2 = st.columns(2)
         with col1:
-            # Note: For form clearing to work, use unique keys inside the form
-            vendor_name = st.text_input("Vendor Company Name", key="new_vendor_name_input", help="The legal name of the vendor company.")
+            vendor_name = st.text_input("Vendor Name", key="new_vendor_name")
         with col2:
-            vendor_domain = st.text_input("Service / Domain Name", key="new_vendor_domain_input", help="E.g., HR Consulting, SaaS Platform, Recruitment Agency.")
+            vendor_domain = st.text_input("Service / Domain Name", key="new_vendor_domain")
             
-        vendor_code = st.text_input("Vendor ID / Code (if applicable)", key="new_vendor_code_input", help="Internal tracking code or system ID.")
-        
-        st.markdown("#### Contact & Address Details")
-        col3, col4, col5 = st.columns(3)
+        col3, col4 = st.columns(2)
         with col3:
-            contact_person = st.text_input("Contact Person", key="new_contact_person_input")
+            submitted_date = st.date_input("Submitted Date", value=date.today(), key="new_vendor_date")
         with col4:
-            contact_email = st.text_input("Email ID", key="new_contact_email_input")
-        with col5:
-            contact_number = st.text_input("Contact Number", key="new_contact_number_input")
-            
-        company_address = st.text_area("Company Address", key="new_company_address_input", height=50)
-
-        st.markdown("#### Submission Details")
-        col6, col7 = st.columns(2)
-        with col6:
-            submitted_date = st.date_input("Submitted Date", value=date.today(), key="new_vendor_date_input")
-        with col7:
             initial_status = st.selectbox(
                 "Set Status", 
                 ["Pending Review", "Approved", "Rejected"],
-                index=0, 
-                key="new_vendor_status_select"
+                key="new_vendor_status"
             )
         
         add_vendor_button = st.form_submit_button("Add Vendor", use_container_width=True)
-        
-        # Use a temporary flag to track if a *new* vendor was successfully added within this block
-        st.session_state['vendor_added_flag'] = False 
 
         if add_vendor_button:
-            if vendor_name and contact_person and contact_email:
-                vendor_id = vendor_name.strip()
+            if vendor_name and vendor_domain:
+                vendor_id = vendor_name.strip() 
                 
                 if vendor_id in st.session_state.vendor_statuses:
                     st.warning(f"Vendor '{vendor_name}' already exists.")
@@ -484,26 +429,14 @@ def vendor_approval_tab_content():
                     new_vendor = {
                         'name': vendor_name.strip(),
                         'domain': vendor_domain.strip(),
-                        'code': vendor_code.strip() if vendor_code else 'N/A',
-                        'contact_person': contact_person.strip(),
-                        'email': contact_email.strip(),
-                        'phone': contact_number.strip() if contact_number else 'N/A',
-                        'address': company_address.strip() if company_address else 'N/A',
                         'submitted_date': submitted_date.strftime("%Y-%m-%d")
                     }
                     st.session_state.vendors.append(new_vendor)
                     st.session_state.vendor_statuses[vendor_id] = initial_status
-                    st.success(f"Vendor **{vendor_name}** added successfully with status **{initial_status}**. Fields are now clear for the next entry.")
-                    st.session_state['vendor_added_flag'] = True # Set flag
-
+                    st.success(f"Vendor **{vendor_name}** added successfully with status **{initial_status}**.")
+                    st.rerun() 
             else:
-                st.error("Please fill in **Vendor Company Name**, **Contact Person**, and **Email ID**.")
-                
-    # Rerun the page script explicitly outside the form only if new data was added.
-    # This updates the Summary table immediately after clearing the form.
-    if st.session_state.get('vendor_added_flag'):
-         del st.session_state['vendor_added_flag'] # Clear the flag
-         st.rerun()
+                st.error("Please fill in both Vendor Name and Service / Domain Name.")
 
     st.markdown("---")
     
@@ -512,7 +445,6 @@ def vendor_approval_tab_content():
     if not st.session_state.vendors:
         st.info("No vendors have been added yet.")
     else:
-        # Loop through vendors to display and allow status update
         for idx, vendor in enumerate(st.session_state.vendors):
             vendor_name = vendor['name']
             vendor_id = vendor_name 
@@ -520,37 +452,24 @@ def vendor_approval_tab_content():
             
             with st.container(border=True):
                 
-                # --- Display Vendor Info ---
-                st.markdown(f"### **{vendor_name}** (Code: `{vendor['code']}`) - **Current Status:** **{current_status}**")
+                col_info, col_status_input, col_update_btn = st.columns([3, 2, 1])
                 
-                col_domain, col_contact_info = st.columns(2)
-                
-                with col_domain:
-                    st.markdown(f"**Domain:** {vendor['domain']}")
-                    st.markdown(f"**Address:** *{vendor['address'].replace('\n', ', ')}*")
-                    st.markdown(f"**Submitted:** {vendor['submitted_date']}")
+                with col_info:
+                    st.markdown(f"**Vendor:** {vendor_name} (`{vendor['domain']}`) - *Submitted: {vendor['submitted_date']}*")
+                    st.markdown(f"**Current Status:** **{current_status}**")
                     
-                with col_contact_info:
-                    st.markdown(f"**Contact Person:** {vendor['contact_person']}")
-                    st.markdown(f"**Email:** `{vendor['email']}`")
-                    st.markdown(f"**Phone:** `{vendor['phone']}`")
-                    
-                st.markdown("---")
-                
-                # --- Status Update Controls ---
-                col_status_input, col_update_btn = st.columns([3, 1])
-                
                 with col_status_input:
                     new_status = st.selectbox(
-                        "Set New Status",
+                        "Set Status",
                         ["Pending Review", "Approved", "Rejected"],
                         index=["Pending Review", "Approved", "Rejected"].index(current_status),
                         key=f"vendor_status_select_{idx}",
+                        label_visibility="collapsed"
                     )
 
                 with col_update_btn:
-                    st.markdown("##") # Space out button
-                    if st.button("Update Status", key=f"vendor_update_btn_{idx}", use_container_width=True):
+                    st.markdown("##") 
+                    if st.button("Update", key=f"vendor_update_btn_{idx}", use_container_width=True):
                         
                         st.session_state.vendor_statuses[vendor_id] = new_status
                         
@@ -564,10 +483,7 @@ def vendor_approval_tab_content():
             name = vendor['name']
             summary_data.append({
                 "Vendor Name": name,
-                "Vendor ID / Code": vendor['code'],
                 "Domain": vendor['domain'],
-                "Contact Person": vendor['contact_person'],
-                "Email ID": vendor['email'],
                 "Submitted Date": vendor['submitted_date'],
                 "Status": st.session_state.vendor_statuses.get(name, "Unknown")
             })
@@ -575,9 +491,37 @@ def vendor_approval_tab_content():
         st.subheader("Summary of All Vendors")
         st.dataframe(summary_data, use_container_width=True)
 
+# --- NEW Third Party Integration Tab ---
+def third_party_integration_tab_content():
+    st.header("🔗 Third Party Integrations")
+    st.markdown("Manage and configure API connections, webhooks, and third-party tools.")
+    st.info("This is a placeholder for future integrations like ATS synchronization, external job board posting, or specialized AI services.")
+
+    st.markdown("### Integration Status")
+    
+    data = {
+        "Service": ["ATS (e.g., Greenhouse)", "Job Board (e.g., Indeed)", "Analytics (e.g., Tableau)", "HRIS (e.g., BambooHR)"],
+        "Status": ["Not Configured", "Active", "Pending Setup", "Active"],
+        "Last Sync": ["N/A", "2025-11-12 10:30 AM", "N/A", "2025-11-11 05:00 PM"],
+        "Action": ["Configure", "Manage", "Setup", "Manage"]
+    }
+    
+    st.dataframe(data, use_container_width=True)
+    
+    st.markdown("---")
+    
+    st.subheader("Configuration Options")
+    st.text_input("Webhook URL for Resume Submissions", "https://api.pragyanai.com/webhooks/resumes", disabled=True)
+    st.text_input("External API Key for Job Posting", "************************", type="password")
+    
+    if st.button("Save Integration Settings", key="save_integrations_admin"):
+        st.success("Integration settings saved.")
+        
+# --- END NEW Third Party Integration Tab ---
+
 
 def admin_dashboard():
-    st.title("🧑‍💼 Admin Dashboard")
+    st.header("🧑‍💼 Admin Dashboard")
     
     nav_col, _ = st.columns([1, 1]) 
 
@@ -594,11 +538,12 @@ def admin_dashboard():
     if "vendor_statuses" not in st.session_state: st.session_state.vendor_statuses = {}
         
     
-    # --- TAB ORDER ---
-    tab_jd, tab_analysis, tab_user_mgmt, tab_statistics = st.tabs([
+    # --- TAB ORDER (THIRD PARTY INTEGRATIONS ADDED) ---
+    tab_jd, tab_analysis, tab_user_mgmt, tab_integrations, tab_statistics = st.tabs([
         "📄 JD Management", 
         "📊 Resume Analysis", 
         "🛠️ User Management", 
+        "🔗 Third Party Integrations", # <-- NEW TAB
         "📈 Statistics" 
     ])
     # -------------------------
@@ -890,6 +835,7 @@ def admin_dashboard():
             
             display_data = []
             for item in results_df:
+                status = st.session_state.resume_statuses.get(item["resume_name"], 'Pending') 
                 
                 display_data.append({
                     "Resume": item["resume_name"],
@@ -898,14 +844,14 @@ def admin_dashboard():
                     "Skills (%)": item.get("skills_percent", "N/A"),
                     "Experience (%)": item.get("experience_percent", "N/A"), 
                     "Education (%)": item.get("education_percent", "N/A"),
+                    "Approval Status": status
                 })
 
             st.dataframe(display_data, use_container_width=True)
 
             st.markdown("##### Detailed Reports")
             for item in results_df:
-                status = st.session_state.resume_statuses.get(item["resume_name"], 'Pending') 
-                header_text = f"Report for **{item['resume_name']}** against {item['jd_name']} (Score: **{item['overall_score']}/10** | S: **{item.get('skills_percent', 'N/A')}%** | E: **{item.get('experience_percent', 'N/A')}%** | Edu: **{item.get('education_percent', 'N/A')}%**) - Current Status: {status}"
+                header_text = f"Report for **{item['resume_name']}** against {item['jd_name']} (Score: **{item['overall_score']}/10** | S: **{item.get('skills_percent', 'N/A')}%** | E: **{item.get('experience_percent', 'N/A')}%** | Edu: **{item.get('education_percent', 'N/A')}%**)"
                 with st.expander(header_text):
                     st.markdown(item['full_analysis'])
 
@@ -925,8 +871,12 @@ def admin_dashboard():
         with nested_tab_vendor:
             vendor_approval_tab_content() 
             
+    # --- TAB 4: Third Party Integrations (NEW) ---
+    with tab_integrations:
+        third_party_integration_tab_content() 
 
-    # --- TAB 4: Statistics (UPDATED) ---
+
+    # --- TAB 5: Statistics ---
     with tab_statistics:
         st.header("System Statistics")
         st.markdown("---")
@@ -936,7 +886,6 @@ def admin_dashboard():
         total_vendors = len(st.session_state.vendors)
         no_of_applications = total_candidates 
         
-        # --- Top-Level Metrics ---
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
@@ -949,53 +898,25 @@ def admin_dashboard():
             st.metric(label="Total Vendors", value=total_vendors, delta_color="off")
 
         with col4:
-            # We can use this to show total resumes, as per the code logic
-            st.metric(label="Total Applications", value=no_of_applications, delta_color="off")
+            st.metric(label="No. of Applications", value=no_of_applications, delta_color="off")
             
         st.markdown("---")
         
-        # --- Candidate Status Breakdown ---
-        st.subheader("Candidate Status Breakdown (Resumes)")
-        
-        candidate_status_counts = {}
+        status_counts = {}
         for status in st.session_state.resume_statuses.values():
-            # Standardizing status names for display
-            display_status = status.replace(' ', '') 
-            candidate_status_counts[display_status] = candidate_status_counts.get(display_status, 0) + 1
+            status_counts[status] = status_counts.get(status, 0) + 1
             
-        status_cols_cand = st.columns(max(len(candidate_status_counts), 1))
+        st.subheader("Candidate Status Breakdown")
         
-        if candidate_status_counts:
-            # Display metrics in columns, ensuring maximum 3 per row for good spacing
-            for i, (status, count) in enumerate(candidate_status_counts.items()):
-                with status_cols_cand[i % len(status_cols_cand)]:
-                    # Display status in a user-friendly format
-                    display_label = status.title().replace('Of', ' of').replace('Awaiting', 'Awaiting')
-                    st.metric(label=f"Candidates {display_label}", value=count)
+        status_cols = st.columns(len(status_counts) or 1)
+        
+        if status_counts:
+            col_count = len(status_cols)
+            for i, (status, count) in enumerate(status_counts.items()):
+                with status_cols[i % col_count]:
+                    st.metric(label=f"{status}", value=count)
         else:
             st.info("No resumes loaded to calculate status breakdown.")
-
-        st.markdown("---")
-        
-        # --- Vendor Status Breakdown (NEW) ---
-        st.subheader("Vendor Status Breakdown")
-        
-        vendor_status_counts = {}
-        for status in st.session_state.vendor_statuses.values():
-            # Standardizing status names for display
-            display_status = status.replace(' ', '')
-            vendor_status_counts[display_status] = vendor_status_counts.get(display_status, 0) + 1
-            
-        status_cols_vend = st.columns(max(len(vendor_status_counts), 1))
-        
-        if vendor_status_counts:
-            # Display metrics in columns
-            for i, (status, count) in enumerate(vendor_status_counts.items()):
-                with status_cols_vend[i % len(status_cols_vend)]:
-                    display_label = status.title().replace('Of', ' of')
-                    st.metric(label=f"Vendors {display_label}", value=count)
-        else:
-            st.info("No vendors added to calculate status breakdown.")
 
 
 # --- Session State & Main Function Initialization (Required for execution) ---
