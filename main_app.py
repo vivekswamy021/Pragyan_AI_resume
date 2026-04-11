@@ -202,7 +202,7 @@ def signup_page():
 # --------------------------------------------------
 
 if __name__ == '__main__':
-    st.set_page_config(layout="wide", page_title="PragyanAI App")
+    st.set_page_config(layout="wide", page_title="AI resume App")
     initialize_session_state()
 
     if st.session_state.logged_in:
