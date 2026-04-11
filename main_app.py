@@ -146,7 +146,7 @@ def render_profile_sidebar():
 
 def login_page():
     #show_logo()
-    st.markdown('<h1 style="font-size: 32px; font-weight: 700; margin-bottom: 10px;">PragyanAI Job Portal</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 style="font-size: 32px; font-weight: 700; margin-bottom: 10px;">AI Resume and Job Portal</h1>', unsafe_allow_html=True)
     st.subheader("Login")
     col1, col2, col3 = st.columns([1, 2, 1])
 
