@@ -1,19 +1,11 @@
 import streamlit as st
-from admin_dashboard import admin_dashboard
-from candidate_dashboard import candidate_dashboard
-from hiring_dashboard import hiring_dashboard
-
-# 🔥 SET YOUR LOGO HERE (GitHub RAW IMAGE LINK)
-# --------------------------------------------------
-#LOGO_URL = "https://raw.githubusercontent.com/vivekswamy021/Pragyan_AI_resume/main/pragyan_ai_school_cover.jpg"
-
-
-# --------------------------------------------------
-# 🔥 LOGO FUNCTION (used across all pages)
-# --------------------------------------------------
-# def show_logo(width=510):
-    #st.image(LOGO_URL, width=width)
-
+try:
+    from admin_dashboard import admin_dashboard
+    from candidate_dashboard import candidate_dashboard
+    from hiring_dashboard import hiring_dashboard
+except ImportError as e:
+    st.error(f"Error: Missing module file. {e}")
+    st.stop()
 
 # ------------------------------
 # Utility Functions
@@ -87,7 +79,6 @@ def initialize_session_state():
     # Hiring Manager
     if 'hiring_jds' not in st.session_state: st.session_state.hiring_jds = []
 
-
 # --------------------------------------------------
 # 👤 PROFILE SIDEBAR FUNCTION
 # --------------------------------------------------
@@ -139,13 +130,11 @@ def render_profile_sidebar():
                 else:
                     st.error("Check password match.")
 
-
 # --------------------------------------------------
 # LOGIN & SIGNUP PAGES
 # --------------------------------------------------
 
 def login_page():
-    #show_logo()
     st.markdown('<h1 style="font-size: 32px; font-weight: 700; margin-bottom: 10px;">AI Resume and Job Portal</h1>', unsafe_allow_html=True)
     st.subheader("Login")
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -175,7 +164,6 @@ def login_page():
             st.rerun()
 
 def signup_page():
-    #show_logo()
     st.markdown('<h1 style="font-size: 30px; font-weight: 700;">Create an Account</h1>', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -196,21 +184,18 @@ def signup_page():
             go_to("login")
             st.rerun()
 
-
 # --------------------------------------------------
 # MAIN EXECUTION
 # --------------------------------------------------
 
 if __name__ == '__main__':
-    st.set_page_config(layout="wide", page_title="AI resume App")
+    st.set_page_config(layout="wide", page_title="AI Resume App")
     initialize_session_state()
 
     if st.session_state.logged_in:
         render_profile_sidebar()
-        #show_logo()
         
-        # --- COMMON HEADER SECTION (Log Out Button) ---
-        # This mirrors the UI in your screenshot
+        # --- COMMON HEADER SECTION ---
         role_display = st.session_state.user_type.capitalize()
         if st.session_state.user_type == "hiring": role_display = "Hiring Manager"
         
@@ -225,13 +210,10 @@ if __name__ == '__main__':
         # --- ROUTING TO DASHBOARDS ---
         if st.session_state.user_type == "admin":
             admin_dashboard(go_to)
-
         elif st.session_state.user_type == "candidate":
             candidate_dashboard(go_to)
-
         elif st.session_state.user_type == "hiring":
             hiring_dashboard(go_to)
-
     else:
         if st.session_state.page == "signup":
             signup_page()
