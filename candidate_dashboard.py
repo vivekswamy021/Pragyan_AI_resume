@@ -739,59 +739,103 @@ def generate_cover_letter_llm(jd_content, parsed_json, preferred_style="Standard
     """
     global client, GROQ_MODEL, GROQ_API_KEY
     
-    if parsed_json.get('error') is not None: 
-         return f"Cannot generate cover letter due to resume parsing errors: {parsed_json['error']}"
+    # 1. Validation Checks
+    if not parsed_json or parsed_json.get('error'): 
+         return f"Cannot generate cover letter due to resume parsing errors: {parsed_json.get('error', 'No parsed data found')}"
 
-    if not jd_content.strip(): return "Please provide a Job Description to generate the letter."
+    if not jd_content or not jd_content.strip(): 
+        return "Please provide a Job Description to generate the letter."
 
+    # 2. Data Preparation (Improved for LLM readability)
     candidate_name = parsed_json.get('name', 'The Candidate')
     candidate_email = parsed_json.get('email', '[Candidate Email]')
-    # Ensure list items are strings before joining
-    candidate_skills = ", ".join([str(s) for s in parsed_json.get('skills', [])])
-    candidate_experience = "\n".join([str(e) for e in parsed_json.get('experience', [])])
     
-    jd_metadata = extract_jd_metadata(jd_content)
-    # Safely get the role from metadata (which is now guaranteed to be a dict)
-    jd_role = jd_metadata.get('role', 'the position')
+    # Clean Skills: Ensure we are sending a clean comma-separated string
+    raw_skills = parsed_json.get('skills', [])
+    candidate_skills = ", ".join([str(s) for s in raw_skills]) if raw_skills else "Not specified"
 
+    # Clean Experience: If items are dicts, extract relevant text fields
+    raw_exp = parsed_json.get('experience', [])
+    exp_list = []
+    for e in raw_exp:
+        if isinstance(e, dict):
+            # Extract common keys like 'title', 'company', 'description'
+            title = e.get('title', e.get('role', ''))
+            desc = e.get('description', e.get('responsibilities', ''))
+            exp_list.append(f"{title}: {desc}")
+        else:
+            exp_list.append(str(e))
+    candidate_experience = "\n".join(exp_list) if exp_list else "Not specified"
+    
+    # Extract JD Metadata
+    try:
+        jd_metadata = extract_jd_metadata(jd_content)
+        jd_role = jd_metadata.get('role', 'the position')
+    except:
+        jd_role = "the position"
+
+    # 3. Enhanced Prompt Engineering
     prompt = f"""
-    You are an expert cover letter generator. Your task is to write a highly professional, engaging, and concise cover letter 
-    that highlights the candidate's fit for the specific job description provided.
-    
+    You are an expert career consultant and cover letter writer. 
+    Your goal is to write a compelling, tailored cover letter for {candidate_name} for the **{jd_role}** position.
+
+    **CRITICAL TASK:** You MUST map the candidate's specific "Relevant Experience" and "Key Skills" to the requirements found in the "Job Description Content". Do not just write a generic letter; explain WHY their specific past roles make them a fit for this JD.
+
     **Instructions:**
-    1.  **Style:** Adopt a **{preferred_style}** tone.
-    2.  **Structure:** Use standard cover letter format.
-    3.  **Customization:** Directly reference the skills and experience listed in the candidate's resume that match the job description's requirements.
-    4.  **Length:** Keep it brief, no more than four paragraphs.
-    5.  **Output Format:** Output the letter text only, using double newlines for paragraph separation. Include placeholders like [Date], [Hiring Manager Name/Title, if known], and [Company Name] where necessary. Use bold formatting for the job title.
+    1. **Style:** Adopt a **{preferred_style}** tone.
+    2. **Structure:** Standard professional layout ([Date], [Placeholder], Salutation, Body, Closing).
+    3. **Content:** Reference specific skills from the resume. If the JD asks for Python and the candidate has Python, highlight it.
+    4. **Constraints:** Max 4 paragraphs. Concise but impactful.
+    5. **Formatting:** Use double newlines between paragraphs. **Bold** the job title in the body.
+
+    --- CANDIDATE RESUME DATA ---
+    Name: {candidate_name}
+    Contact: {candidate_email}
+    Skills: {candidate_skills}
+    Experience Summary: 
+    {candidate_experience}
     
-    --- Candidate Information ---
-    Candidate Name: {candidate_name}
-    Candidate Contact: {candidate_email}
-    Key Skills: {candidate_skills}
-    Relevant Experience: {candidate_experience}
-    
-    --- Job Description Information ---
-    Job Description Role: {jd_role}
-    Job Description Content:
+    --- JOB DESCRIPTION ---
+    Role: {jd_role}
+    Content:
     {jd_content}
+
+    --- OUTPUT ---
+    Write the cover letter now:
     """
     
-    if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
-         response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
-         return response.choices[0].message.content.strip()
+    # 4. LLM Execution
+    # Determine if we use the real client or mock
+    is_mock = isinstance(client, MockGroqClient) or not GROQ_API_KEY
 
     try:
-        response = client.chat.completions.create(
-            model=GROQ_MODEL, 
-            messages=[{"role": "user", "content": prompt}], 
-            temperature=0.7 
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        error_output = f"AI Generation Error: Failed to connect or receive response from LLM. Error: {e}\n{traceback.format_exc()}"
-        return error_output
+        if is_mock:
+            # Using standard create for mock or simplified setup
+            response = client.chat().create(
+                model=GROQ_MODEL, 
+                messages=[{"role": "user", "content": prompt}]
+            )
+        else:
+            # Standard Groq SDK call
+            response = client.chat.completions.create(
+                model=GROQ_MODEL, 
+                messages=[{"role": "system", "content": "You are a professional hiring expert."},
+                          {"role": "user", "content": prompt}], 
+                temperature=0.6,
+                max_tokens=1000
+            )
+        
+        # Extract content safely
+        if hasattr(response, 'choices'):
+            letter_text = response.choices[0].message.content.strip()
+        else:
+            # Fallback for different response structures
+            letter_text = response
+            
+        return letter_text
 
+    except Exception as e:
+        return f"AI Generation Error: {str(e)}\n\n{traceback.format_exc()}"
 def generate_gap_course_plan(gap_analysis_text, jd_role, candidate_skills):
     """
     Generates a detailed course plan and certification suggestions to fill identified gaps.
