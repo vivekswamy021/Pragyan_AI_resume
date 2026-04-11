@@ -1664,30 +1664,45 @@ def jd_batch_match_tab():
                     # Call the LLM evaluation function
                     fit_output = evaluate_jd_fit(jd_content, parsed_json) 
                     
-                    # --- FIX: ROBUST SCORE EXTRACTION ---
-                    # This pattern handles: **Overall Fit Score:** 8/10, [8]/10, 8 / 10, etc.
-                    overall_score = "N/A"
-                    score_match = re.search(r'(?:Overall Fit Score|Overall Score|Fit Score):\s*\*?\[?\s*(\d+)\s*\]?\s*/\s*10', fit_output, re.IGNORECASE)
+                    # --- FIXED EXTRACTION LOGIC ---
                     
-                    if score_match:
-                        overall_score = score_match.group(1)
-                    else:
-                        # Fallback: Look for the first "X/10" pattern in the text
-                        fallback = re.search(r'(\d+)\s*/\s*10', fit_output)
+                    # 1. Improved Score Extraction: Removed the 'text*?' bug
+                    score_patterns = [
+                        r"Overall Fit Score:\s*\*?\[?\s*(\d+)\s*\]?\s*/\s*10",
+                        r"Overall\s*Score:\s*\*?\[?\s*(\d+)\s*\]?\s*/\s*10",
+                        r"Fit\s*Score:\s*\*?\[?\s*(\d+)\s*\]?\s*/\s*10"
+                    ]
+                    
+                    overall_score = "N/A"
+                    for pattern in score_patterns:
+                        match = re.search(pattern, fit_output, re.IGNORECASE)
+                        if match:
+                            overall_score = match.group(1)
+                            break
+                    
+                    # Fallback for any "Number/10" in the text
+                    if overall_score == "N/A":
+                        fallback = re.search(r"(\d+)\s*/\s*10", fit_output)
                         if fallback:
                             overall_score = fallback.group(1)
 
-                    # --- FIX: ROBUST SECTION EXTRACTION ---
+                    # 2. Extract Section Match Analysis block
+                    section_analysis_match = re.search(
+                        r'--- Section Match Analysis ---\s*(.*?)\s*(?:Strengths|Overall Summary|Gaps|$)', 
+                        fit_output, re.DOTALL | re.IGNORECASE
+                    )
+                    
                     skills_percent, exp_percent, edu_percent = '0', '0', '0'
-                    
-                    # Look for percentages anywhere in the analysis if the block capture fails
-                    s_m = re.search(r'Skills\s*Match:\s*\*?\[?\s*(\d+)\s*%?\s*\]?', fit_output, re.IGNORECASE)
-                    x_m = re.search(r'Experience\s*Match:\s*\*?\[?\s*(\d+)\s*%?\s*\]?', fit_output, re.IGNORECASE)
-                    e_m = re.search(r'Education\s*Match:\s*\*?\[?\s*(\d+)\s*%?\s*\]?', fit_output, re.IGNORECASE)
-                    
-                    if s_m: skills_percent = s_m.group(1)
-                    if x_m: exp_percent = x_m.group(1)
-                    if e_m: edu_percent = e_m.group(1)
+                    if section_analysis_match:
+                        section_text = section_analysis_match.group(1)
+                        # Look for digits followed by optional % sign
+                        s_m = re.search(r'Skills\s*Match:\s*(\d+)', section_text, re.IGNORECASE)
+                        x_m = re.search(r'Experience\s*Match:\s*(\d+)', section_text, re.IGNORECASE)
+                        e_m = re.search(r'Education\s*Match:\s*(\d+)', section_text, re.IGNORECASE)
+                        
+                        if s_m: skills_percent = s_m.group(1)
+                        if x_m: exp_percent = x_m.group(1)
+                        if e_m: edu_percent = e_m.group(1)
 
                     # 3. Extract Gaps
                     gaps_match = re.search(r'Gaps/Areas for Improvement:\s*(.*?)\s*(?:Overall Summary|---|$)', fit_output, re.DOTALL | re.IGNORECASE)
@@ -1707,10 +1722,10 @@ def jd_batch_match_tab():
                         "gaps": raw_gaps
                     })
                         
-                # Sort by score descending (highest match first)
+                # Sort by score descending
                 results_with_score.sort(key=lambda x: x['numeric_score'], reverse=True)
                 
-                # Assign Ranks based on sorted order
+                # Assign Ranks
                 for i, item in enumerate(results_with_score):
                     item['rank'] = i + 1
                     
@@ -1736,15 +1751,15 @@ def jd_batch_match_tab():
              
          summary_df = pd.DataFrame(summary_df_data)
          
+         # FIXED: Removed yellow color (Mid-range now transparent/white)
          def color_score(val):
              try:
                  num = int(val)
-                 if num >= 8: return 'background-color: #d4edda; color: #155724' # Green
-                 elif num >= 6: return 'background-color: #fff3cd; color: #856404' # Yellow
-                 return 'background-color: #f8d7da; color: #721c24' # Red
+                 if num >= 8: return 'background-color: #d4edda; color: #155724' # Clean Green
+                 elif num >= 6: return '' # REMOVED YELLOW - Set to default
+                 return 'background-color: #f8d7da; color: #721c24' # Clean Red
              except: return ''
              
-         # Using .map for Pandas 2.0+ compatibility
          st.dataframe(
              summary_df.style.map(color_score, subset=['Overall Score (10)']), 
              use_container_width=True,
@@ -1757,11 +1772,11 @@ def jd_batch_match_tab():
          
          for res in st.session_state.candidate_match_results:
              with st.expander(f"**Rank {res.get('rank')}** | {res['jd_name']} | **Score: {res['overall_score']}/10**"):
-                 st.markdown(f"**Section Matches:** Exp: `{res['experience_percent']}%` | Edu: `{res['education_percent']}%` | Skills: `{res['skills_percent']}%`")
+                 st.write(f"**Section Matches:** Exp: {res['experience_percent']}% | Edu: {res['education_percent']}% | Skills: {res['skills_percent']}%")
                  st.markdown("---")
                  st.markdown(res['full_analysis'])
     else:
-         st.info("💡 Run the match analysis above to evaluate your resume against selected Job Descriptions.")
+         st.info("Run the match analysis above to evaluate your resume against selected Job Descriptions.")
         
 # --- Filter JD Tab Function (unchanged) ---
 
