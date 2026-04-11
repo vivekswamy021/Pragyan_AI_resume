@@ -1720,8 +1720,9 @@ def jd_batch_match_tab():
              except:
                  return ''
              
+         # FIX: Changed .applymap to .map for compatibility with Pandas 2.1.0+
          st.dataframe(
-             summary_df.style.applymap(color_score, subset=['Overall Score (10)']), 
+             summary_df.style.map(color_score, subset=['Overall Score (10)']), 
              use_container_width=True,
              column_order=["Rank", "Job Description", "Overall Score (10)", "Experience %", "Education %", "Skills %"]
          )
