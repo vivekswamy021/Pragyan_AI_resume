@@ -1000,7 +1000,7 @@ def admin_dashboard():
 
 # --- Session State & Main Function Initialization (Required for execution) ---
 if __name__ == '__main__':
-    st.set_page_config(layout="wide", page_title="PragyanAI Admin Dashboard")
+    st.set_page_config(layout="wide", page_title="Admin Dashboard")
     # Initialize state for necessary variables
     if 'page' not in st.session_state: st.session_state.page = "admin_dashboard" 
     if 'admin_jd_list' not in st.session_state: st.session_state.admin_jd_list = []
