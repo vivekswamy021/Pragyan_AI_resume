@@ -1,7 +1,6 @@
 # app.py
 
 import streamlit as st
-from utils import go_to, clear_interview_state
 from admin_dashboard import admin_dashboard
 from candidate_dashboard import candidate_dashboard
 from hiring_dashboard import hiring_dashboard
