@@ -207,7 +207,7 @@ if __name__ == '__main__':
 
     if st.session_state.logged_in:
         render_profile_sidebar()
-        show_logo()
+        #show_logo()
         
         # --- COMMON HEADER SECTION (Log Out Button) ---
         # This mirrors the UI in your screenshot
