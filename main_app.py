@@ -1,229 +1,117 @@
+# app.py
+
 import streamlit as st
+from utils import go_to, clear_interview_state
+from admin_dashboard import admin_dashboard
+from candidate_dashboard import candidate_dashboard
+from hiring_dashboard import hiring_dashboard
+from datetime import date
 
-# Attempting to import the dashboard functions
-# Make sure these .py files exist in the same directory!
-try:
-    from admin_dashboard import admin_dashboard
-    from candidate_dashboard import candidate_dashboard
-    from hiring_dashboard import hiring_dashboard
-except ImportError as e:
-    st.error(f"Module Import Error: {e}. Please ensure admin_dashboard.py, candidate_dashboard.py, and hiring_dashboard.py are in the same folder.")
-    st.stop()
-
-# ------------------------------
-# Utility Functions
-# ------------------------------
-
-def go_to(page_name):
-    st.session_state.page = page_name
-
-def handle_logout():
-    """Resets session state and redirects to login."""
-    st.session_state.logged_in = False
-    st.session_state.user_type = None
-    st.session_state.user_email = ""
-    st.session_state.user_name = ""
-    st.session_state.page = "login"
-    st.rerun()
-
-def initialize_session_state():
-    if 'page' not in st.session_state: st.session_state.page = "login"
-    if 'logged_in' not in st.session_state: st.session_state.logged_in = False
-    if 'user_type' not in st.session_state: st.session_state.user_type = None
-    if 'user_email' not in st.session_state: st.session_state.user_email = "" 
-    if 'user_name' not in st.session_state: st.session_state.user_name = ""
-
-    # 👤 USER PROFILE DATA
-    if 'user_profile' not in st.session_state:
-        st.session_state.user_profile = {
-            "profile_pic": None,
-            "github_link": "",
-            "linkedin_link": "",
-            "password": "password123"
-        }
-
-    # Admin Data
-    if 'admin_jd_list' not in st.session_state: st.session_state.admin_jd_list = []
-    if 'resumes_to_analyze' not in st.session_state: st.session_state.resumes_to_analyze = []
-    if 'admin_match_results' not in st.session_state: st.session_state.admin_match_results = []
-    if 'resume_statuses' not in st.session_state: st.session_state.resume_statuses = {}
-    if 'vendors' not in st.session_state: st.session_state.vendors = []
-    if 'vendor_statuses' not in st.session_state: st.session_state.vendor_statuses = {}
-
-    # Candidate Data
-    if "parsed" not in st.session_state: st.session_state.parsed = {} 
-    if "full_text" not in st.session_state: st.session_state.full_text = ""
-    if "excel_data" not in st.session_state: st.session_state.excel_data = None
-    if "candidate_uploaded_resumes" not in st.session_state: st.session_state.candidate_uploaded_resumes = []
-    if "pasted_cv_text" not in st.session_state: st.session_state.pasted_cv_text = ""
-    if "current_parsing_source_name" not in st.session_state: st.session_state.current_parsing_source_name = None
-
-    if "candidate_jd_list" not in st.session_state: st.session_state.candidate_jd_list = []
-    if "candidate_match_results" not in st.session_state: st.session_state.candidate_match_results = []
-    if 'filtered_jds_display' not in st.session_state: st.session_state.filtered_jds_display = []
-    if 'last_selected_skills' not in st.session_state: st.session_state.last_selected_skills = []
-    if 'generated_cover_letter' not in st.session_state: st.session_state.generated_cover_letter = "" 
-    if 'cl_jd_name' not in st.session_state: st.session_state.cl_jd_name = "" 
-
-    # CV Management Tab Data
-    if 'cv_data' not in st.session_state: 
-        st.session_state.cv_data = {
-            'personal_info': {'name': '', 'email': '', 'phone': ''},
-            'education': [],
-            'experience': [],
-            'projects': [],
-            'certifications': [],
-            'strengths_raw': ''
-        }
-
-    if 'form_cv_text' not in st.session_state:
-        st.session_state.form_cv_text = ""
-
-    # Hiring Manager
-    if 'hiring_jds' not in st.session_state: st.session_state.hiring_jds = []
-
-
-# --------------------------------------------------
-# 👤 PROFILE SIDEBAR FUNCTION
-# --------------------------------------------------
-def render_profile_sidebar():
-    with st.sidebar:
-        st.header(f"👤 {st.session_state.user_name}")
-        st.markdown(f"**Role:** {st.session_state.user_type.capitalize()}")
-        st.markdown(f"**Email:** {st.session_state.user_email}")
-        st.divider()
-
-        if st.session_state.user_profile["profile_pic"]:
-            st.image(st.session_state.user_profile["profile_pic"], width=100)
-        else:
-            st.markdown("## 👤")
-            st.caption("No image")
-
-        uploaded_pic = st.file_uploader("Update Photo", type=["jpg", "png", "jpeg"])
-        if uploaded_pic is not None:
-            st.session_state.user_profile["profile_pic"] = uploaded_pic
-            st.success("Photo Updated!")
-            st.rerun()
-
-        st.divider()
-        st.subheader("✏️ Profile Name")
-        new_name = st.text_input("Display Name", value=st.session_state.user_name, label_visibility="collapsed")
-        if st.button("Update Name"):
-            st.session_state.user_name = new_name
-            st.success("Name updated!")
-            st.rerun()
-
-        st.divider()
-        st.subheader("🔗 Professional Links")
-        new_github = st.text_input("GitHub URL", value=st.session_state.user_profile["github_link"], placeholder="https://github.com/...")
-        new_linkedin = st.text_input("LinkedIn URL", value=st.session_state.user_profile["linkedin_link"], placeholder="https://linkedin.com/in/...")
-
-        if st.button("Save Links"):
-            st.session_state.user_profile["github_link"] = new_github
-            st.session_state.user_profile["linkedin_link"] = new_linkedin
-            st.success("Links saved successfully!")
-
-        st.divider()
-        with st.expander("🔐 Change Password"):
-            new_pass = st.text_input("New Password", type="password")
-            confirm_pass = st.text_input("Confirm New Password", type="password")
-            if st.button("Update Password"):
-                if new_pass and confirm_pass and new_pass == confirm_pass:
-                    st.session_state.user_profile["password"] = new_pass
-                    st.success("Password changed!")
-                else:
-                    st.error("Check password match.")
-
-
-# --------------------------------------------------
-# LOGIN & SIGNUP PAGES
-# --------------------------------------------------
-
+# -------------------------
+# Main App Initialization
+# -------------------------
 def login_page():
-    st.markdown('<h1 style="font-size: 32px; font-weight: 700; margin-bottom: 10px;">AI Resume and Job Portal</h1>', unsafe_allow_html=True)
-    st.subheader("Login")
-    col1, col2, col3 = st.columns([1, 2, 1])
+    st.title("🌐 PragyanAI Job Portal")
+    st.header("Login")
 
-    with col2:
-        st.caption("Use any email/password. Select role: Candidate / Admin / Hiring Manager.")
-        with st.form("login_form", clear_on_submit=True):
-            role = st.selectbox("Select Role", ["Select Role", "Candidate", "Admin", "Hiring Manager"], label_visibility="collapsed")
-            email = st.text_input("Email", placeholder="Enter email", label_visibility="collapsed")
-            password = st.text_input("Password", type="password", placeholder="Enter password", label_visibility="collapsed")
-            submitted = st.form_submit_button("Login")
+    # --- Role Selection ---
+    selected_role = st.selectbox(
+        "Select Your Role",
+        ["Select Role", "Admin Dashboard", "Candidate Dashboard", "Hiring Company Dashboard"],
+        key="login_role_select"
+    )
+    
+    st.markdown("---")
 
-            if submitted:
-                if role == "Select Role" or not email or not password:
-                    st.error("Please fill all fields.")
-                else:
-                    user_role = {"Candidate": "candidate", "Admin": "admin", "Hiring Manager": "hiring"}.get(role)
-                    st.session_state.logged_in = True
-                    st.session_state.user_type = user_role
-                    st.session_state.user_email = email
-                    st.session_state.user_name = email.split("@")[0].capitalize()
-                    go_to(f"{user_role}_dashboard")
-                    st.rerun()
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
 
-        if st.button("Don't have an account? Sign up here"):
-            go_to("signup")
-            st.rerun()
+    if st.button("Login", use_container_width=True):
+        if email and password:
+            if selected_role == "Select Role":
+                st.error("Please select your role before logging in.")
+            elif selected_role == "Admin Dashboard":
+                st.success("Login successful! Redirecting to Admin Dashboard.")
+                go_to("admin_dashboard")
+            elif selected_role == "Candidate Dashboard":
+                st.success("Login successful! Redirecting to Candidate Dashboard.")
+                go_to("candidate_dashboard")
+            elif selected_role == "Hiring Company Dashboard":
+                st.success("Login successful! Redirecting to Hiring Company Dashboard.")
+                go_to("hiring_dashboard")
+        else:
+            st.error("Please enter both email and password")
+
+    st.markdown("---")
+    
+    if st.button("Don't have an account? Sign up here"):
+        go_to("signup")
 
 def signup_page():
-    st.markdown('<h1 style="font-size: 30px; font-weight: 700;">Create an Account</h1>', unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        with st.form("signup_form"):
-            full_name = st.text_input("Full Name", placeholder="Enter full name")
-            email = st.text_input("Email", placeholder="Enter email")
-            password = st.text_input("Password", type="password")
-            confirm_password = st.text_input("Confirm", type="password")
-            submitted = st.form_submit_button("Sign Up")
-            if submitted:
-                if password == confirm_password and email:
-                    st.success("Account created! Please log in.")
-                    go_to("login")
-                    st.rerun()
-                else:
-                    st.error("Check details.")
-        if st.button("Already have an account? Login here"):
+    st.header("Create an Account")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+    confirm = st.text_input("Confirm Password", type="password")
+
+    if st.button("Sign Up", use_container_width=True):
+        if password == confirm and email:
+            st.success("Signup successful! Please login.")
             go_to("login")
-            st.rerun()
+        else:
+            st.error("Passwords do not match or email is empty")
+
+    if st.button("Already have an account? Login here"):
+        go_to("login")
 
 
-# --------------------------------------------------
-# MAIN EXECUTION
-# --------------------------------------------------
+def main():
+    st.set_page_config(layout="wide", page_title="PragyanAI Job Portal")
+
+    # --- Session State Initialization ---
+    if 'page' not in st.session_state: st.session_state.page = "login"
+    
+    # Initialize session state for AI features (Defensive Initialization)
+    if 'parsed' not in st.session_state: st.session_state.parsed = {}
+    if 'full_text' not in st.session_state: st.session_state.full_text = ""
+    if 'excel_data' not in st.session_state: st.session_state.excel_data = None
+    if 'qa_answer' not in st.session_state: st.session_state.qa_answer = ""
+    if 'iq_output' not in st.session_state: st.session_state.iq_output = ""
+    if 'jd_fit_output' not in st.session_state: st.session_state.jd_fit_output = ""
+        
+        # Admin Dashboard specific lists
+    if 'admin_jd_list' not in st.session_state: st.session_state.admin_jd_list = [] 
+    if 'resumes_to_analyze' not in st.session_state: st.session_state.resumes_to_analyze = [] 
+    if 'admin_match_results' not in st.session_state: st.session_state.admin_match_results = [] 
+    if 'resume_statuses' not in st.session_state: st.session_state.resume_statuses = {} 
+        
+        # Vendor State Init
+    if 'vendors' not in st.session_state: st.session_state.vendors = []
+    if 'vendor_statuses' not in st.session_state: st.session_state.vendor_statuses = {}
+        
+        # Candidate Dashboard specific lists
+    if 'candidate_jd_list' not in st.session_state: st.session_state.candidate_jd_list = []
+    if 'candidate_match_results' not in st.session_state: st.session_state.candidate_match_results = []
+    
+    # Resume Parsing Upload State
+    if 'candidate_uploaded_resumes' not in st.session_state: st.session_state.candidate_uploaded_resumes = []
+    
+    # Interview Prep Q&A State
+    if 'interview_qa' not in st.session_state: st.session_state.interview_qa = [] 
+    if 'evaluation_report' not in st.session_state: st.session_state.evaluation_report = ""
+
+
+    # --- Page Routing ---
+    if st.session_state.page == "login":
+        login_page()
+    elif st.session_state.page == "signup":
+        signup_page()
+    elif st.session_state.page == "admin_dashboard":
+        admin_dashboard()
+    elif st.session_state.page == "candidate_dashboard":
+        candidate_dashboard()
+    elif st.session_state.page == "hiring_dashboard":
+        hiring_dashboard()
 
 if __name__ == '__main__':
-    st.set_page_config(layout="wide", page_title="AI Resume App")
-    initialize_session_state()
-
-    if st.session_state.logged_in:
-        render_profile_sidebar()
-        
-        role_display = st.session_state.user_type.capitalize()
-        if st.session_state.user_type == "hiring": role_display = "Hiring Manager"
-        
-        st.markdown(f'# 👨‍💼 {role_display} Dashboard')
-        st.caption(f"Logged in as: **{st.session_state.user_name}**")
-        
-        if st.button("🚪 Log Out"):
-            handle_logout()
-        
-        st.divider()
-
-        # --- ROUTING TO DASHBOARDS ---
-        if st.session_state.user_type == "admin":
-            admin_dashboard(go_to)
-
-        elif st.session_state.user_type == "candidate":
-            candidate_dashboard(go_to)
-
-        elif st.session_state.user_type == "hiring":
-            hiring_dashboard(go_to)
-
-    else:
-        if st.session_state.page == "signup":
-            signup_page()
-        else:
+    main()
             login_page()
