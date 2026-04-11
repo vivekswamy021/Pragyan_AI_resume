@@ -11,8 +11,8 @@ from hiring_dashboard import hiring_dashboard
 # --------------------------------------------------
 # 🔥 LOGO FUNCTION (used across all pages)
 # --------------------------------------------------
-def show_logo(width=510):
-    st.image(LOGO_URL, width=width)
+# def show_logo(width=510):
+    #st.image(LOGO_URL, width=width)
 
 
 # ------------------------------
