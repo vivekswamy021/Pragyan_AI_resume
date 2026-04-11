@@ -145,7 +145,7 @@ def render_profile_sidebar():
 # --------------------------------------------------
 
 def login_page():
-    show_logo()
+    #show_logo()
     st.markdown('<h1 style="font-size: 32px; font-weight: 700; margin-bottom: 10px;">PragyanAI Job Portal</h1>', unsafe_allow_html=True)
     st.subheader("Login")
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -175,7 +175,7 @@ def login_page():
             st.rerun()
 
 def signup_page():
-    show_logo()
+    #show_logo()
     st.markdown('<h1 style="font-size: 30px; font-weight: 700;">Create an Account</h1>', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
