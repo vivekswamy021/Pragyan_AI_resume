@@ -1,215 +1,476 @@
-# app.py
+from admin_dashboard import admin_dashboard
 
-import streamlit as st
-import os
-import pdfplumber
-import docx
-import openpyxl
-import json
-import tempfile
-from groq import Groq
-import traceback
-import re
-from dotenv import load_dotenv 
-from datetime import date 
-import csv 
-from streamlit.runtime.uploaded_file_manager import UploadedFile
+from candidate_dashboard import candidate_dashboard
 
-# -------------------------
-# CONFIGURATION & API SETUP
-# -------------------------
+from hiring_dashboard import hiring_dashboard
 
-GROQ_MODEL = "llama-3.1-8b-instant"
-DEFAULT_JOB_TYPES = ["Full-time", "Contract", "Internship", "Remote", "Part-time"]
-DEFAULT_ROLES = ["Software Engineer", "Data Scientist", "Product Manager", "HR Manager", "Marketing Specialist", "Operations Analyst"]
 
-load_dotenv()
-GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 
-if not GROQ_API_KEY:
-    st.warning("🚨 WARNING: GROQ_API_KEY not set. AI functionality disabled.")
-    class MockGroqClient:
-        def chat(self):
-            class Completions:
-                def create(self, **kwargs):
-                    raise ValueError("GROQ_API_KEY not set.")
-            return Completions()
-    client = MockGroqClient()
-else:
-    client = Groq(api_key=GROQ_API_KEY)
+# 🔥 SET YOUR LOGO HERE (GitHub RAW IMAGE LINK)
 
-# -------------------------
-# CORE UTILITY FUNCTIONS
-# -------------------------
+# --------------------------------------------------
+
+#LOGO_URL = "https://raw.githubusercontent.com/vivekswamy021/Pragyan_AI_resume/main/pragyan_ai_school_cover.jpg"
+
+
+
+
+
+# --------------------------------------------------
+
+# 🔥 LOGO FUNCTION (used across all pages)
+
+# --------------------------------------------------
+
+# def show_logo(width=510):
+
+    #st.image(LOGO_URL, width=width)
+
+
+
+
+
+# ------------------------------
+
+# Utility Functions
+
+# ------------------------------
+
+
 
 def go_to(page_name):
+
     st.session_state.page = page_name
 
-def get_file_type(file_path):
-    ext = os.path.splitext(file_path)[1].lower().strip('.')
-    return ext if ext in ['pdf', 'docx', 'xlsx', 'txt', 'json', 'csv'] else 'txt'
 
-def extract_content(file_type, file_path):
-    text = ''
-    try:
-        if file_type == 'pdf':
-            with pdfplumber.open(file_path) as pdf:
-                text = '\n'.join([page.extract_text() or "" for page in pdf.pages])
-        elif file_type == 'docx':
-            doc = docx.Document(file_path)
-            text = '\n'.join([para.text for para in doc.paragraphs])
-        elif file_type == 'xlsx':
-            workbook = openpyxl.load_workbook(file_path)
-            for sheet in workbook.sheetnames:
-                for row in workbook[sheet].iter_rows(values_only=True):
-                    text += ' | '.join([str(c) for c in row if c is not None]) + '\n'
-        else:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                text = f.read()
-        return text if text.strip() else "Error: File is empty."
-    except Exception as e:
-        return f"Error: {e}"
 
-# -------------------------
-# AI LOGIC (REFINED JSON EXTRACTION)
-# -------------------------
+def handle_logout():
 
-def parse_with_llm(text):
-    if not GROQ_API_KEY: return {"error": "API Key missing"}
-    prompt = f"""Extract details from this resume into JSON: Name, Email, Phone, Skills, 
-    Education (list), Experience (list), summary (3 sentence bio), Github, LinkedIn.
-    Resume: {text}"""
-    try:
-        response = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}], temperature=0.1)
-        content = response.choices[0].message.content.strip()
-        # Aggressive Regex Fix for "Extra Data" error
-        json_match = re.search(r'\{.*\}', content, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group(0))
-        raise ValueError("No JSON found")
-    except Exception as e:
-        return {"error": str(e), "name": "Unknown"}
+    """Resets session state and redirects to login."""
 
-@st.cache_data(show_spinner="Matching...")
-def evaluate_jd_fit(jd_text, parsed_json):
-    if not GROQ_API_KEY: return "AI Disabled"
-    prompt = f"Match this Resume JSON: {json.dumps(parsed_json)} against this JD: {jd_text}. Give Score/10 and Strengths/Gaps."
-    response = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
-    return response.choices[0].message.content
+    st.session_state.logged_in = False
 
-def extract_jd_from_linkedin_url(url):
-    return f"Simulated JD for role at {url}. Requirements: Python, SQL, Cloud."
+    st.session_state.user_type = None
 
-# -------------------------
-# ADMIN DASHBOARD
-# -------------------------
+    st.session_state.user_email = ""
 
-def admin_dashboard():
-    st.title("🧑‍💼 Admin Dashboard")
-    if st.button("🚪 Log Out"): go_to("login"); st.rerun()
+    st.session_state.user_name = ""
 
-    tab1, tab2, tab3 = st.tabs(["📊 Resume Analysis", "🛠️ User Management", "📈 Statistics"])
-    
-    with tab1:
-        files = st.file_uploader("Upload Resumes", accept_multiple_files=True)
-        if st.button("Process Resumes"):
-            for f in files:
-                with tempfile.NamedTemporaryFile(delete=False, suffix=f".{get_file_type(f.name)}") as tmp:
-                    tmp.write(f.getbuffer())
-                    txt = extract_content(get_file_type(tmp.name), tmp.name)
-                    res = parse_with_llm(txt)
-                    st.session_state.resumes_to_analyze.append({"name": f.name, "parsed": res, "applied_jd": "Pending", "submitted_date": str(date.today())})
-                    st.session_state.resume_statuses[f.name] = "Pending"
-            st.success("Processed!")
+    st.session_state.page = "login"
 
-    with tab2:
-        st.subheader("Candidate Approval")
-        for idx, r in enumerate(st.session_state.resumes_to_analyze):
-            with st.container(border=True):
-                st.write(f"**Candidate:** {r['name']} | **Status:** {st.session_state.resume_statuses[r['name']]}")
-                st.write(f"Summary: {r['parsed'].get('summary', 'N/A')}")
-                c1, c2, c3 = st.columns(3)
-                if c1.button("✅ Approve", key=f"app_{idx}"): st.session_state.resume_statuses[r['name']] = "Approved"; st.rerun()
-                if c2.button("❌ Reject", key=f"rej_{idx}"): st.session_state.resume_statuses[r['name']] = "Rejected"; st.rerun()
-                if c3.button("🟡 Pending", key=f"pen_{idx}"): st.session_state.resume_statuses[r['name']] = "Pending"; st.rerun()
+    st.rerun()
+
+
+
+def initialize_session_state():
+
+    if 'page' not in st.session_state: st.session_state.page = "login"
+
+    if 'logged_in' not in st.session_state: st.session_state.logged_in = False
+
+    if 'user_type' not in st.session_state: st.session_state.user_type = None
+
+    if 'user_email' not in st.session_state: st.session_state.user_email = "" 
+
+    if 'user_name' not in st.session_state: st.session_state.user_name = ""
+
+
+
+    # 👤 USER PROFILE DATA
+
+    if 'user_profile' not in st.session_state:
+
+        st.session_state.user_profile = {
+
+            "profile_pic": None,
+
+            "github_link": "",
+
+            "linkedin_link": "",
+
+            "password": "password123"
+
+        }
+
+
+
+    # Admin Data
+
+    if 'admin_jd_list' not in st.session_state: st.session_state.admin_jd_list = []
+
+    if 'resumes_to_analyze' not in st.session_state: st.session_state.resumes_to_analyze = []
+
+    if 'admin_match_results' not in st.session_state: st.session_state.admin_match_results = []
+
+    if 'resume_statuses' not in st.session_state: st.session_state.resume_statuses = {}
+
+    if 'vendors' not in st.session_state: st.session_state.vendors = []
+
+    if 'vendor_statuses' not in st.session_state: st.session_state.vendor_statuses = {}
+
+
+
+    # Candidate Data
+
+    if "parsed" not in st.session_state: st.session_state.parsed = {} 
+
+    if "full_text" not in st.session_state: st.session_state.full_text = ""
+
+    if "excel_data" not in st.session_state: st.session_state.excel_data = None
+
+    if "candidate_uploaded_resumes" not in st.session_state: st.session_state.candidate_uploaded_resumes = []
+
+    if "pasted_cv_text" not in st.session_state: st.session_state.pasted_cv_text = ""
+
+    if "current_parsing_source_name" not in st.session_state: st.session_state.current_parsing_source_name = None
+
+
+
+    if "candidate_jd_list" not in st.session_state: st.session_state.candidate_jd_list = []
+
+    if "candidate_match_results" not in st.session_state: st.session_state.candidate_match_results = []
+
+    if 'filtered_jds_display' not in st.session_state: st.session_state.filtered_jds_display = []
+
+    if 'last_selected_skills' not in st.session_state: st.session_state.last_selected_skills = []
+
+    if 'generated_cover_letter' not in st.session_state: st.session_state.generated_cover_letter = "" 
+
+    if 'cl_jd_name' not in st.session_state: st.session_state.cl_jd_name = "" 
+
+
+
+    # CV Management Tab Data
+
+    if 'cv_data' not in st.session_state: 
+
+        st.session_state.cv_data = {
+
+            'personal_info': {'name': '', 'email': '', 'phone': ''},
+
+            'education': [],
+
+            'experience': [],
+
+            'projects': [],
+
+            'certifications': [],
+
+            'strengths_raw': ''
+
+        }
+
+
+
+    if 'form_cv_text' not in st.session_state:
+
+        st.session_state.form_cv_text = ""
+
+
+
+    # Hiring Manager
+
+    if 'hiring_jds' not in st.session_state: st.session_state.hiring_jds = []
+
+
+
+
+
+# --------------------------------------------------
+
+# 👤 PROFILE SIDEBAR FUNCTION
+
+# --------------------------------------------------
+
+def render_profile_sidebar():
+
+    with st.sidebar:
+
+        st.header(f"👤 {st.session_state.user_name}")
+
+        st.markdown(f"**Role:** {st.session_state.user_type.capitalize()}")
+
+        st.markdown(f"**Email:** {st.session_state.user_email}")
 
         st.divider()
-        st.subheader("Vendor Approval")
-        with st.form("vendor_form", clear_on_submit=True):
-            v_name = st.text_input("Vendor Name")
-            v_contact = st.text_input("Contact Person")
-            if st.form_submit_button("Add Vendor"):
-                st.session_state.vendors.append({"name": v_name, "contact": v_contact, "status": "Pending Review"})
-                st.session_state.vendor_statuses[v_name] = "Pending Review"
-                st.rerun()
-        st.write(st.session_state.vendors)
 
-    with tab3:
-        st.write(f"Total Candidates: {len(st.session_state.resumes_to_analyze)}")
-        st.write(f"Total Vendors: {len(st.session_state.vendors)}")
 
-# -------------------------
-# CANDIDATE DASHBOARD
-# -------------------------
 
-def candidate_dashboard():
-    st.title("👩‍🎓 Candidate Dashboard")
-    if st.button("🚪 Log Out"): go_to("login"); st.rerun()
+        if st.session_state.user_profile["profile_pic"]:
 
-    t1, t2 = st.tabs(["🚀 CV Management & Match", "📝 Education"])
-    
-    with t1:
-        st.subheader("Match Your Resume")
-        uploaded_file = st.file_uploader("Upload Resume")
-        jd_text = st.text_area("Paste JD")
-        if st.button("Run Analysis"):
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-                tmp.write(uploaded_file.getbuffer())
-                txt = extract_content("pdf", tmp.name)
-                parsed = parse_with_llm(txt)
-                fit = evaluate_jd_fit(jd_text, parsed)
-                st.write(fit)
+            st.image(st.session_state.user_profile["profile_pic"], width=100)
 
-    with t2:
-        st.subheader("Add Education")
-        with st.form("edu_form", clear_on_submit=True):
-            deg = st.selectbox("Degree", ["B.Tech", "M.Tech", "MBA", "B.Sc", "Other"])
-            col = st.text_input("College")
-            uni = st.text_input("University")
-            dfrom = st.date_input("From", value=date(2020,1,1))
-            dto = st.date_input("To", value=date.today())
-            if st.form_submit_button("Add Education"):
-                st.session_state.manual_education.append(f"{deg} at {col} ({uni}) [{dfrom} to {dto}]")
-                st.rerun()
-        st.write(st.session_state.manual_education)
+        else:
 
-# -------------------------
-# MAIN ROUTING
-# -------------------------
+            st.markdown("## 👤")
 
-def main():
-    st.set_page_config(layout="wide", page_title="PragyanAI Portal")
+            st.caption("No image")
 
-    # Initialize State
-    if 'page' not in st.session_state: st.session_state.page = "login"
-    if 'resumes_to_analyze' not in st.session_state: st.session_state.resumes_to_analyze = []
-    if 'resume_statuses' not in st.session_state: st.session_state.resume_statuses = {}
-    if 'vendors' not in st.session_state: st.session_state.vendors = []
-    if 'vendor_statuses' not in st.session_state: st.session_state.vendor_statuses = {}
-    if 'manual_education' not in st.session_state: st.session_state.manual_education = []
 
-    if st.session_state.page == "login":
-        st.title("PragyanAI Job Portal")
-        role = st.selectbox("I am a...", ["Admin", "Candidate", "Hiring Company"])
-        if st.button("Login"):
-            if role == "Admin": go_to("admin")
-            elif role == "Candidate": go_to("candidate")
-            else: go_to("hiring")
+
+        uploaded_pic = st.file_uploader("Update Photo", type=["jpg", "png", "jpeg"])
+
+        if uploaded_pic is not None:
+
+            st.session_state.user_profile["profile_pic"] = uploaded_pic
+
+            st.success("Photo Updated!")
+
             st.rerun()
-    
-    elif st.session_state.page == "admin": admin_dashboard()
-    elif st.session_state.page == "candidate": candidate_dashboard()
-    elif st.session_state.page == "hiring": st.title("🏢 Hiring Dashboard (Coming Soon)"); st.button("Back", on_click=lambda: go_to("login"))
 
-if __name__ == "__main__":
-    main()
+
+
+        st.divider()
+
+        st.subheader("✏️ Profile Name")
+
+        new_name = st.text_input("Display Name", value=st.session_state.user_name, label_visibility="collapsed")
+
+        if st.button("Update Name"):
+
+            st.session_state.user_name = new_name
+
+            st.success("Name updated!")
+
+            st.rerun()
+
+
+
+        st.divider()
+
+        st.subheader("🔗 Professional Links")
+
+        new_github = st.text_input("GitHub URL", value=st.session_state.user_profile["github_link"], placeholder="https://github.com/...")
+
+        new_linkedin = st.text_input("LinkedIn URL", value=st.session_state.user_profile["linkedin_link"], placeholder="https://linkedin.com/in/...")
+
+
+
+        if st.button("Save Links"):
+
+            st.session_state.user_profile["github_link"] = new_github
+
+            st.session_state.user_profile["linkedin_link"] = new_linkedin
+
+            st.success("Links saved successfully!")
+
+
+
+        st.divider()
+
+        with st.expander("🔐 Change Password"):
+
+            new_pass = st.text_input("New Password", type="password")
+
+            confirm_pass = st.text_input("Confirm New Password", type="password")
+
+            if st.button("Update Password"):
+
+                if new_pass and confirm_pass and new_pass == confirm_pass:
+
+                    st.session_state.user_profile["password"] = new_pass
+
+                    st.success("Password changed!")
+
+                else:
+
+                    st.error("Check password match.")
+
+
+
+
+
+# --------------------------------------------------
+
+# LOGIN & SIGNUP PAGES
+
+# --------------------------------------------------
+
+
+
+def login_page():
+
+    #show_logo()
+
+    st.markdown('<h1 style="font-size: 32px; font-weight: 700; margin-bottom: 10px;">AI Resume and Job Portal</h1>', unsafe_allow_html=True)
+
+    st.subheader("Login")
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+
+
+    with col2:
+
+        st.caption("Use any email/password. Select role: Candidate / Admin / Hiring Manager.")
+
+        with st.form("login_form", clear_on_submit=True):
+
+            role = st.selectbox("Select Role", ["Select Role", "Candidate", "Admin", "Hiring Manager"], label_visibility="collapsed")
+
+            email = st.text_input("Email", placeholder="Enter email", label_visibility="collapsed")
+
+            password = st.text_input("Password", type="password", placeholder="Enter password", label_visibility="collapsed")
+
+            submitted = st.form_submit_button("Login")
+
+
+
+            if submitted:
+
+                if role == "Select Role" or not email or not password:
+
+                    st.error("Please fill all fields.")
+
+                else:
+
+                    user_role = {"Candidate": "candidate", "Admin": "admin", "Hiring Manager": "hiring"}.get(role)
+
+                    st.session_state.logged_in = True
+
+                    st.session_state.user_type = user_role
+
+                    st.session_state.user_email = email
+
+                    st.session_state.user_name = email.split("@")[0].capitalize()
+
+                    go_to(f"{user_role}_dashboard")
+
+                    st.rerun()
+
+
+
+        if st.button("Don't have an account? Sign up here"):
+
+            go_to("signup")
+
+            st.rerun()
+
+
+
+def signup_page():
+
+    #show_logo()
+
+    st.markdown('<h1 style="font-size: 30px; font-weight: 700;">Create an Account</h1>', unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+
+    with col2:
+
+        with st.form("signup_form"):
+
+            full_name = st.text_input("Full Name", placeholder="Enter full name")
+
+            email = st.text_input("Email", placeholder="Enter email")
+
+            password = st.text_input("Password", type="password")
+
+            confirm_password = st.text_input("Confirm", type="password")
+
+            submitted = st.form_submit_button("Sign Up")
+
+            if submitted:
+
+                if password == confirm_password and email:
+
+                    st.success("Account created! Please log in.")
+
+                    go_to("login")
+
+                    st.rerun()
+
+                else:
+
+                    st.error("Check details.")
+
+        if st.button("Already have an account? Login here"):
+
+            go_to("login")
+
+            st.rerun()
+
+
+
+
+
+# --------------------------------------------------
+
+# MAIN EXECUTION
+
+# --------------------------------------------------
+
+
+
+if __name__ == '__main__':
+
+    st.set_page_config(layout="wide", page_title="AI resume App")
+
+    initialize_session_state()
+
+
+
+    if st.session_state.logged_in:
+
+        render_profile_sidebar()
+
+        #show_logo()
+
+        
+
+        # --- COMMON HEADER SECTION (Log Out Button) ---
+
+        # This mirrors the UI in your screenshot
+
+        role_display = st.session_state.user_type.capitalize()
+
+        if st.session_state.user_type == "hiring": role_display = "Hiring Manager"
+
+        
+
+        st.markdown(f'# 👨‍💼 {role_display} Dashboard')
+
+        st.caption(f"Logged in as: **{st.session_state.user_name}**")
+
+        
+
+        if st.button("🚪 Log Out"):
+
+            handle_logout()
+
+        
+
+        st.divider()
+
+
+
+        # --- ROUTING TO DASHBOARDS ---
+
+        if st.session_state.user_type == "admin":
+
+            admin_dashboard(go_to)
+
+
+
+        elif st.session_state.user_type == "candidate":
+
+            candidate_dashboard(go_to)
+
+
+
+        elif st.session_state.user_type == "hiring":
+
+            hiring_dashboard(go_to)
+
+
+
+    else:
+
+        if st.session_state.page == "signup":
+
+            signup_page()
+
+        else:
+
+            login_page() 
+
