@@ -448,10 +448,8 @@ if __name__ == '__main__':
 
         if st.session_state.user_type == "admin":
 
-            admin_dashboard(go_to)
-
-
-
+            admin_dashboard()
+            
         elif st.session_state.user_type == "candidate":
 
             candidate_dashboard(go_to)
