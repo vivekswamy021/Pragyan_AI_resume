@@ -2512,7 +2512,7 @@ def candidate_dashboard(go_to):
         st.session_state.candidate_job_types = DEFAULT_JOB_TYPES 
 
     # --- Main Content with Tabs (CV Management added) ---
-    tab_parsing, tab_cv_management, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot, tab_cover_letter, tab_interview_prep, tab_gap_analysis = st.tabs(
+    tab_parsing, tab_cv_management, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot, tab_interview_prep, tab_gap_analysis = st.tabs(
         [
             "📄 Resume Parsing", 
             "📝 CV Management", # NEW TAB
