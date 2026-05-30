@@ -2515,7 +2515,7 @@ def candidate_dashboard(go_to):
     tab_parsing, tab_cv_management, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot, tab_interview_prep, tab_gap_analysis = st.tabs(
         [
             "📄 Resume Parsing", 
-            "📝 CV Management", # NEW TAB
+            "📝 Resume or CV Builder", # NEW TAB
             "✨ Parsed Data View", 
             "📚 JD Management", 
             "🎯 Batch JD Match", 
