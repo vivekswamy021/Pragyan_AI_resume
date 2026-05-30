@@ -452,13 +452,13 @@ if __name__ == '__main__':
             
         elif st.session_state.user_type == "candidate":
 
-            candidate_dashboard()
+            candidate_dashboard(go_to)
 
 
 
         elif st.session_state.user_type == "hiring":
 
-            hiring_dashboard()
+            hiring_dashboard(go_to)
 
 
 
