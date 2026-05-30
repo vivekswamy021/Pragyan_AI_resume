@@ -1920,137 +1920,137 @@ def parsed_data_tab():
 
 # --- Cover Letter Generation Tab (UPDATED) ---
 
-def generate_cover_letter_tab():
-    """Cover Letter Tab."""
-    st.header("✉️ Generate Cover Letter")
-    st.markdown("Create a customized cover letter for a specific Job Description using your parsed resume data.")
-    st.markdown("---")
+#def generate_cover_letter_tab():
+  #  """Cover Letter Tab."""
+  #  st.header("✉️ Generate Cover Letter")
+  #  st.markdown("Create a customized cover letter for a specific Job Description using your parsed resume data.")
+  #  st.markdown("---")
 
     # 1. Validation: Check if resume data exists in session state
-    is_resume_parsed = (
-        st.session_state.get('parsed') is not None and 
-        st.session_state.parsed.get('name') is not None and 
-        st.session_state.parsed.get('error') is None
+  #  is_resume_parsed = (
+  #     st.session_state.get('parsed') is not None and 
+#       st.session_state.parsed.get('name') is not None and 
+  #     st.session_state.parsed.get('error') is None
     )
     
-    if not is_resume_parsed:
-        st.warning("⚠️ **Cover Letter Disabled:** Please upload and parse a resume in the 'Resume Parsing' tab first.")
+# if not is_resume_parsed:
+#        st.warning("⚠️ **Cover Letter Disabled:** Please upload and parse a resume in the 'Resume Parsing' tab first.")
         return
         
     # 2. Validation: Check if JDs exist
-    if not st.session_state.get('candidate_jd_list'):
-        st.error("❌ Please **add Job Descriptions** in the 'JD Management' tab first.")
-        return
+   # if not st.session_state.get('candidate_jd_list'):
+   #     st.error("❌ Please **add Job Descriptions** in the 'JD Management' tab first.")
+   #     return
         
     # 3. JD Selection
-    jd_names = [jd.get('name') for jd in st.session_state.candidate_jd_list if jd.get('name')]
-    selected_jd_name = st.selectbox(
-        "Select Job Description for Cover Letter",
-        options=jd_names,
-        key="selected_jd_for_cl"
+   # jd_names = [jd.get('name') for jd in st.session_state.candidate_jd_list if jd.get('name')]
+  #  selected_jd_name = st.selectbox(
+  #      "Select Job Description for Cover Letter",
+   #     options=jd_names,
+  #      key="selected_jd_for_cl"
     )
 
-    selected_jd = next((jd for jd in st.session_state.candidate_jd_list if jd.get('name') == selected_jd_name), None)
+#    selected_jd = next((jd for jd in st.session_state.candidate_jd_list if jd.get('name') == selected_jd_name), None)
     
-    if not selected_jd:
-        st.error("Selected Job Description not found.")
-        return
+#    if not selected_jd:
+ #       st.error("Selected Job Description not found.")
+  #      return
     
-    st.markdown("---")
-    col_style, col_gen = st.columns([1, 1])
+  #  st.markdown("---")
+ #   col_style, col_gen = st.columns([1, 1])
     
-    with col_style:
-        style = st.selectbox(
-            "Select Letter Style/Tone",
-            options=["Standard", "Enthusiastic", "Professional", "Concise"],
-            key="cl_style"
-        )
+  #  with col_style:
+  #      style = st.selectbox(
+   #         "Select Letter Style/Tone",
+  #          options=["Standard", "Enthusiastic", "Professional", "Concise"],
+   #         key="cl_style"
+  #      )
         
-    with col_gen:
-        st.write("") # Padding
-        st.write("") # Padding
-        if st.button("✨ Generate Cover Letter", use_container_width=True, type="primary"):
-            # Clear previous result before generating new one
-            st.session_state.generated_cover_letter = ""
-            
-            with st.spinner(f"Analyzing JD and Resume to write letter..."):
-                # Call the LLM logic (referencing the fixed version provided previously)
-                letter_text = generate_cover_letter_llm(
-                    jd_content=selected_jd.get('content', ''), 
-                    parsed_json=st.session_state.parsed,
-                    preferred_style=style
-                )
+  #  with col_gen:
+  #      st.write("") # Padding
+   #     st.write("") # Padding
+    #    if st.button("✨ Generate Cover Letter", use_container_width=True, type="primary"):
+     #       # Clear previous result before generating new one
+     #       st.session_state.generated_cover_letter = ""
+     #       
+      #      with st.spinner(f"Analyzing JD and Resume to write letter..."):
+     #           # Call the LLM logic (referencing the fixed version provided previously)
+     #           letter_text = generate_cover_letter_llm(
+      #              jd_content=selected_jd.get('content', ''), 
+      #              parsed_json=st.session_state.parsed,
+       #             preferred_style=style
+       #         )
                 
                 # Store results in session state
-                st.session_state.generated_cover_letter = letter_text
-                st.session_state.cl_jd_name = selected_jd_name 
-                st.rerun()
-                
-    st.markdown("---")
+        #        st.session_state.generated_cover_letter = letter_text
+         #       st.session_state.cl_jd_name = selected_jd_name 
+          #      st.rerun()
+           #     
+    #st.markdown("---")
     
     # 4. Display Results
-    if st.session_state.get('generated_cover_letter'):
+    #if st.session_state.get('generated_cover_letter'):
         
-        st.subheader(f"✅ Generated Cover Letter for: {st.session_state.cl_jd_name}")
+     #   st.subheader(f"✅ Generated Cover Letter for: {st.session_state.cl_jd_name}")
         
         # Check for error messages returned by the LLM function
-        if any(err in st.session_state.generated_cover_letter for err in ["Cannot generate", "Error", "Failed"]):
-            st.error(st.session_state.generated_cover_letter)
+      #  if any(err in st.session_state.generated_cover_letter for err in ["Cannot generate", "Error", "Failed"]):
+       #     st.error(st.session_state.generated_cover_letter)
             # Add a reset button if it fails
-            if st.button("Retry Generation"):
-                st.session_state.generated_cover_letter = ""
-                st.rerun()
-            return
+    #        if st.button("Retry Generation"):
+     #           st.session_state.generated_cover_letter = ""
+      #          st.rerun()
+       #     return
 
         # Text area for user to make manual edits
-        final_letter_text = st.text_area(
-            "Review and edit your letter:",
-            value=st.session_state.generated_cover_letter,
-            height=450,
-            key="final_cover_letter_edit"
-        )
+       # final_letter_text = st.text_area(
+        #    "Review and edit your letter:",
+         #   value=st.session_state.generated_cover_letter,
+          #  height=450,
+           # key="final_cover_letter_edit"
+       # )
         
-        st.markdown("##### 📥 Export Letter")
+        #st.markdown("##### 📥 Export Letter")
         
         # Filename construction
-        safe_name = st.session_state.parsed.get('name', 'Candidate').replace(' ', '_')
-        safe_role = selected_jd.get('name', 'Job').replace(' ', '_')
-        base_filename = f"{safe_name}_CoverLetter_{safe_role}"
+        #safe_name = st.session_state.parsed.get('name', 'Candidate').replace(' ', '_')
+        #safe_role = selected_jd.get('name', 'Job').replace(' ', '_')
+        #base_filename = f"{safe_name}_CoverLetter_{safe_role}"
         
-        col_html_dl, col_txt_dl = st.columns(2)
+        #col_html_dl, col_txt_dl = st.columns(2)
         
-        with col_html_dl:
-            html_filename = f"{base_filename}.html"
-            html_data = get_download_link(
-                final_letter_text, 
-                html_filename, 
-                'html',
-                title=f"Cover Letter - {selected_jd_name}"
-            )
-            render_download_button(
-                html_data, 
-                html_filename, 
-                "📄 Save as HTML / PDF", 
-                'cl_html'
-            )
+        #with col_html_dl:
+        #    html_filename = f"{base_filename}.html"
+         #   html_data = get_download_link(
+          #      final_letter_text, 
+           #     html_filename, 
+            #    'html',
+             #   title=f"Cover Letter - {selected_jd_name}"
+            #)
+            #render_download_button(
+             #   html_data, 
+              #  html_filename, 
+               # "📄 Save as HTML / PDF", 
+                #'cl_html'
+            #)
             
-        with col_txt_dl:
-            txt_filename = f"{base_filename}.txt"
-            txt_data = get_download_link(
-                final_letter_text, 
-                txt_filename, 
-                'text',
-                title=f"Cover Letter - {selected_jd_name}"
-            )
-            render_download_button(
-                txt_data, 
-                txt_filename, 
-                "⬇️ Save as Plain Text (.txt)", 
-                'cl_txt'
-            )
+        #with col_txt_dl:
+         #   txt_filename = f"{base_filename}.txt"
+        #    txt_data = get_download_link(
+       #         final_letter_text, 
+        #    txt_filename, 
+        #        'text',
+         #       title=f"Cover Letter - {selected_jd_name}"
+        #    )
+       #     render_download_button(
+      #          txt_data, 
+     #           txt_filename, 
+    #            "⬇️ Save as Plain Text (.txt)", 
+   #             'cl_txt'
+  #          )
             
-    else:
-        st.info("💡 Select a Job Description and click the 'Generate' button to create your letter using AI.")
+ #   else:
+#        st.info("💡 Select a Job Description and click the 'Generate' button to create your letter using AI.")
         
 # --- Interview Preparation Tab (UPDATED) ---
 
@@ -2653,8 +2653,7 @@ def candidate_dashboard(go_to):
             "📚 JD Management", 
             "🎯 Batch JD Match", 
             "🔍 Filter JD", 
-            "🤖 Chatbot", 
-            "✉️ Generate Cover Letter", 
+            "🤖 Chatbot",  
             "🎤 Interview Preparation",
             "💡 Gap Analysis & Course Plan" 
         ]
@@ -2680,9 +2679,6 @@ def candidate_dashboard(go_to):
         
     with tab_chatbot:
         chatbot_tab_content()
-        
-    with tab_cover_letter:
-        generate_cover_letter_tab() 
         
     with tab_interview_prep:
         interview_preparation_tab() 
