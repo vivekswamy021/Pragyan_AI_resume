@@ -52,10 +52,6 @@ STARTER_KEYWORDS = {
 
 # --- End Default/Mock Data ---
 
-
-
-
-
 # --- Define MockGroqClient globally (Necessary for testing without API Key) ---
 
 
@@ -4743,409 +4739,238 @@ def interview_preparation_tab():
                     st.session_state.iq_output_jd = raw_questions_response
 
                     q_list = parse_questions_from_raw(raw_questions_response)
-
-                        
-
+                    
                     st.session_state.interview_qa_jd = q_list
 
-                    
-
                     if q_list:
-
                         st.success(f"Generated {len(q_list)} questions based on **{selected_jd_name}**.")
-
                     else:
-
                         st.warning(f"Could not parse any questions from the LLM response.")
-
-                    
-
                 except Exception as e:
 
                     st.error(f"Error generating questions: {e}\nTrace: {traceback.format_exc()}")
-
-                    st.session_state.iq_output_jd = "Error generating questions."
-
+                    st.session_state.iq_output_jd = "Error generating questions.
                     st.session_state.interview_qa_jd = []
-
-
-
         # Display/Evaluation Logic for JD Mode
-
         display_evaluation_form('jd', selected_jd.get('content', '') if selected_jd else "", selected_jd.get('content', '') if selected_jd else "")
-
-
 
 # New : cover letter generator ---------
 
-
-
 def cover_letter_tab():
-
     """ Tab layout managing text document uploads, template generation toggles, and downloading blocks. """
-
     st.header("✉️ Tailored Cover Letter Generator")
-
     st.markdown("Provide your core text parameters below to instantly draft a clean, high-impact cover letter.")
+    st.markdown("---")
+
+    # --- SECTION 1: PROFILE/RESUME DATA PANEL (Full Width) ---
+    st.subheader("1. Profile / Resume Input")
+    cl_res_method = st.radio(
+        "Select Resume Entry Method", 
+        ["Upload File Document", "Paste Raw Text Workspace"], 
+        key="cl_tab_v2_res_entry_modality_toggle"
+    )
+    
+    resume_payload_text = ""
+    if cl_res_method == "Upload File Document":
+        uploaded_res = st.file_uploader(
+            "Upload Resume (PDF, DOCX, TXT)", 
+            type=["pdf", "docx", "txt"], 
+            key="cl_tab_v2_raw_file_resume_uploader_widget"
+        )
+        if uploaded_res:
+            f_type = get_file_type(uploaded_res.name)
+            uploaded_res.seek(0)
+            txt_out, _ = extract_content(f_type, uploaded_res.getvalue(), uploaded_res.name)
+            if not txt_out.startswith("[Error"):
+                resume_payload_text = txt_out
+                st.success(f"Loaded Profile: {uploaded_res.name}")
+            else:
+                st.error(txt_out)
+    else:
+        resume_payload_text = st.text_area(
+            "Paste candidate resume text contents here:", 
+            height=200, 
+            key="cl_tab_v2_raw_pasted_text_resume_area_widget"
+        )
 
     st.markdown("---")
 
-
-
-    # Layout Split Grid Panels setup
-
-    col_left_panel, col_right_panel = st.columns(2)
-
-
-
-    # --- SECTION 1: PROFILE/RESUME DATA PANEL ---
-
-    with col_left_panel:
-
-        st.subheader("1. Profile / Resume Input")
-
-        cl_res_method = st.radio(
-
-            "Select Resume Entry Method", 
-
-            ["Upload File Document", "Paste Raw Text Workspace"], 
-
-            key="cl_tab_v2_res_entry_modality_toggle"
-
-        )
-
-        
-
-        resume_payload_text = ""
-
-        if cl_res_method == "Upload File Document":
-
-            uploaded_res = st.file_uploader(
-
-                "Upload Resume (PDF, DOCX, TXT)", 
-
-                type=["pdf", "docx", "txt"], 
-
-                key="cl_tab_v2_raw_file_resume_uploader_widget"
-
-            )
-
-            if uploaded_res:
-
-                f_type = get_file_type(uploaded_res.name)
-
-                uploaded_res.seek(0)
-
-                txt_out, _ = extract_content(f_type, uploaded_res.getvalue(), uploaded_res.name)
-
-                if not txt_out.startswith("[Error"):
-
-                    resume_payload_text = txt_out
-
-                    st.success(f"Loaded Profile: {uploaded_res.name}")
-
-                else:
-
-                    st.error(txt_out)
-
-        else:
-
-            resume_payload_text = st.text_area(
-
-                "Paste candidate resume text contents here:", 
-
-                height=250, 
-
-                key="cl_tab_v2_raw_pasted_text_resume_area_widget"
-
-            )
-
-
-
-    # --- SECTION 2: JOB DESCRIPTION POSTING PANEL ---
-
-    with col_right_panel:
-
-        st.subheader("2. Target Job Requirements")
-
-        cl_jd_method = st.radio(
-
-            "Select JD Entry Method", 
-
-            ["Upload File Document", "Paste Raw Text Workspace"], 
-
-            key="cl_tab_v2_jd_entry_modality_toggle"
-
-        )
-
-        
-
-        jd_payload_text = ""
-
-        if cl_jd_method == "Upload File Document":
-
-            uploaded_jd = st.file_uploader(
-
-                "Upload Job Description (PDF, DOCX, TXT)", 
-
-                type=["pdf", "docx", "txt"], 
-
-                key="cl_tab_v2_raw_file_jd_uploader_widget"
-
-            )
-
-            if uploaded_jd:
-
-                f_type = get_file_type(uploaded_jd.name)
-
-                uploaded_jd.seek(0)
-
-                txt_out, _ = extract_content(f_type, uploaded_jd.getvalue(), uploaded_jd.name)
-
-                if not txt_out.startswith("[Error"):
-
-                    jd_payload_text = txt_out
-
-                    st.success(f"Loaded JD details: {uploaded_jd.name}")
-
-                else:
-
-                    st.error(txt_out)
-
-        else:
-
-            jd_payload_text = st.text_area(
-
-                "Paste raw structural job description details here:", 
-
-                height=250, 
-
-                key="cl_tab_v2_raw_pasted_text_jd_area_widget"
-
-            )
-
-
-
-    st.markdown("---")
-
-
-
-    # --- SECTION 3: WORKFLOW GENERATION STRATEGY SELECTION ---
-
-    st.subheader("3. Choose Generation Strategy")
-
-    generation_mode = st.radio(
-
-        "Workflow Engine",
-
-        ["🤖 AI Powered Alignment", "📋 Use a Template (Choose from our professionally designed templates)"],
-
-        index=0,
-
-        key="cl_tab_v2_generation_engine_mode_toggle",
-
-        help="Switch between completely custom deep AI parsing alignment or instantaneous static templates layout engines."
-
+    # --- VISUAL PICKER INTERFACE (Matching Screenshot 2026-06-02 154212.jpg) ---
+    st.markdown(
+        """
+        <div style='text-align: center; color: white; background-color: #0066cc; padding: 18px; border-radius: 6px; font-family: Arial, sans-serif;'>
+            <h1 style='margin: 0; font-size: 32px; font-weight: bold;'>Choose Your Cover Letter Template</h1>
+            <p style='margin: 8px 0 0 0; font-size: 16px; color: #e6f0ff;'>Select from our professionally designed templates to create your perfect cover letter. You can always change your template later.</p>
+        </div>
+        """, 
+        unsafe_allow_html=True
     )
+    st.markdown("<br/>", unsafe_allow_html=True)
 
+    # Initialize selected style tracking state
+    if 'cl_selected_style' not in st.session_state:
+        st.session_state.cl_selected_style = "Professional"
 
+    col1, col2, col3, col4 = st.columns(4)
 
-    template_style = st.selectbox(
+    with col1:
+        is_sel = st.session_state.cl_selected_style == "Simple"
+        border_css = "border: 2px solid #0066cc;" if is_sel else "border: 1px solid #ddd;"
+        st.markdown(f"""
+        <div style="{border_css} padding: 12px; border-radius: 6px; background: white; text-align: center; box-shadow: 1px 1px 5px rgba(0,0,0,0.05);">
+            <h4 style="color:#333; margin:0 0 8px 0; font-weight: bold;">Simple</h4>
+            <div style="font-size:9px; color:#666; text-align:left; border:1px dashed #ccc; padding:6px; height:120px; overflow:hidden; background:#fafafa; font-family:monospace;">
+                <b>[Candidate Name]</b><br/>[Date]<br/><br/>Dear Hiring Team,<br/>Please accept this letter as expression of my deep technical interest...
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<div style='padding-top:4px;'></div>", unsafe_allow_html=True)
+        if st.button("Use Simple", key="set_style_simple", use_container_width=True):
+            st.session_state.cl_selected_style = "Simple"
+            st.rerun()
 
-        "Design Template Tone / Blueprint Style",
+    with col2:
+        is_sel = st.session_state.cl_selected_style == "Professional"
+        border_css = "border: 2px solid #0066cc; box-shadow: 0px 0px 8px rgba(0,102,204,0.3);" if is_sel else "border: 1px solid #ddd;"
+        st.markdown(f"""
+        <div style="{border_css} padding: 12px; border-radius: 6px; background: white; text-align: center;">
+            <h4 style="color:#0066cc; margin:0 0 8px 0; font-weight: bold;">Professional</h4>
+            <div style="font-size:9px; color:#666; text-align:left; border:1px dashed #ccc; padding:6px; height:120px; overflow:hidden; background:#fafafa; font-family:sans-serif;">
+                <span style="color:#0066cc; font-weight:bold; font-size:11px;">Alex Zhang</span><br/>
+                <span style="font-size:7px; color:gray;">San Jose, CA | +1 (555) 012-3456</span><br/>
+                <hr style="margin:4px 0; border:0; border-top:1px solid #0066cc;"/>
+                Dear Sir/Madam,<br/>I am writing to express my rigorous interest based on production parameters...
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<div style='padding-top:4px;'></div>", unsafe_allow_html=True)
+        if st.button("Use Professional", key="set_style_prof", use_container_width=True):
+            st.session_state.cl_selected_style = "Professional"
+            st.rerun()
 
-        options=["Simple", "Professional", "Modern", "Creative"],
+    with col3:
+        is_sel = st.session_state.cl_selected_style == "Modern"
+        border_css = "border: 2px solid #0066cc;" if is_sel else "border: 1px solid #ddd;"
+        st.markdown(f"""
+        <div style="{border_css} padding: 12px; border-radius: 6px; background: white; text-align: center; box-shadow: 1px 1px 5px rgba(0,0,0,0.05);">
+            <h4 style="color:#333; margin:0 0 8px 0; font-weight: bold;">Modern</h4>
+            <div style="font-size:9px; color:#666; text-align:left; border:1px dashed #ccc; padding:6px; height:120px; overflow:hidden; background:#fafafa; font-family:sans-serif;">
+                <div style="border-left: 3px solid #ff3366; padding-left: 4px;">
+                    <b>Ryan Martinez</b><br/><span style="font-size:7px; color:gray;">ryan.martinez@email.com</span>
+                </div><br/>
+                Dear Team,<br/>The opportunity to scale platforms matches my active delivery parameters...
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<div style='padding-top:4px;'></div>", unsafe_allow_html=True)
+        if st.button("Use Modern", key="set_style_modern", use_container_width=True):
+            st.session_state.cl_selected_style = "Modern"
+            st.rerun()
 
-        index=1,
+    with col4:
+        is_sel = st.session_state.cl_selected_style == "Creative"
+        border_css = "border: 2px solid #0066cc;" if is_sel else "border: 1px solid #ddd;"
+        st.markdown(f"""
+        <div style="{border_css} padding: 12px; border-radius: 6px; background: white; text-align: center; box-shadow: 1px 1px 5px rgba(0,0,0,0.05);">
+            <h4 style="color:#333; margin:0 0 8px 0; font-weight: bold;">Creative</h4>
+            <div style="font-size:9px; color:#666; text-align:left; border:1px dashed #ccc; padding:6px; height:120px; overflow:hidden; background:#fffbf2; font-family:Georgia, serif;">
+                <b>System Architectures tell a story.</b><br/><br/>
+                Dear Creative Decision Makers,<br/>From structural database calls down to the latency constraints of user experience...
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("<div style='padding-top:4px;'></div>", unsafe_allow_html=True)
+        if st.button("Use Creative", key="set_style_creative", use_container_width=True):
+            st.session_state.cl_selected_style = "Creative"
+            st.rerun()
 
-        key="cl_tab_v2_design_style_dropdown_selector"
+    st.markdown("<br/>", unsafe_allow_html=True)
 
-    )
-
-
-
-    # Caches state tracking variables initialization
-
+    # Cache state tracking variables initialization
     if 'cl_v2_cached_output_string' not in st.session_state:
-
         st.session_state.cl_v2_cached_output_string = ""
-
     if 'cl_v2_cached_signature_stamp' not in st.session_state:
-
         st.session_state.cl_v2_cached_signature_stamp = ""
 
+    # Generate a matching contextual signature block based on parsed profile history list items
+    active_jd_context = ""
+    if st.session_state.get('candidate_jd_list'):
+        active_jd_context = st.session_state.candidate_jd_list[0].get('content', '')
 
-
-    current_input_signature = f"engine_{generation_mode[:3]}_res_{hash(resume_payload_text)}_jd_{hash(jd_payload_text)}_style_{template_style}"
-
-
+    current_input_signature = f"res_{hash(resume_payload_text)}_jd_{hash(active_jd_context)}_style_{st.session_state.cl_selected_style}"
 
     # Master Generation Blueprint Trigger Action Execution
-
-    if st.button("🚀 Process & Generate Cover Letter", type="primary", use_container_width=True, key="cl_tab_v2_master_process_trigger_btn"):
-
+    if st.button(f"🚀 Process & Generate Cover Letter ({st.session_state.cl_selected_style} Style)", type="primary", use_container_width=True, key="cl_tab_v2_master_process_trigger_btn"):
         if not resume_payload_text.strip():
-
-            st.error("Validation Halt: Please provide a valid resume profile before running compilation.")
-
-        elif not jd_payload_text.strip():
-
-            st.error("Validation Halt: Please provide target job description requirements text.")
-
+            st.error("Validation Halt: Please provide a valid resume profile input before running compilation.")
         else:
-
-            with st.spinner("Processing documents content parameters and engineering structural matching layout layouts..."):
-
+            with st.spinner("Processing document profile context parameters and engineering structural layout..."):
                 st.session_state.cl_v2_cached_output_string = ""
-
                 
-
-                if "AI Powered" in generation_mode:
-
-                    # Execute active AI mapping connection pipeline
-
-                    compiled_result = generate_tailored_cover_letter(
-
-                        resume_text=resume_payload_text,
-
-                        jd_content=jd_payload_text,
-
-                        template_style=template_style,
-
-                        cache_bust=current_input_signature
-
-                    )
-
-                else:
-
-                    # Compile instant native local design template profiles blocks
-
-                    compiled_result = compile_static_template(
-
-                        resume_text=resume_payload_text,
-
-                        jd_content=jd_payload_text,
-
-                        template_style=template_style
-
-                    )
-
+                # Execute AI mapping orchestration tracking pipeline
+                compiled_result = generate_tailored_cover_letter(
+                    resume_text=resume_payload_text,
+                    jd_content=active_jd_context,
+                    template_style=st.session_state.cl_selected_style,
+                    cache_bust=current_input_signature
+                )
                 
-
                 st.session_state.cl_v2_cached_output_string = compiled_result
-
                 st.session_state.cl_v2_cached_signature_stamp = current_input_signature
-
                 st.rerun()
 
-
-
     # --- SECTION 4: INTERACTIVE CANVAS DISPLAY WORKSPACE ---
-
     if st.session_state.cl_v2_cached_output_string:
-
         st.markdown("---")
-
         st.subheader("📝 Live Cover Letter Workspace Canvas")
-
         
-
         if current_input_signature != st.session_state.cl_v2_cached_signature_stamp:
-
             st.caption("⚠️ *Data drift notice: Inputs have changed since this layout was drafted. Click generate to rebuild.*")
-
             
-
         final_edited_output = st.text_area(
-
             "Review, modify text elements, or overwrite placeholder values directly inside the editor canvas below:",
-
             value=st.session_state.cl_v2_cached_output_string,
-
             height=450,
-
             key="cl_tab_v2_interactive_workspace_text_canvas_widget"
-
         )
-
         st.session_state.cl_v2_cached_output_string = final_edited_output
 
-
-
         # Isolate clean naming variables for output files formatting
-
-        cand_name, role_title, _ = extract_basic_entities(resume_payload_text, jd_payload_text)
-
+        cand_name, role_title, _ = extract_basic_entities(resume_payload_text, active_jd_context)
         clean_name = cand_name.replace(' ', '_') if isinstance(cand_name, str) else "Candidate"
-
         clean_role = role_title.replace(' ', '_').replace('/', '_')
-
         base_export_filename = f"{clean_name}_CoverLetter_{clean_role}"
 
-
-
         # File export actions layout panel grid cards setup
-
         st.markdown("##### Document Export Channels")
-
         col_dl_md, col_dl_html = st.columns(2)
-
         
-
         with col_dl_md:
-
             st.download_button(
-
                 label="⬇️ Download Markdown Document (.md)",
-
                 data=st.session_state.cl_v2_cached_output_string,
-
                 file_name=f"{base_export_filename}.md",
-
                 mime="text/markdown",
-
                 use_container_width=True,
-
                 key="cl_tab_v2_md_download_action_button_widget"
-
             )
-
             
-
         with col_dl_html:
-
             html_uri_link = get_download_link(
-
                 data=st.session_state.cl_v2_cached_output_string,
-
                 filename=f"{base_export_filename}.html",
-
                 file_format='html',
-
                 title="Tailored Resume Cover Letter Documentation"
-
             )
-
             render_download_button(
-
                 data_uri=html_uri_link,
-
                 filename=f"{base_export_filename}.html",
-
                 label="📄 Download HTML Profile (Print to PDF)",
-
                 color='html'
-
             )
-
 # --------------------------------------------------------------------------------------
-
 # NEW TAB: GAP ANALYSIS & COURSE PLAN
-
 # --------------------------------------------------------------------------------------
-
-
-
 def gap_analysis_tab():
 
     """
@@ -5462,7 +5287,7 @@ def qa_on_jd(question, jd_content):
 
             messages=[{"role": "user", "content": prompt}], 
 
-            temperature=0.4
+            temperature=0.6
 
         )
 
