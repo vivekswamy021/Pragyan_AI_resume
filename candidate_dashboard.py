@@ -28,7 +28,7 @@ STARTER_KEYWORDS = {
 
 # --- Define MockGroqClient globally (Necessary for testing without API Key) ---
 class MockGroqClient:
-    """Mock client for local testing when Groq is not available or key is missing."""
+    """Mock client for local testing when Groq is not available or key is missing."""
     def chat(self):
         class Completions:
             def create(self, **kwargs):
