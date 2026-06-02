@@ -4,7 +4,7 @@ import pdfplumber
 import docx
 import json
 import traceback
-
+import re 
 
 from dotenv import load_dotenv 
 from io import BytesIO 
@@ -2959,4 +2959,4 @@ def candidate_dashboard(go_to):
 # -------------------------
 
 if __name__ == '__main__':
-    candidate_dashboard() 
+    candidate_dashboard()
