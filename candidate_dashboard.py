@@ -4,8 +4,7 @@ import pdfplumber
 import docx
 import json
 import traceback
-import re 
-
+import re
 from dotenv import load_dotenv 
 from io import BytesIO 
 import pandas as pd
