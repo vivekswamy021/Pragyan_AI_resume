@@ -4,11 +4,11 @@ import pdfplumber
 import docx
 import json
 import traceback
-import re 
-from dotenv import load_dotenv 
-from io import BytesIO 
+import re
+from dotenv import load_dotenv
+from io import BytesIO
 import pandas as pd
-import base64 
+import base64
 
 # --- CONFIGURATION & API SETUP ---
 
@@ -21,8 +21,8 @@ GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 DEFAULT_ROLES = ["Data Scientist", "Cloud Engineer", "Software Engineer", "AI/ML Engineer"]
 DEFAULT_JOB_TYPES = ["Full-time", "Contract", "Remote"]
 STARTER_KEYWORDS = {
-    "Python", "MySQL", "GCP", "cloud computing", "ML", 
-    "API services", "LLM integration", "JavaScript", "SQL", "AWS", "MLOps", "Data Visualization"
+    "Python", "MySQL", "GCP", "cloud computing", "ML", 
+    "API services", "LLM integration", "JavaScript", "SQL", "AWS", "MLOps", "Data Visualization"
 }
 # --- End Default/Mock Data ---
 
