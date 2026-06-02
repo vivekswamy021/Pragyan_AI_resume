@@ -24,38 +24,44 @@ STARTER_KEYWORDS = {
     "Python", "MySQL", "GCP", "cloud computing", "ML", 
     "API services", "LLM integration", "JavaScript", "SQL", "AWS", "MLOps", "Data Visualization"
 }
-# --- End Default/Mock Data ---
+
+# Dummy helper functions for CV Management Tab preview generation
+def convert_to_json(data):
+    return json.dumps(data, indent=4)
+
+def convert_to_html_content(data):
+    return f"<h3>{data['personal_info'].get('name', 'CV Preview')}</h3><p>Email: {data['personal_info'].get('email', '')}</p>"
+
 
 # --- Define MockGroqClient globally (Necessary for testing without API Key) ---
+
 class MockGroqClient:
     """Mock client for local testing when Groq is not available or key is missing."""
-    def chat(self):
-        class Completions:
-            def create(self, **kwargs):
-                prompt_content = kwargs.get('messages', [{}])[0].get('content', '')
-                
-                # --- Specific Mock Logic for Interview Prep (Updated for new types) ---
-                if "Generate a list of interview questions" in prompt_content:
-                    
-                    if "targeting the **JD**" in prompt_content:
-                        # JD Based Mock
-                        section = "Cloud Engineer"
-                        mock_questions_raw = f"""
-                        [Basic/HR-related]
-                        Q1: What excites you most about the field of cloud engineering?
-                        
-                        [Intermediate/Technical]
-                        Q2: Explain how you would implement CI/CD for a project involving Docker and Kubernetes.
-                        
-                        [Advanced/Experience-based]
-                        Q3: Describe a time you had to troubleshoot a production issue related to infrastructure automation and the steps you took.
-                        
-                        [Basic/Situation-based]
-                        Q4: How do you handle disagreements with colleagues regarding technical implementation decisions?
-                        
-                        [Intermediate/Technical]
-                        Q5: Explain the core differences between AWS and GCP services related to the JD.
-                        """
+    def chat(self):
+        class Completions:
+            def create(self, **kwargs):
+                prompt_content = kwargs.get('messages', [{}])[0].get('content', '')
+                
+                # --- Specific Mock Logic for Interview Prep ---
+                if "Generate a list of interview questions" in prompt_content:
+                    if "targeting the **JD**" in prompt_content:
+                        section = "Cloud Engineer"
+                        mock_questions_raw = f"""
+                        [Basic/HR-related]
+                        Q1: What excites you most about the field of cloud engineering?
+                        
+                        [Intermediate/Technical]
+                        Q2: Explain how you would implement CI/CD for a project involving Docker and Kubernetes.
+                        
+                        [Advanced/Experience-based]
+                        Q3: Describe a time you had to troubleshoot a production issue related to infrastructure automation and the steps you took.
+                        
+                        [Basic/Situation-based]
+                        Q4: How do you handle disagreements with colleagues regarding technical implementation decisions?
+                        
+                        [Intermediate/Technical]
+                        Q5: Explain the core differences between AWS and GCP services related to the JD.
+                        """
                     else:
                         # Resume Section Based Mock (targeting Skills section)
                         section_match = re.search(r'targeting the \*\*(.+?)\*\* section', prompt_content)
