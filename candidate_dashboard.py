@@ -4751,7 +4751,9 @@ def interview_preparation_tab():
                     st.error(f"Error generating questions: {e}\nTrace: {traceback.format_exc()}")
                     st.session_state.iq_output_jd = "Error generating questions.
                     st.session_state.interview_qa_jd = []
+                    
         # Display/Evaluation Logic for JD Mode
+        
         display_evaluation_form('jd', selected_jd.get('content', '') if selected_jd else "", selected_jd.get('content', '') if selected_jd else "")
 
 # New : cover letter generator ---------
