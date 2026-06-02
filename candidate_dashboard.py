@@ -24,10 +24,7 @@ STARTER_KEYWORDS = {
     "Python", "MySQL", "GCP", "cloud computing", "ML", 
     "API services", "LLM integration", "JavaScript", "SQL", "AWS", "MLOps", "Data Visualization"
 }
-
 # --- End Default/Mock Data ---
-
-
 # --- Define MockGroqClient globally (Necessary for testing without API Key) ---
 
 class MockGroqClient:
