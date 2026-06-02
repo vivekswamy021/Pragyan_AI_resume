@@ -795,7 +795,84 @@ def evaluate_jd_fit(job_description, parsed_json):
         error_output = f"AI Evaluation Error: Failed to connect or receive response from LLM. Error: {e}\n{traceback.format_exc()}"
         return error_output
 
-###--------
+###-------- cover letter generate for resume 
+def generate_tailored_cover_letter(resume_text, jd_content, template_style, role_title):
+    """
+    Generates a highly personalized cover letter by aligning candidate context with JD requirements
+    according to a specified tone blueprint.
+    """
+    global client, GROQ_MODEL, GROQ_API_KEY
+    
+    if not resume_text.strip():
+        return "Error: No valid resume text found. Please parse a resume first."
+    if not jd_content.strip():
+        return "Error: Please select or paste a valid job description."
+
+    # Define stylistic tone modifiers for the LLM based on user selection
+    style_guidelines = {
+        "Simple": "Direct, clear, and concise. Avoid complex jargon or flowery descriptors. Stick to straightforward facts and alignment.",
+        "Professional": "Traditional, formal corporate tone. Emphasize structured achievements, executive presence, industry standards, and respectful compliance.",
+        "Modern": "Innovative, bold, and forward-looking. Use high-energy, confident language. Focus on driving velocity, scaling tech stacks, and modern agile workflows.",
+        "Creative": "Narrative-driven and storytelling focused. Open with a compelling hook regarding passion for tech/product. Use dynamic vocabulary and emphasize unique problem-solving perspectives."
+    }
+
+    selected_style_rule = style_guidelines.get(template_style, style_guidelines["Professional"])
+
+    prompt = f"""
+    You are an elite executive career architect. Write a tailored, high-converting cover letter for the position of: **{role_title}**.
+    
+    **Tone Blueprint (Strictly follow this style):**
+    {selected_style_rule}
+
+    **Strategic Alignment Instructions:**
+    1. Parse the Job Description for core pain points, required technologies, and cultural values.
+    2. Extract relevant items from the Candidate's Resume text that directly solve those problems or map to those technologies.
+    3. Seamlessly weave the candidate's skills into factual, contextual expressions of value. Do not invent details or metrics.
+    4. Keep the total length between 250 to 350 words. Structure into clean paragraphs (Salutation, Hook, Body Paragraph matching criteria, Call to Action, Professional Sign-off).
+
+    --- Target Job Description (JD) ---
+    {jd_content}
+
+    --- Candidate Resume Context ---
+    {resume_text}
+
+    --- Output Requirements ---
+    Provide ONLY the raw markdown text of the cover letter. Use brackets like [Company Name] or [Date] for structural placeholders if they are not explicitly present in the provided context. Do not include introductory notes, chat meta-commentary, or markdown code blocks like ```markdown.
+    """
+
+    # Local development offline fallback mechanism
+    if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
+        return f"""[Date]
+
+Hiring Manager
+[Company Name]
+
+**Subject: Application for {role_title} - {st.session_state.parsed.get('name', 'Candidate')}**
+
+Dear Hiring Manager,
+
+I am writing to express my enthusiastic interest in the {role_title} position. As a Computer Science graduate with hands-on experience deploying data-driven applications, I am eager to apply my technical foundation to your current engineering challenges.
+
+Reviewing your requirements, I noted a clear focus on building scalable systems. Through my hands-on portfolio projects, I have developed competencies utilizing Python, manipulating datasets via Pandas and NumPy, and managing deployment pipelines using Streamlit and GitHub. This direct experience allows me to build operational, user-facing applications efficiently.
+
+I look forward to the opportunity to discuss how my analytical skills and passion for modern frameworks can add value to your engineering team. Thank you for your time and consideration.
+
+Sincerely,
+
+{st.session_state.parsed.get('name', 'Candidate')}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7  # Balanced temperature for fluid, natural phrasing variants
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"AI Generation Error: Failed to compile cover letter. Detail: {str(e)}"
+
+# GAP course plan -------------
 def generate_gap_course_plan(gap_analysis_text, jd_role, candidate_skills):
     """
     Generates a detailed course plan and certification suggestions to fill identified gaps.
@@ -2233,6 +2310,121 @@ def interview_preparation_tab():
         # Display/Evaluation Logic for JD Mode
         display_evaluation_form('jd', selected_jd.get('content', '') if selected_jd else "", selected_jd.get('content', '') if selected_jd else "")
 
+# New : cover letter generator ---------
+
+def cover_letter_tab():
+    """ Tab layout handling selection parameters, generation, and file downloading blocks. """
+    st.header("✉️ Tailored Cover Letter Generator")
+    st.markdown("Draft a targeted cover letter matching your profile seamlessly against any saved Job Description requirements.")
+    st.markdown("---")
+
+    # Guard rail checks
+    is_resume_parsed = (
+        st.session_state.get('parsed') is not None and
+        st.session_state.parsed.get('name') is not None and
+        st.session_state.parsed.get('error') is None
+    )
+    is_jd_loaded = bool(st.session_state.get('candidate_jd_list'))
+
+    if not is_resume_parsed:
+        st.warning("⚠️ **Cover Letter Disabled:** Please parse your resume successfully in the 'Resume Parsing' or 'CV Builder' tab first.")
+        return
+    if not is_jd_loaded:
+        st.warning("⚠️ **Cover Letter Disabled:** Please add at least one Job Description in the 'JD Management' tab first.")
+        return
+
+    # Configuration layout widgets
+    col_jd_sel, col_style_sel = st.columns(2)
+    
+    with col_jd_sel:
+        jd_names = [jd.get('name') for jd in st.session_state.candidate_jd_list if jd.get('name')]
+        selected_jd_name = st.selectbox("1. Target Job Description Profile", options=jd_names, key="cl_jd_selector")
+        
+        # Isolate selected record object
+        target_jd_item = next((jd for jd in st.session_state.candidate_jd_list if jd.get('name') == selected_jd_name), None)
+        jd_content_raw = target_jd_item.get('content', '') if target_jd_item else ""
+        role_title_raw = target_jd_item.get('role', 'Target Position')
+
+    with col_style_sel:
+        template_style = st.selectbox(
+            "2. Document Template Style Tone",
+            options=["Simple", "Professional", "Modern", "Creative"],
+            index=1,
+            key="cl_style_selector",
+            help="Modifies tone syntax mapping to match corporate cultures"
+        )
+
+    # State tracking variables setup
+    if 'generated_cover_letter' not in st.session_state:
+        st.session_state.generated_cover_letter = ""
+    if 'last_compiled_signature' not in st.session_state:
+        st.session_state.last_compiled_signature = ""
+
+    current_config_signature = f"{selected_jd_name}_{template_style}_{st.session_state.get('current_parsing_source_name')}"
+
+    # Action submission triggers
+    if st.button("🚀 Generate Bespoke Cover Letter", type="primary", use_container_width=True):
+        with st.spinner("AI is analyzing alignment properties and drafting your letter..."):
+            compiled_letter = generate_tailored_cover_letter(
+                resume_text=st.session_state.full_text,
+                jd_content=jd_content_raw,
+                template_style=template_style,
+                role_title=role_title_raw
+            )
+            st.session_state.generated_cover_letter = compiled_letter
+            st.session_state.last_compiled_signature = current_config_signature
+            st.rerun()
+
+    # Document presentation view output panel block
+    if st.session_state.generated_cover_letter:
+        st.markdown("---")
+        st.subheader("📝 Generated Output Draft")
+        
+        # Check if selection configurations drifted out of sync with state contents
+        if current_config_signature != st.session_state.last_compiled_signature:
+            st.caption("ℹ️ *The parameters selected above have changed since this draft was compiled. Click generate again to re-sync.*")
+            
+        # Editable workspace layout area box
+        editable_letter = st.text_area(
+            "Review and make manual edits below if needed before downloading:",
+            value=st.session_state.generated_cover_letter,
+            height=400,
+            key="cl_workspace_textarea"
+        )
+        st.session_state.generated_cover_letter = editable_letter
+
+        # File export actions column deck structure setup
+        st.markdown("##### Document Export Channels")
+        col_dl_md, col_dl_html = st.columns(2)
+        
+        cand_clean_name = st.session_state.parsed.get('name', 'Candidate').replace(' ', '_')
+        role_clean_name = role_title_raw.replace(' ', '_').replace('/', '_')
+        base_filename = f"{cand_clean_name}_CoverLetter_{role_clean_name}"
+        
+        with col_dl_md:
+            st.download_button(
+                label="⬇️ Download Markdown (.md)",
+                data=st.session_state.generated_cover_letter,
+                file_name=f"{base_filename}.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
+            
+        with col_dl_html:
+            # Reuses your generic structural base64 rendering functions
+            html_data_uri = get_download_link(
+                data=st.session_state.generated_cover_letter,
+                filename=f"{base_filename}.html",
+                file_format='html',
+                title="Tailored Cover Letter"
+            )
+            render_download_button(
+                data_uri=html_data_uri,
+                filename=f"{base_filename}.html",
+                label="📄 Download HTML (Print to PDF)",
+                color='html'
+            )
+
 
 # --------------------------------------------------------------------------------------
 # NEW TAB: GAP ANALYSIS & COURSE PLAN
@@ -2338,7 +2530,6 @@ def gap_analysis_tab():
 # --------------------------------------------------------------------------------------
 # END GAP ANALYSIS TAB
 # --------------------------------------------------------------------------------------
-
 
 # --------------------------------------------------------------------------------------
 # CHATBOT FUNCTIONALITY (unchanged)
@@ -2574,14 +2765,15 @@ def candidate_dashboard(go_to):
         st.session_state.candidate_job_types = DEFAULT_JOB_TYPES 
 
     # --- Main Content with Tabs (CV Management added) ---
-    tab_parsing, tab_cv_management, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_chatbot, tab_interview_prep, tab_gap_analysis = st.tabs(
+    tab_parsing, tab_cv_management, tab_data_view, tab_jd, tab_batch_match, tab_filter_jd, tab_cover_letter, tab_chatbot, tab_interview_prep, tab_gap_analysis = st.tabs(
         [
             "📄 Resume Parsing", 
-            "📝 Resume or CV Builder", # NEW TAB
+            "📝 Resume or CV Builder", 
             "✨ Parsed Data View", 
             "📚 JD Management", 
             "🎯 Batch JD Match", 
             "🔍 Filter JD", 
+            "✉️ Cover Letters",      # <-- NEW TAB PLACEMENT 
             "🤖 Chatbot",  
             "🎤 Interview Preparation",
             "💡 Gap Analysis & Course Plan" 
@@ -2605,6 +2797,9 @@ def candidate_dashboard(go_to):
         
     with tab_filter_jd:
         filter_jd_tab_content()
+         
+    with tab_cover_letter:     # <-- ROUTE INTERACTION CALL TO NEW VIEW HOOK
+        cover_letter_tab()
         
     with tab_chatbot:
         chatbot_tab_content()
