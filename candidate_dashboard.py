@@ -4,11 +4,11 @@ import pdfplumber
 import docx
 import json
 import traceback
-import re 
-from dotenv import load_dotenv 
-from io import BytesIO 
+import re
+from dotenv import load_dotenv
+from io import BytesIO
 import pandas as pd
-import base64 
+import base64
 
 # --- CONFIGURATION & API SETUP ---
 
@@ -55,371 +55,366 @@ class MockGroqClient:
                         """
                     else:
                         # Resume Section Based Mock (targetting skills section)
-                        # Resume Section Based Mock (targeting Skills section)
-                        section_match = re.search(r'targeting the \*\*(.+?)\*\* section', prompt_content)
-                        section = section_match.group(1).strip() if section_match else "General Skills"
-                        
-                        mock_questions_raw = f"""
-                        [Basic/HR-related]
-                        Q1: Why did you choose to specialize in the **{section}** area?
-                        
-                        [Intermediate/Technical]
-                        Q2: Describe a complex technical challenge you overcame in the **{section}** area (e.g., optimizing Python code).
-                        
-                        [Advanced/Experience-based]
-                        Q3: Provide a detailed example of a project where you used your **{section}** skills to achieve a measurable business outcome.
-                        
-                        [Intermediate/Situation-based]
-                        Q4: How would you deal with a tight deadline for a project involving your **{section}** skills?
-                        
-                        [Advanced/Technical]
-                        Q5: How do you keep up to date with the latest trends in **{section}**?
-                        """
-                    # Return the raw text as expected by the new parser logic
-                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_questions_raw})})()]})
+                        section_match = re.search(r'targeting the \*\*(.+?)\*\* section', prompt_content)
+                        section = section_match.group(1).strip() if section_match else "General Skills"
+                        mock_questions_raw = f"""
+                        [Basic/HR-related]
+                        Q1: Why did you choose to specialize in the **{section}** area?
+                        
+                        [Intermediate/Technical]
+                        Q2: Describe a complex technical challenge you overcame in the **{section}** area (e.g., optimizing Python code).
+                        
+                        [Advanced/Experience-based]
+                        Q3: Provide a detailed example of a project where you used your **{section}** skills to achieve a measurable business outcome.
+                        
+                        [Intermediate/Situation-based]
+                        Q4: How would you deal with a tight deadline for a project involving your **{section}** skills?
+                        
+                        [Advanced/Technical]
+                        Q5: How do you keep up to date with the latest trends in **{section}**?
+                        """
+                    # Return the raw text as expected by the new parser logic
+                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_questions_raw})})()]})
 
-                elif "Evaluate the candidate's answers to the following questions" in prompt_content:
-                    # Simple mock evaluation logic
-                    if "Q2" in prompt_content and "complex technical challenge" in prompt_content:
-                        score = 8
-                        feedback = "Excellent structure using the STAR method (simulated). You clearly articulated the situation and your actions. **Focus on quantifying the results.**"
-                    else:
-                        score = 6
-                        feedback = "Good technical detail, but the answers were a bit generic (simulated). Try to connect your skills directly to the business impact."
+                elif "Evaluate the candidate's answers to the following questions" in prompt_content:
+                    # Simple mock evaluation logic
+                    if "Q2" in prompt_content and "complex technical challenge" in prompt_content:
+                        score = 8
+                        feedback = "Excellent structure using the STAR method (simulated). You clearly articulated the situation and your actions. **Focus on quantifying the results.**"
+                    else:
+                        score = 6
+                        feedback = "Good technical detail, but the answers were a bit generic (simulated). Try to connect your skills directly to the business impact."
 
-                    mock_evaluation = f"""
-                    --- AI Evaluation Report ---
-                    
-                    **Overall Score:** {score}/10
-                    **Summary:** The candidate provided decent technical background but lacked deep, quantifiable examples for most questions. The answer to Q2 was strong. Performance in **HR-related** was good, but **Situation-based** needs improvement.
-                    
-                    **Q1 (HR-related) Feedback:** {feedback}
-                    
-                    **Q2 (Technical) Feedback:** Strong response. Excellent use of technical terms and process.
-                    
-                    **Q3 (Experience-based) Feedback:** Answer was too theoretical. Need a real-world project example.
-                    
-                    **Q4 (Situation-based) Feedback:** Lacked a clear structured approach to conflict resolution.
-                    
-                    **Next Steps:** Review the job description and prepare more quantifiable achievements related to this area.
-                    """
-                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_evaluation})})()]})
+                    mock_evaluation = f"""
+                    --- AI Evaluation Report ---
+                    
+                    **Overall Score:** {score}/10
+                    **Summary:** The candidate provided decent technical background but lacked deep, quantifiable examples for most questions. The answer to Q2 was strong. Performance in **HR-related** was good, but **Situation-based** needs improvement.
+                    
+                    **Q1 (HR-related) Feedback:** {feedback}
+                    
+                    **Q2 (Technical) Feedback:** Strong response. Excellent use of technical terms and process.
+                    
+                    **Q3 (Experience-based) Feedback:** Answer was too theoretical. Need a real-world project example.
+                    
+                    **Q4 (Situation-based) Feedback:** Lacked a clear structured approach to conflict resolution.
+                    
+                    **Next Steps:** Review the job description and prepare more quantifiable achievements related to this area.
+                    """
+                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_evaluation})})()]})
 
-                elif "Generate a detailed course plan and suggest relevant certifications" in prompt_content:
-                    gap_match = re.search(r'Gaps Identified:\s*(.*)', prompt_content, re.DOTALL)
-                    gap_summary = gap_match.group(1).strip() if gap_match else "Missing key skills in Cloud and CI/CD."
-                    
-                    mock_plan = f"""
-                    ## 💡 Detailed Course Plan: Addressing Gaps in Cloud/CI/CD (Simulated)
-                    
-                    The goal is to cover the identified gaps: **{gap_summary}**.
-                    
-                    ### Phase 1: Foundational Cloud Skills (4 Weeks)
-                    * **Module 1 (AWS/GCP):** Core services (EC2, S3, IAM, VPC). Focus on security best practices.
-                    * **Module 2 (IaC):** Introduction to **Terraform** or CloudFormation/Deployment Manager. Hands-on simple infrastructure provisioning.
-                    
-                    ### Phase 2: Automation & DevOps (6 Weeks)
-                    * **Module 3 (CI/CD Principles):** Theory and practice of continuous integration/delivery using **GitLab CI** or Jenkins.
-                    * **Module 4 (Containerization):** Advanced Dockerfile creation and multi-container application deployment with Docker Compose.
-                    * **Module 5 (Kubernetes Basics):** Deploying and scaling applications using basic K8s objects (Pods, Deployments, Services).
-                    
-                    ### Phase 3: Project and Certification Prep (4 Weeks)
-                    * **Project:** Build a fully automated CI/CD pipeline deploying a microservice to a managed Kubernetes cluster (EKS/GKE).
-                    
-                    ---
-                    
-                    ## 🏅 Suggested Certifications
-                    
-                    * **For AWS Focus:** **AWS Certified Solutions Architect – Associate** (Covers broad cloud knowledge).
-                    * **For GCP Focus:** **Google Cloud Professional Cloud Architect** (A high-value certification).
-                    * **For DevOps/CI/CD:** **Certified Kubernetes Administrator (CKA)** or **HashiCorp Certified Terraform Associate**.
-                    
-                    ---
-                    **Next Step:** Focus on the **AWS Certified Solutions Architect** path first, as it provides the quickest return on investment for entry to mid-level cloud roles.
-                    """
-                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_plan})})()]})
+                elif "Generate a detailed course plan and suggest relevant certifications" in prompt_content:
+                    gap_match = re.search(r'Gaps Identified:\s*(.*)', prompt_content, re.DOTALL)
+                    gap_summary = gap_match.group(1).strip() if gap_match else "Missing key skills in Cloud and CI/CD."
+                    
+                    mock_plan = f"""
+                    ## 💡 Detailed Course Plan: Addressing Gaps in Cloud/CI/CD (Simulated)
+                    
+                    The goal is to cover the identified gaps: **{gap_summary}**.
+                    
+                    ### Phase 1: Foundational Cloud Skills (4 Weeks)
+                    * **Module 1 (AWS/GCP):** Core services (EC2, S3, IAM, VPC). Focus on security best practices.
+                    * **Module 2 (IaC):** Introduction to **Terraform** or CloudFormation/Deployment Manager. Hands-on simple infrastructure provisioning.
+                    
+                    ### Phase 2: Automation & DevOps (6 Weeks)
+                    * **Module 3 (CI/CD Principles):** Theory and practice of continuous integration/delivery using **GitLab CI** or Jenkins.
+                    * **Module 4 (Containerization):** Advanced Dockerfile creation and multi-container application deployment with Docker Compose.
+                    * **Module 5 (Kubernetes Basics):** Deploying and scaling applications using basic K8s objects (Pods, Deployments, Services).
+                    
+                    ### Phase 3: Project and Certification Prep (4 Weeks)
+                    * **Project:** Build a fully automated CI/CD pipeline deploying a microservice to a managed Kubernetes cluster (EKS/GKE).
+                    
+                    ---
+                    
+                    ## 🏅 Suggested Certifications
+                    
+                    * **For AWS Focus:** **AWS Certified Solutions Architect – Associate** (Covers broad cloud knowledge).
+                    * **For GCP Focus:** **Google Cloud Professional Cloud Architect** (A high-value certification).
+                    * **For DevOps/CI/CD:** **Certified Kubernetes Administrator (CKA)** or **HashiCorp Certified Terraform Associate**.
+                    
+                    ---
+                    **Next Step:** Focus on the **AWS Certified Solutions Architect** path first, as it provides the quickest return on investment for entry to mid-level cloud roles.
+                    """
+                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_plan})})()]}) 
 
-                # --- Existing Mock Logic (JD Q&A, Resume Q&A, Cover Letter) ---
-                elif "Answer the following question about the Job Description concisely and directly." in prompt_content:
-                    question_match = re.search(r'Question:\s*(.*)', prompt_content)
-                    question = question_match.group(1).strip() if question_match else "a question"
-                    
-                    if 'role' in question.lower():
-                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'The required role in this Job Description is Cloud Engineer.'})()]})
-                    elif 'experience' in question.lower():
-                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'The job requires 3+ years of experience in AWS/GCP and infrastructure automation.'})()]})
-                    else:
-                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'Mock answer for JD question: The JD mentions Python and Docker as key skills.'})()]})
+                elif "Answer the following question about the Job Description concisely and directly." in prompt_content:
+                    question_match = re.search(r'Question:\s*(.*)', prompt_content)
+                    question = question_match.group(1).strip() if question_match else "a question"
+                    
+                    if 'role' in question.lower():
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'The required role in this Job Description is Cloud Engineer.'})()]})
+                    elif 'experience' in question.lower():
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'The job requires 3+ years of experience in AWS/GCP and infrastructure automation.'})()]})
+                    else:
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'Mock answer for JD question: The JD mentions Python and Docker as key skills.'})()]})
 
-                elif "Answer the following question about the resume concisely and directly." in prompt_content:
-                    question_match = re.search(r'Question:\s*(.*)', prompt_content)
-                    question = question_match.group(1).strip() if question_match else "a question"
-                    
-                    if 'name' in question.lower():
-                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'The candidate\'s name is Vivek Swamy.'})()]})
-                    elif 'skills' in question.lower():
-                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'Key skills include Python, SQL, AWS, and MLOps.'})()]})
-                    else:
-                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': f'Based on the mock resume data, I can provide a simulated answer to your question about {question}.'})()]})
+                elif "Answer the following question about the resume concisely and directly." in prompt_content:
+                    question_match = re.search(r'Question:\s*(.*)', prompt_content)
+                    question = question_match.group(1).strip() if question_match else "a question"
+                    
+                    if 'name' in question.lower():
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'The candidate\'s name is Vivek Swamy.'})()]})
+                    elif 'skills' in question.lower():
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': 'Key skills include Python, SQL, AWS, and MLOps.'})()]})
+                    else:
+                        return type('MockResponse', (object,), {'choices': [type('Message', (object,), {'content': f'Based on the mock resume data, I can provide a simulated answer to your question about {question}.'})()]})
 
-                elif "You are an expert cover letter generator" in prompt_content:
-                    role_match = re.search(r'Job Description Role: (.*?)[\.\n]', prompt_content)
-                    role = role_match.group(1).strip() if role_match else "Software Engineer"
-                    
-                    mock_cover_letter = f"""
-                    [Date]
-                    
-                    [Hiring Manager Name/Title, if known]
-                    [Company Name]
-                    
-                    **Subject: Application for {role} Position - Vivek Swamy**
-                    
-                    Dear Hiring Manager,
-                    
-                    I am writing to express my enthusiastic interest in the **{role}** position at MockCorp, as detailed in the attached job description. My background, highlighted by strong skills in Python, AWS, and MLOps, aligns perfectly with your requirements for [Key Requirement from JD - e.g., cloud infrastructure management].
-                    
-                    During my time at Test Corp (simulated experience), I was responsible for [specific achievement related to JD]. My resume further details my proficiency in [Skill 1] and [Skill 2], which I believe would make me an immediate asset to your team.
-                    
-                    I am confident in my ability to contribute to your company's goals and I look forward to the opportunity to discuss my application further.
-                    
-                    Sincerely,
-                    
-                    Vivek Swamy
-                    [vivek.swamy@example.com]
-                    """
-                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_cover_letter})})()]})
-                
-                # Mock candidate data (Vivek Swamy) for parsing
-                mock_llm_json = {
-                    "name": "Vivek Swamy", 
-                    "email": "vivek.swamy@example.com", 
-                    "phone": "555-1234", 
-                    "linkedin": "https://linkedin.com/in/vivek-swamy-mock", 
-                    "github": "https://github.com/vivek-mock", 
-                    "personal_details": "Mock summary generated for: Vivek Swamy.", 
-                    "skills": [
-                        "Python", "SQL", "AWS", "Streamlit", 
-                        "LLM Integration", "MLOps", "Data Visualization", 
-                        "Docker", "Kubernetes", "Java", "API Services" 
-                    ], 
-                    "education": ["B.S. Computer Science, Mock University, 2020"], 
-                    "experience": ["Software Intern, Mock Solutions (2024-2025)", "Data Analyst, Test Corp (2022-2024)"], 
-                    "certifications": ["Mock Certification in AWS Cloud"], 
-                    "projects": ["Mock Project: Built an MLOps pipeline using Docker and Kubernetes."], 
-                    "strength": ["Mock Strength"], 
-                }
-                
-                # Mock response content for GroqClient initialization check (for parsing)
-                message_obj = type('Message', (object,), {'content': json.dumps(mock_llm_json)})()
-                choice_obj = type('Choice', (object,), {'message': message_obj})()
-                response_obj = type('MockResponse', (object,), {'choices': [choice_obj]})()
-                return response_obj
-        
-        # Add a placeholder for the completions object if we need a mock response for fit evaluation
-        class FitCompletions(Completions):
-            def create(self, **kwargs):
-                prompt_content = kwargs.get('messages', [{}])[0].get('content', '')
-                
-                if "Evaluate how well the following resume content matches the provided job description" in prompt_content:
-                    # SIMULATED FIT LOGIC (Fallback for when the LLM-dependent function tries to run without a key)
-                    
-                    # Simple heuristic mock score based on role title in the prompt
-                    jd_role_match = re.search(r'(?:Role|Engineer|Scientist)[:\s]+([\w\s/-]+)', prompt_content)
-                    jd_role = jd_role_match.group(1).lower().strip() if jd_role_match else "default"
-                    
-                    if 'ai/ml' in jd_role or 'mlops' in jd_role:
-                        score = 8
-                    elif 'data scientist' in jd_role:
-                        score = 7
-                    elif 'cloud engineer' in jd_role:
-                        score = 6
-                    else:
-                        score = 5
-                        
-                    # Calculate percentages based on the score to differentiate the rows
-                    skills_p = 50 + (score * 5)
-                    exp_p = 60 + (score * 3)
-                    edu_p = 70 + (score * 1)
-                    
-                    # NOTE: This mock output uses the strict format expected by the regex parser below.
-                    mock_fit_output = f"""
-                    Overall Fit Score: {score}/10
-                    
-                    --- Section Match Analysis ---
-                    Skills Match: {skills_p}%
-                    Experience Match: {exp_p}%
-                    Education Match: {edu_p}%
-                    
-                    Strengths/Matches:
-                    - Mock Match Point 1 (Role: {jd_role})
-                    - Mock Match Point 2
-                    
-                    Gaps/Areas for Improvement:
-                    - Missing hands-on experience in **Terraform**.
-                    - Lack of project experience deploying applications to **GCP/EKS**.
-                    - Weak documentation skills in CI/CD pipeline development.
-                    
-                    Overall Summary: Mock summary for score {score}.
-                    """
-                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_fit_output})})()]})
-                
-                # If it's not a fit evaluation, run standard Completions logic
-                return super().create(**kwargs)
+                elif "You are an expert cover letter generator" in prompt_content:
+                    role_match = re.search(r'Job Description Role: (.*?)[\.\n]', prompt_content)
+                    role = role_match.group(1).strip() if role_match else "Software Engineer"
+                    
+                    mock_cover_letter = f"""
+                    [Date]
+                    
+                    [Hiring Manager Name/Title, if known]
+                    [Company Name]
+                    
+                    **Subject: Application for {role} Position - Vivek Swamy**
+                    
+                    Dear Hiring Manager,
+                    
+                    I am writing to express my enthusiastic interest in the **{role}** position at MockCorp, as detailed in the attached job description. My background, highlighted by strong skills in Python, AWS, and MLOps, aligns perfectly with your requirements for [Key Requirement from JD - e.g., cloud infrastructure management].
+                    
+                    During my time at Test Corp (simulated experience), I was responsible for [specific achievement related to JD]. My resume further details my proficiency in [Skill 1] and [Skill 2], which I believe would make me an immediate asset to your team.
+                    
+                    I am confident in my ability to contribute to your company's goals and I look forward to the opportunity to discuss my application further.
+                    
+                    Sincerely,
+                    
+                    Vivek Swamy
+                    [vivek.swamy@example.com]
+                    """
+                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_cover_letter})})()]})
+                
+          # Mock candidate data (Vivek Swamy) for parsing
+                mock_llm_json = {
+                    "name": "Vivek Swamy", 
+                    "email": "vivek.swamy@example.com", 
+                    "phone": "555-1234", 
+                    "linkedin": "https://linkedin.com/in/vivek-swamy-mock", 
+                    "github": "https://github.com/vivek-mock", 
+                    "personal_details": "Mock summary generated for: Vivek Swamy.", 
+                    "skills": [
+                        "Python", "SQL", "AWS", "Streamlit", 
+                        "LLM Integration", "MLOps", "Data Visualization", 
+                        "Docker", "Kubernetes", "Java", "API Services" 
+                    ], 
+                    "education": ["B.S. Computer Science, Mock University, 2020"], 
+                    "experience": ["Software Intern, Mock Solutions (2024-2025)", "Data Analyst, Test Corp (2022-2024)"], 
+                    "certifications": ["Mock Certification in AWS Cloud"], 
+                    "projects": ["Mock Project: Built an MLOps pipeline using Docker and Kubernetes."], 
+                    "strength": ["Mock Strength"], 
+                }                
+                
+                # Mock response content for GroqClient initialization check (for parsing)
+                message_obj = type('Message', (object,), {'content': json.dumps(mock_llm_json)})()
+                choice_obj = type('Choice', (object,), {'message': message_obj})()
+                response_obj = type('MockResponse', (object,), {'choices': [choice_obj]})()
+                return response_obj
+        
+        # Add a placeholder for the completions object if we need a mock response for fit evaluation
+        class FitCompletions(Completions):
+            def create(self, **kwargs):
+                prompt_content = kwargs.get('messages', [{}])[0].get('content', '')
+                
+                if "Evaluate how well the following resume content matches the provided job description" in prompt_content:
+                    # SIMULATED FIT LOGIC (Fallback for when the LLM-dependent function tries to run without a key)
+                    
+                    # Simple heuristic mock score based on role title in the prompt
+                    jd_role_match = re.search(r'(?:Role|Engineer|Scientist)[:\s]+([\w\s/-]+)', prompt_content)
+                    jd_role = jd_role_match.group(1).lower().strip() if jd_role_match else "default"
+                    
+                    if 'ai/ml' in jd_role or 'mlops' in jd_role:
+                        score = 8
+                    elif 'data scientist' in jd_role:
+                        score = 7
+                    elif 'cloud engineer' in jd_role:
+                        score = 6
+                    else:
+                        score = 5
+                        
+                    # Calculate percentages based on the score to differentiate the rows
+                    skills_p = 50 + (score * 5)
+                    exp_p = 60 + (score * 3)
+                    edu_p = 70 + (score * 1)
+                    
+                    # NOTE: This mock output uses the strict format expected by the regex parser below.
+                    mock_fit_output = f"""
+                    Overall Fit Score: {score}/10
+                    
+                    --- Section Match Analysis ---
+                    Skills Match: {skills_p}%
+                    Experience Match: {exp_p}%
+                    Education Match: {edu_p}%
+                    
+                    Strengths/Matches:
+                    - Mock Match Point 1 (Role: {jd_role})
+                    - Mock Match Point 2
+                    
+                    Gaps/Areas for Improvement:
+                    - Missing hands-on experience in **Terraform**.
+                    - Lack of project experience deploying applications to **GCP/EKS**.
+                    - Weak documentation skills in CI/CD pipeline development.
+                    
+                    Overall Summary: Mock summary for score {score}.
+                    """
+                    return type('MockResponse', (object,), {'choices': [type('Choice', (object,), {'message': type('Message', (object,), {'content': mock_fit_output})})()]})
+                
+                # If it's not a fit evaluation, run standard Completions logic
+                return super().create(**kwargs)
 
-        return FitCompletions()
-
+        return FitCompletions()
+        
 # Initialize the Groq client or the Mock client based on the environment variable
 try:
-    from groq import Groq
-    
-    if GROQ_API_KEY:
-        client = Groq(api_key=GROQ_API_KEY)
-        # Custom flag to indicate a successful connection attempt to the real client
-        class GroqPlaceholder(Groq): 
-             def __init__(self, api_key): 
-                 super().__init__(api_key=api_key)
-                 self.client_ready = True
-        client = GroqPlaceholder(api_key=GROQ_API_KEY)
-    else:
-        # Fallback if key is missing but Groq is installed
-        raise ValueError("GROQ_API_KEY not set. Using Mock Client.")
-        
+    from groq import Groq
+    
+    if GROQ_API_KEY:
+        client = Groq(api_key=GROQ_API_KEY)
+        # Custom flag to indicate a successful connection attempt to the real client
+        class GroqPlaceholder(Groq): 
+             def __init__(self, api_key): 
+                 super().__init__(api_key=api_key)
+                 self.client_ready = True
+        client = GroqPlaceholder(api_key=GROQ_API_KEY)
+    else:
+        # Fallback if key is missing but Groq is installed
+        raise ValueError("GROQ_API_KEY not set. Using Mock Client.")
+        
 except (ImportError, ValueError, NameError) as e:
-    # Fallback to Mock Client if import fails or key is missing
-    client = MockGroqClient()
-    
+    # Fallback to Mock Client if import fails or key is missing
+    client = MockGroqClient()
+    
 # --- END API SETUP ---
 
 
 # --- Utility Functions ---
 
 def clear_interview_state(mode):
-    """Clears all session state variables related to interview preparation for a specific mode."""
-    if mode == 'resume':
-        if 'iq_output_resume' in st.session_state: del st.session_state['iq_output_resume']
-        if 'interview_qa_resume' in st.session_state: del st.session_state['interview_qa_resume']
-        if 'evaluation_report_resume' in st.session_state: del st.session_state['evaluation_report_resume']
-    elif mode == 'jd':
-        if 'iq_output_jd' in st.session_state: del st.session_state['iq_output_jd']
-        if 'interview_qa_jd' in st.session_state: del st.session_state['interview_qa_jd']
-        if 'evaluation_report_jd' in st.session_state: del st.session_state['evaluation_report_jd']
-    
-    # Also clear the gap analysis plan when interview state is cleared (as it's derived from the match)
-    if 'gap_analysis_plan' in st.session_state: del st.session_state['gap_analysis_plan']
+    """Clears all session state variables related to interview preparation for a specific mode."""
+    if mode == 'resume':
+        if 'iq_output_resume' in st.session_state: del st.session_state['iq_output_resume']
+        if 'interview_qa_resume' in st.session_state: del st.session_state['interview_qa_resume']
+        if 'evaluation_report_resume' in st.session_state: del st.session_state['evaluation_report_resume']
+    elif mode == 'jd':
+        if 'iq_output_jd' in st.session_state: del st.session_state['iq_output_jd']
+        if 'interview_qa_jd' in st.session_state: del st.session_state['interview_qa_jd']
+        if 'evaluation_report_jd' in st.session_state: del st.session_state['evaluation_report_jd']
+    
+    # Also clear the gap analysis plan when interview state is cleared (as it's derived from the match)
+    if 'gap_analysis_plan' in st.session_state: del st.session_state['gap_analysis_plan']
 
 
 def get_file_type(file_name):
-    """Identifies the file type based on its extension, handling common text formats."""
-    ext = os.path.splitext(file_name)[1].lower().strip('.')
-    if ext == 'pdf': return 'pdf'
-    elif ext in ('docx', 'doc'): return 'docx'
-    elif ext in ('txt', 'md', 'markdown', 'rtf'): return 'txt' 
-    elif ext == 'json': return 'json'
-    elif ext in ('xlsx', 'xls', 'csv'): return 'excel' 
-    else: return 'unknown' 
+    """Identifies the file type based on its extension, handling common text formats."""
+    ext = os.path.splitext(file_name)[1].lower().strip('.')
+    if ext == 'pdf': return 'pdf'
+    elif ext in ('docx', 'doc'): return 'docx'
+    elif ext in ('txt', 'md', 'markdown', 'rtf'): return 'txt' 
+    elif ext == 'json': return 'json'
+    elif ext in ('xlsx', 'xls', 'csv'): return 'excel' 
+    else: return 'unknown' 
 
 def extract_content(file_type, file_content_bytes, file_name):
-    """Extracts text content from uploaded file content (bytes)."""
-    text = ''
-    excel_data = None
-    try:
-        if file_type == 'pdf':
-            with pdfplumber.open(BytesIO(file_content_bytes)) as pdf:
-                for page in pdf.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text += page_text + '\n'
-        
-        elif file_type == 'docx':
-            doc = docx.Document(BytesIO(file_content_bytes))
-            text = '\n'.join([para.text for para in doc.paragraphs])
-        
-        elif file_type == 'txt':
-            try:
-                # Try UTF-8 first, fallback to Latin-1
-                text = file_content_bytes.decode('utf-8')
-            except UnicodeDecodeError:
-                 text = file_content_bytes.decode('latin-1')
-        
-        elif file_type == 'json':
-            try:
-                text = file_content_bytes.decode('utf-8')
-                text = "--- JSON Content Start ---\n" + text + "\n--- JSON Content End ---"
-            except UnicodeDecodeError:
-                return f"[Error] JSON content extraction failed: Unicode Decode Error.", None
-        
-        elif file_type == 'excel':
-            try:
-                if file_name.endswith('.csv'):
-                    df = pd.read_csv(BytesIO(file_content_bytes))
-                else: 
-                    xls = pd.ExcelFile(BytesIO(file_content_bytes))
-                    all_sheets_data = {}
-                    for sheet_name in xls.sheet_names:
-                        df = pd.read_excel(xls, sheet_name=sheet_name)
-                        # Store as JSON strings for LLM input
-                        all_sheets_data[sheet_name] = df.to_json(orient='records') 
-                        
-                    excel_data = all_sheets_data 
-                    text = json.dumps(all_sheets_data, indent=2)
-                    text = f"[EXCEL_CONTENT] The following structured data was extracted:\n{text}"
-                    
-            except Exception as e:
-                return f"[Error] Excel/CSV file parsing failed. Error: {e}", None
+    """Extracts text content from uploaded file content (bytes)."""
+    text = ''
+    excel_data = None
+    try:
+        if file_type == 'pdf':
+            with pdfplumber.open(BytesIO(file_content_bytes)) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + '\n'
+        
+        elif file_type == 'docx':
+            doc = docx.Document(BytesIO(file_content_bytes))
+            text = '\n'.join([para.text for para in doc.paragraphs])
+        
+        elif file_type == 'txt':
+            try:
+                # Try UTF-8 first, fallback to Latin-1
+                text = file_content_bytes.decode('utf-8')
+            except UnicodeDecodeError:
+                 text = file_content_bytes.decode('latin-1')
+        
+        elif file_type == 'json':
+            try:
+                text = file_content_bytes.decode('utf-8')
+                text = "--- JSON Content Start ---\n" + text + "\n--- JSON Content End ---"
+            except UnicodeDecodeError:
+                return f"[Error] JSON content extraction failed: Unicode Decode Error.", None
+        
+        elif file_type == 'excel':
+            try:
+                if file_name.endswith('.csv'):
+                    df = pd.read_csv(BytesIO(file_content_bytes))
+                else: 
+                    xls = pd.ExcelFile(BytesIO(file_content_bytes))
+                    all_sheets_data = {}
+                    for sheet_name in xls.sheet_names:
+                        df = pd.read_excel(xls, sheet_name=sheet_name)
+                        # Store as JSON strings for LLM input
+                        all_sheets_data[sheet_name] = df.to_json(orient='records') 
+                        
+                    excel_data = all_sheets_data 
+                    text = json.dumps(all_sheets_data, indent=2)
+                    text = f"[EXCEL_CONTENT] The following structured data was extracted:\n{text}"
+                    
+            except Exception as e:
+                return f"[Error] Excel/CSV file parsing failed. Error: {e}", None
 
-
-        if not text.strip() and file_type not in ('excel', 'json'): 
-            return f"[Error] {file_type.upper()} content extraction failed or file is empty.", None
-        
-        return text, excel_data
-    
-    except Exception as e:
-        return f"[Error] Fatal Extraction Error: Failed to read file content ({file_type}). Error: {e}\n{traceback.format_exc()}", None
+        if not text.strip() and file_type not in ('excel', 'json'): 
+            return f"[Error] {file_type.upper()} content extraction failed or file is empty.", None
+        
+        return text, excel_data
+    
+    except Exception as e:
+        return f"[Error] Fatal Extraction Error: Failed to read file content ({file_type}). Error: {e}\n{traceback.format_exc()}", None
 
 @st.cache_data(show_spinner="Analyzing content with Groq LLM...")
 def parse_resume_with_llm(text):
-    """
-    Sends resume text to the LLM for structured information extraction.
-    """
-    
-    def get_fallback_name():
-        return "Vivek Swamy" 
+    """
+    Sends resume text to the LLM for structured information extraction.
+    """
+    
+    def get_fallback_name():
+        return "Vivek Swamy" 
 
-    if text.startswith("[Error"):
-        return {"name": "Parsing Error", "error": text}
+    if text.startswith("[Error"):
+        return {"name": "Parsing Error", "error": text}
 
-    json_match_external = re.search(r'--- JSON Content Start ---\s*(.*?)\s*--- JSON Content End ---', text, re.DOTALL)
-    
-    if json_match_external:
-        try:
-            json_content = json_match_external.group(1).strip()
-            parsed_data = json.loads(json_content)
-            
-            if not parsed_data.get('name'):
-                 parsed_data['name'] = get_fallback_name()
-                 
-            parsed_data['error'] = None 
-            
-            return parsed_data
-        
-        except json.JSONDecodeError:
-            return {"name": get_fallback_name(), "error": f"LLM Input Error: Could not decode uploaded JSON content into a valid structure."}
-            
-    if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
-        try:
-            completion = client.chat().create(model=GROQ_MODEL, messages=[{}])
-            content = completion.choices[0].message.content.strip()
-            parsed_data = json.loads(content)
-            
-            if not parsed_data.get('name'):
-                 parsed_data['name'] = get_fallback_name()
-            
-            parsed_data['error'] = None 
-            return parsed_data
-            
-        except Exception as e:
-            return {"name": get_fallback_name(), "error": f"Mock Client Error: {e}"}
-
+    json_match_external = re.search(r'--- JSON Content Start ---\s*(.*?)\s*--- JSON Content End ---', text, re.DOTALL)
+    
+    if json_match_external:
+        try:
+            json_content = json_match_external.group(1).strip()
+            parsed_data = json.loads(json_content)
+            
+            if not parsed_data.get('name'):
+                 parsed_data['name'] = get_fallback_name()
+                 
+            parsed_data['error'] = None 
+            
+            return parsed_data
+        
+        except json.JSONDecodeError:
+            return {"name": get_fallback_name(), "error": f"LLM Input Error: Could not decode uploaded JSON content into a valid structure."}
+            
+    if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
+        try:
+            completion = client.chat().create(model=GROQ_MODEL, messages=[{}])
+            content = completion.choices[0].message.content.strip()
+            parsed_data = json.loads(content)
+            
+            if not parsed_data.get('name'):
+                 parsed_data['name'] = get_fallback_name()
+            
+            parsed_data['error'] = None 
+            return parsed_data
+            
+        except Exception as e:
+            return {"name": get_fallback_name(), "error": f"Mock Client Error: {e}"}
     
     prompt = f"""Extract the following information from the resume in structured JSON.
     Ensure all relevant details for each category are captured.
