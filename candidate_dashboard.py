@@ -797,6 +797,10 @@ def evaluate_jd_fit(job_description, parsed_json):
 
 ###-------- cover letter generate for resume---------
 
+import streamlit as st
+import json
+import re
+
 def generate_tailored_cover_letter(resume_text, jd_content, template_style, cache_bust=None):
     """
     Generates a completely unique, highly personalized cover letter by evaluating 
@@ -805,9 +809,9 @@ def generate_tailored_cover_letter(resume_text, jd_content, template_style, cach
     global client, GROQ_MODEL, GROQ_API_KEY
     
     if not resume_text or not resume_text.strip():
-        return "Error: No valid resume text found. Please upload or paste a resume first."
+        return "Error: No valid resume text found. Please provide your resume first."
     if not jd_content or not jd_content.strip():
-        return "Error: Please upload or paste a valid job description."
+        return "Error: Please select a template or provide a custom job description."
 
     # Define stylistic tone modifiers for the LLM based on user selection
     style_guidelines = {
@@ -844,7 +848,6 @@ def generate_tailored_cover_letter(resume_text, jd_content, template_style, cach
     # --- INTELLIGENT DYNAMIC DATA FALLBACK LAYER ---
     # Executes if working offline or if GROQ_API_KEY is missing.
     if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
-        # Dynamic Name Extraction: Read first clean line
         lines = [line.strip() for line in resume_text.split('\n') if line.strip()]
         cand_name = "Candidate"
         if lines:
@@ -852,7 +855,6 @@ def generate_tailored_cover_letter(resume_text, jd_content, template_style, cach
             if len(potential_name) < 40 and not any(kw in potential_name.lower() for kw in ['resume', 'cv', 'experience', 'education']):
                 cand_name = potential_name
 
-        # Dynamic Role Extraction from JD text
         role_title = "Technical Specialist"
         role_match = re.search(r'(?:Role|Position|Title|Job Title)[:\s\n]+([\w\s/-]+)', jd_content, re.IGNORECASE)
         if role_match:
@@ -864,7 +866,6 @@ def generate_tailored_cover_letter(resume_text, jd_content, template_style, cach
         elif 'cloud engineer' in jd_content.lower():
             role_title = "Cloud Engineer"
 
-        # Dynamic Core Skills Extraction Heuristics from input text payload
         skills_inventory = ["Python", "Pandas", "NumPy", "SQL", "Streamlit", "Docker", "Kubernetes", "AWS", "GCP", "Scikit-Learn"]
         extracted_skills = [skill for skill in skills_inventory if skill.lower() in resume_text.lower()]
         skills_phrase = ", ".join(extracted_skills[:4]) if extracted_skills else "software engineering principles and modern libraries"
@@ -883,7 +884,7 @@ I am writing to express my strong interest in the open {role_title} position at 
 
 As a dedicated developer, my technical foundation is anchored by a deep focus on writing clean, scalable code and optimizing performance. Through extensive practical projects, I have cultivated hands-on experience utilizing modern workflows, implementing secure data pipelines, and executing deployment structures using core tools like {skills_phrase}. Taking software paradigms from conceptual architectural states down to operational, user-facing applications has trained me to approach system debugging methodically.
 
-I am particularly excited about your team's commitment to pushing innovative technology barriers forward. I am eager to contribute my technical versatility, analytical thinking capabilities, and disciplined problem-solving approach to your active production deliverables.
+I am particularly excited about your team's commitment to pushing innovative technology barriers forward. I am eager to bring my problem-solving abilities, technical versatility, and passion for continuous learning to an entry-level engineering role where I can contribute to real-world challenges.
 
 Thank you for your time and analytical evaluation of my profile qualifications. I look forward to the opportunity to discuss my structural alignment parameters with you in a future interview.
 
@@ -896,7 +897,7 @@ Sincerely,
         response = client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7  # Preserves rich phrasing variations
+            temperature=0.7
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
@@ -2341,15 +2342,15 @@ def interview_preparation_tab():
 # New : cover letter generator ---------
 
 def cover_letter_tab():
-    """ Tab layout managing text document uploads, input evaluations, rendering, and downloading file blocks. """
+    """ Tab layout managing text document uploads, template blueprints selection, and file downloading. """
     st.header("✉️ Tailored Cover Letter Generator")
-    st.markdown("Upload or paste your documents directly to generate a completely personalized cover letter matching your candidate credentials.")
+    st.markdown("Provide your resume and a target job profile—either custom or using our pre-designed templates—to draft an aligned cover letter.")
     st.markdown("---")
 
     # Layout Split Grid Columns setup
     col_left_panel, col_right_panel = st.columns(2)
 
-    # --- SECTION 1: CANDIDATE PROFILE INPUT GRID PANEL ---
+    # --- SECTION 1: CANDIDATE PROFILE INPUT PANEL (LEFT) ---
     with col_left_panel:
         st.subheader("1. Profile / Resume Input")
         cl_res_method = st.radio(
@@ -2381,37 +2382,63 @@ def cover_letter_tab():
                 key="cl_tab_raw_pasted_text_resume_area_widget"
             )
 
-    # --- SECTION 2: JOB DESCRIPTION POSTING GRID PANEL ---
+    # --- SECTION 2: JOB DESCRIPTION POSTING / TEMPLATE PANEL (RIGHT) ---
     with col_right_panel:
         st.subheader("2. Target Job Requirements")
-        cl_jd_method = st.radio(
-            "Select JD Entry Method", 
-            ["Upload File Document", "Paste Raw Text Workspace"], 
-            key="cl_tab_jd_entry_modality_toggle"
+        cl_jd_source_type = st.radio(
+            "Choose Target Profile Method",
+            ["Use a Template", "Upload or Paste Custom JD"],
+            key="cl_tab_jd_source_type_toggle",
+            help="Choose from our professionally designed templates or provide a specific job posting."
         )
         
         jd_payload_text = ""
-        if cl_jd_method == "Upload File Document":
-            uploaded_jd = st.file_uploader(
-                "Upload Job Description (PDF, DOCX, TXT)", 
-                type=["pdf", "docx", "txt"], 
-                key="cl_tab_raw_file_jd_uploader_widget"
+        
+        if cl_jd_source_type == "Use a Template":
+            st.markdown("<div style='font-size: 13px; color: grey; margin-bottom: 4px;'>Choose from our professionally designed templates:</div>", unsafe_allow_html=True)
+            chosen_template_profile = st.selectbox(
+                "Select Role Template",
+                options=["AI/ML Engineer Profile", "Data Scientist Profile", "Cloud Engineer Profile", "Full-Stack Software Engineer Profile"],
+                key="cl_tab_prebuilt_templates_dropdown"
             )
-            if uploaded_jd:
-                f_type = get_file_type(uploaded_jd.name)
-                uploaded_jd.seek(0)
-                txt_out, _ = extract_content(f_type, uploaded_jd.getvalue(), uploaded_jd.name)
-                if not txt_out.startswith("[Error"):
-                    jd_payload_text = txt_out
-                    st.success(f"Loaded JD details: {uploaded_jd.name}")
-                else:
-                    st.error(txt_out)
+            
+            # Professionally engineered blueprint data records structures
+            templates_dictionary = {
+                "AI/ML Engineer Profile": "Role: AI/ML Engineer\nRequirements: Deep knowledge of Python, building LLM integrations, retrieval-augmented generation (RAG) systems, managing orchestration pipelines, and configuring vector data stores (Supabase/pgvector). Familiarity with computer vision tools (OpenCV, MediaPipe) and setting up fine-tuning routines is highly desirable.",
+                "Data Scientist Profile": "Role: Data Scientist\nRequirements: Strong proficiency handling large analytical data layers using Python, Pandas, and NumPy. Expert level implementation background working with SQL/relational management systems, structuring exploratory analysis routines, compiling predictive modeling math, and building real-time dashboards inside Streamlit or equivalent visualization interfaces.",
+                "Cloud Engineer Profile": "Role: Cloud Engineer\nRequirements: Core infrastructure orchestration focus. Operational management expertise handling Linux systems, microservices container setups using Docker and Kubernetes, continuous automation (CI/CD workflows), and managing cloud deployments across scalable ecosystems like AWS, GCP, or automated Infrastructure as Code (Terraform).",
+                "Full-Stack Software Engineer Profile": "Role: Full-Stack Software Engineer\nRequirements: End-to-end web system architecture capabilities. Experienced designing clean operational APIs in frameworks like FastAPI or Node.js, managing scalable application logic layer interactions with SQL engines, versioning deployments via Git workflows, and organizing client layouts using modern responsive web ecosystems."
+            }
+            jd_payload_text = templates_dictionary.get(chosen_template_profile, "")
+            st.info(f"✨ Active Template Loaded: {chosen_template_profile}")
+            
         else:
-            jd_payload_text = st.text_area(
-                "Paste raw structural job description details here:", 
-                height=250, 
-                key="cl_tab_raw_pasted_text_jd_area_widget"
+            cl_jd_method = st.radio(
+                "Select Custom Entry Modality", 
+                ["Upload File Document", "Paste Raw Text Workspace"], 
+                key="cl_tab_jd_entry_modality_toggle"
             )
+            if cl_jd_method == "Upload File Document":
+                uploaded_jd = st.file_uploader(
+                    "Upload Job Description (PDF, DOCX, TXT)", 
+                    type=["pdf", "docx", "txt"], 
+                    key="cl_tab_raw_file_jd_uploader_widget"
+                )
+                if uploaded_jd:
+                    f_type = get_file_type(uploaded_jd.name)
+                    uploaded_jd.seek(0)
+                    txt_out, _ = extract_content(f_type, uploaded_jd.getvalue(), uploaded_jd.name)
+                    if not txt_out.startswith("[Error"):
+                        jd_payload_text = txt_out
+                        st.success(f"Loaded JD details: {uploaded_jd.name}")
+                    else:
+                        st.error(txt_out)
+            else:
+                jd_payload_text = st.text_area(
+                    "Paste raw structural job description details here:", 
+                    height=145, 
+                    key="cl_tab_raw_pasted_text_jd_area_widget"
+                )
 
     st.markdown("---")
 
@@ -2436,19 +2463,18 @@ def cover_letter_tab():
     # Master Action Generation Trigger
     if st.button("🚀 Run AI Alignment & Generate Cover Letter", type="primary", use_container_width=True, key="cl_tab_master_generation_trigger_btn"):
         if not resume_payload_text.strip():
-            st.error("Validation Halt: Please provide a valid resume profile input layout configuration.")
+            st.error("Validation Halt: Please provide your resume details.")
         elif not jd_payload_text.strip():
-            st.error("Validation Halt: Please provide target job requirements text.")
+            st.error("Validation Halt: Please provide a job description or select a professional template profile.")
         else:
-            with st.spinner("AI engine is scrubbing input variables, mapping requirements keywords, and restructuring document layout templates..."):
-                # Clear legacy cache elements safely before invoking computation threads
+            with st.spinner("AI engine is scrubbing input variables, mapping requirements keywords, and restructuring document templates..."):
                 st.session_state.cl_cached_output_string = ""
                 
                 generated_result = generate_tailored_cover_letter(
                     resume_text=resume_payload_text,
                     jd_content=jd_payload_text,
                     template_style=template_style,
-                    cache_bust=current_input_signature # Breaks functional level execution caching
+                    cache_bust=current_input_signature
                 )
                 st.session_state.cl_cached_output_string = generated_result
                 st.session_state.cl_cached_signature_stamp = current_input_signature
@@ -2478,6 +2504,8 @@ def cover_letter_tab():
             parsed_title = title_match.group(1).strip()
         elif 'data scientist' in jd_payload_text.lower():
             parsed_title = "Data_Scientist"
+        elif 'ai/ml' in jd_payload_text.lower() or 'machine learning' in jd_payload_text.lower():
+            parsed_title = "AI_ML_Engineer"
             
         first_line_raw = resume_payload_text.split('\n')[0].strip('#*[] ')
         cand_clean_name = first_line_raw.replace(' ', '_') if (first_line_raw and len(first_line_raw) < 40) else "Candidate"
@@ -2504,7 +2532,7 @@ def cover_letter_tab():
                 data=st.session_state.cl_cached_output_string,
                 filename=f"{base_export_filename}.html",
                 file_format='html',
-                title="Bespoke Tailored Cover Letter Documentation"
+                title="Bespoke Tailored Cover Letter"
             )
             render_download_button(
                 data_uri=html_uri_link,
