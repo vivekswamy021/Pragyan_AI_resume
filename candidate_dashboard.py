@@ -4,11 +4,11 @@ import pdfplumber
 import docx
 import json
 import traceback
-import re
-from dotenv import load_dotenv
-from io import BytesIO
+import re 
+from dotenv import load_dotenv 
+from io import BytesIO 
 import pandas as pd
-import base64
+import base64 
 
 # --- CONFIGURATION & API SETUP ---
 
@@ -23,7 +23,8 @@ DEFAULT_JOB_TYPES = ["Full-time", "Contract", "Remote"]
 STARTER_KEYWORDS = {
     "Python", "MySQL", "GCP", "cloud computing", "ML", 
     "API services", "LLM integration", "JavaScript", "SQL", "AWS", "MLOps", "Data Visualization"
-} 
+}
+
 # --- End Default/Mock Data ---
 
 
