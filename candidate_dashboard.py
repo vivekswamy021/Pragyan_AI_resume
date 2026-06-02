@@ -5,10 +5,10 @@ import docx
 import json
 import traceback
 import re
-from dotenv import load_dotenv 
-from io import BytesIO 
+from dotenv import load_dotenv
 import pandas as pd
-import base64 
+import base64
+from io import BytesIO 
 
 # --- CONFIGURATION & API SETUP ---
 
