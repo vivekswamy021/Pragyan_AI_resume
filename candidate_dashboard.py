@@ -4,11 +4,11 @@ import pdfplumber
 import docx
 import json
 import traceback
-import re
-from dotenv import load_dotenv
+import re 
+from dotenv import load_dotenv 
+from io import BytesIO 
 import pandas as pd
-import base64
-from io import BytesIO 
+import base64 
 
 # --- CONFIGURATION & API SETUP ---
 
