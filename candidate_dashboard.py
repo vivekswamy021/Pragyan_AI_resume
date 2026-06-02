@@ -23,7 +23,7 @@ DEFAULT_JOB_TYPES = ["Full-time", "Contract", "Remote"]
 STARTER_KEYWORDS = {
     "Python", "MySQL", "GCP", "cloud computing", "ML", 
     "API services", "LLM integration", "JavaScript", "SQL", "AWS", "MLOps", "Data Visualization"
-}
+} 
 # --- End Default/Mock Data ---
 
 
