@@ -2314,7 +2314,7 @@ def interview_preparation_tab():
 
 def cover_letter_tab():
     """ Tab layout handling selection parameters, generation, and file downloading blocks. """
-    st.header("✉️ Tailored Cover Letter Generator")
+    st.header("✉️ Cover Letter Generator")
     st.markdown("Draft a targeted cover letter matching your profile seamlessly against any saved Job Description requirements.")
     st.markdown("---")
 
@@ -2338,7 +2338,7 @@ def cover_letter_tab():
     
     with col_jd_sel:
         jd_names = [jd.get('name') for jd in st.session_state.candidate_jd_list if jd.get('name')]
-        selected_jd_name = st.selectbox("1. Target Job Description Profile", options=jd_names, key="cl_jd_selector")
+        selected_jd_name = st.selectbox("1. Select Job Description Profile", options=jd_names, key="cl_jd_selector")
         
         # Isolate selected record object
         target_jd_item = next((jd for jd in st.session_state.candidate_jd_list if jd.get('name') == selected_jd_name), None)
@@ -2347,7 +2347,7 @@ def cover_letter_tab():
 
     with col_style_sel:
         template_style = st.selectbox(
-            "2. Document Template Style Tone",
+            "2. Select Cover letter Templates Style",
             options=["Simple", "Professional", "Modern", "Creative"],
             index=1,
             key="cl_style_selector",
@@ -2363,7 +2363,7 @@ def cover_letter_tab():
     current_config_signature = f"{selected_jd_name}_{template_style}_{st.session_state.get('current_parsing_source_name')}"
 
     # Action submission triggers
-    if st.button("🚀 Generate Bespoke Cover Letter", type="primary", use_container_width=True):
+    if st.button("🚀 Build a Cover Letter", type="primary", use_container_width=True):
         with st.spinner("AI is analyzing alignment properties and drafting your letter..."):
             compiled_letter = generate_tailored_cover_letter(
                 resume_text=st.session_state.full_text,
@@ -2378,7 +2378,7 @@ def cover_letter_tab():
     # Document presentation view output panel block
     if st.session_state.generated_cover_letter:
         st.markdown("---")
-        st.subheader("📝 Generated Output Draft")
+        st.subheader("📝 Cover letter")
         
         # Check if selection configurations drifted out of sync with state contents
         if current_config_signature != st.session_state.last_compiled_signature:
@@ -2394,7 +2394,7 @@ def cover_letter_tab():
         st.session_state.generated_cover_letter = editable_letter
 
         # File export actions column deck structure setup
-        st.markdown("##### Document Export Channels")
+        st.markdown("##### Download cover letter ")
         col_dl_md, col_dl_html = st.columns(2)
         
         cand_clean_name = st.session_state.parsed.get('name', 'Candidate').replace(' ', '_')
@@ -2416,7 +2416,7 @@ def cover_letter_tab():
                 data=st.session_state.generated_cover_letter,
                 filename=f"{base_filename}.html",
                 file_format='html',
-                title="Tailored Cover Letter"
+                title="Cover Letter"
             )
             render_download_button(
                 data_uri=html_data_uri,
