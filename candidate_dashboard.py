@@ -24,15 +24,6 @@ STARTER_KEYWORDS = {
     "Python", "MySQL", "GCP", "cloud computing", "ML", 
     "API services", "LLM integration", "JavaScript", "SQL", "AWS", "MLOps", "Data Visualization"
 }
-
-# Dummy helper functions for CV Management Tab preview generation
-def convert_to_json(data):
-    return json.dumps(data, indent=4)
-
-def convert_to_html_content(data):
-    return f"<h3>{data['personal_info'].get('name', 'CV Preview')}</h3><p>Email: {data['personal_info'].get('email', '')}</p>"
-
-
 # --- Define MockGroqClient globally (Necessary for testing without API Key) ---
 
 class MockGroqClient:
@@ -62,7 +53,7 @@ class MockGroqClient:
                         [Intermediate/Technical]
                         Q5: Explain the core differences between AWS and GCP services related to the JD.
                         """
-                    else:
+                    else:
                         # Resume Section Based Mock (targeting Skills section)
                         section_match = re.search(r'targeting the \*\*(.+?)\*\* section', prompt_content)
                         section = section_match.group(1).strip() if section_match else "General Skills"
