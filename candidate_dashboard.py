@@ -4,7 +4,7 @@ import pdfplumber
 import docx
 import json
 import traceback
-import re 
+
 
 from dotenv import load_dotenv 
 from io import BytesIO 
