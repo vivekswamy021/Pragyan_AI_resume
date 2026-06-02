@@ -25,8 +25,8 @@ STARTER_KEYWORDS = {
     "API services", "LLM integration", "JavaScript", "SQL", "AWS", "MLOps", "Data Visualization"
 }
 # --- End Default/Mock Data ---
-# --- Define MockGroqClient globally (Necessary for testing without API Key) ---
 
+# --- Define MockGroqClient globally (Necessary for testing without API Key) ---
 class MockGroqClient:
     """Mock client for local testing when Groq is not available or key is missing."""
     def chat(self):
@@ -2949,11 +2949,6 @@ def candidate_dashboard(go_to):
         
     with tab_gap_analysis:
         gap_analysis_tab()
-
-
-# -------------------------
-# MAIN APP EXECUTION
-# -------------------------
 
 # -------------------------
 # MAIN APP EXECUTION
