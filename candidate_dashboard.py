@@ -54,6 +54,7 @@ class MockGroqClient:
                         Q5: Explain the core differences between AWS and GCP services related to the JD.
                         """
                     else:
+                        # Resume Section Based Mock (targetting skills section)
                         # Resume Section Based Mock (targeting Skills section)
                         section_match = re.search(r'targeting the \*\*(.+?)\*\* section', prompt_content)
                         section = section_match.group(1).strip() if section_match else "General Skills"
