@@ -1351,7 +1351,7 @@ def cv_management_tab():
         json_data = json.dumps(st.session_state.cv_data, indent=4) 
         html_content = convert_to_html_content(st.session_state.cv_data)
         
-    def convert_to_html_content(cv_data):
+def convert_to_html_content(cv_data):
     """
     Converts the structured cv_data dictionary into a clean, well-styled HTML string
     for rendering a printable PDF simulator layout.
