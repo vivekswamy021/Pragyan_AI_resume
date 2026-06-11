@@ -497,7 +497,7 @@ def parse_and_store_resume(content_source, file_name_key, source_type):
 
     if extracted_text.startswith("[Error"):
         return {"error": extracted_text, "full_text": extracted_text, "excel_data": None, "name": file_name}
-    
+        
     # 2. Call LLM Parser
     parsed_data = parse_resume_with_llm(extracted_text)
     
