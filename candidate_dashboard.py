@@ -782,11 +782,6 @@ def evaluate_jd_fit(job_description, parsed_json):
 # ATS  resume Score -------------------
 import streamlit as st
 import re
-import io
-from reportlab.lib.pagesizes import letter
-from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 # --- Ensure required state variables exist globally ---
 if "ats_score_calculated" not in st.session_state:
