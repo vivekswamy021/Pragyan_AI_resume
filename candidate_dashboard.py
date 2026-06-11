@@ -447,11 +447,9 @@ def parse_resume_with_llm(text):
             json_str = json_match.group(0).strip()
             
             if json_str.startswith('```json'):
-                json_str = json_str[len('
-```json'):]
+                json_str = json_str[len('```json'):]
             if json_str.endswith('```'):
-                json_str = json_str[:-len('
-```')]
+                json_str = json_str[:-len('```')]
             
             json_str = json_str.strip()
             
