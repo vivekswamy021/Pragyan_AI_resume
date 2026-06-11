@@ -1344,13 +1344,10 @@ def cv_management_tab():
         
     st.markdown("##### Current Generated Data Preview")
     
-    if st.session_state.form_cv_text:
-         # Generate content for all formats
-        markdown_text = st.session_state.form_cv_text
-        # Use standard json.dumps instead of a custom function
-        json_data = json.dumps(st.session_state.cv_data, indent=4) 
-        html_content = convert_to_html_content(st.session_state.cv_data)
-        
+    # ==============================================================================
+# 1. HELPER PARSING FUNCTIONS (Place this in your global scope / near other helper functions)
+# ==============================================================================
+
 def convert_to_html_content(cv_data):
     """
     Converts the structured cv_data dictionary into a clean, well-styled HTML string
@@ -1422,7 +1419,6 @@ def convert_to_html_content(cv_data):
         html += '<div class="section"><div class="section-title">Core Competencies & Expertise</div><ul>'
         for line in strengths_raw.split('\n'):
             if line.strip():
-                # Clean away markdown markers if users type them into the raw workspace
                 clean_line = line.strip().lstrip('*+- ').strip()
                 html += f"<li>{clean_line}</li>"
         html += '</ul></div>'
@@ -1433,9 +1429,26 @@ def convert_to_html_content(cv_data):
     </html>
     """
     return html
-    tab_md, tab_json, tab_html_pdf = st.tabs(["Markdown (.md)", "JSON (.json)", "HTML/PDF Preview"])
 
-    with tab_md:
+
+# ==============================================================================
+# 2. RENDER PIPELINE WORKSPACE (Inside your cv_management_tab definition block)
+# ==============================================================================
+
+    if st.session_state.form_cv_text:
+        # Generate content for all formats
+        markdown_text = st.session_state.form_cv_text
+        
+        # Use standard json.dumps instead of a custom function
+        json_data = json.dumps(st.session_state.cv_data, indent=4) 
+        
+        # Now calls securely since definition is globally declared above
+        html_content = convert_to_html_content(st.session_state.cv_data)
+        
+        # Create Tabs for viewing
+        tab_md, tab_json, tab_html_pdf = st.tabs(["Markdown (.md)", "JSON (.json)", "HTML/PDF Preview"])
+
+        with tab_md:
             st.code(markdown_text, language='markdown')
             st.download_button(
                 label="⬇️ Download Markdown (.md)",
@@ -1445,7 +1458,7 @@ def convert_to_html_content(cv_data):
                 use_container_width=True
             )
 
-    with tab_json:
+        with tab_json:
             st.json(json_data)
             st.download_button(
                 label="⬇️ Download JSON (.json)",
@@ -1455,7 +1468,7 @@ def convert_to_html_content(cv_data):
                 use_container_width=True
             )
 
-    with tab_html_pdf:
+        with tab_html_pdf:
             st.components.v1.html(html_content, height=400, scrolling=True)
             st.download_button(
                 label="⬇️ Download HTML (.html)",
@@ -1464,8 +1477,8 @@ def convert_to_html_content(cv_data):
                 mime="text/html",
                 use_container_width=True
             )
-        else:
-             st.info("No CV text generated yet. Fill out the forms and click the generate button.")
+    else:
+        st.info("No CV text generated yet. Fill out the forms and click the generate button.")
 
     if st.button("🗑️ Clear All Form Data", key="clear_cv_form_data"):
         st.session_state.cv_data = {
@@ -1478,7 +1491,6 @@ def convert_to_html_content(cv_data):
         }
         st.session_state.form_cv_text = ""
         st.rerun()
-
 
 def jd_management_tab_candidate():
     st.header("📚 Manage Job Descriptions for Matching")
