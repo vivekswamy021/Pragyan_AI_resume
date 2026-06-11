@@ -1433,7 +1433,7 @@ def convert_to_html_content(cv_data):
     </html>
     """
     return html
-        tab_md, tab_json, tab_html_pdf = st.tabs(["Markdown (.md)", "JSON (.json)", "HTML/PDF Preview"])
+    tab_md, tab_json, tab_html_pdf = st.tabs(["Markdown (.md)", "JSON (.json)", "HTML/PDF Preview"])
 
         with tab_md:
             st.code(markdown_text, language='markdown')
