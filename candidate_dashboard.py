@@ -1338,11 +1338,12 @@ def cv_management_tab():
             
         return text.strip()
 
-    if st.button("Generate CV Data for Parsing & Preview", type="primary", use_container_width=True):
+   if st.button("Generate CV Data for Parsing & Preview", type="primary", use_container_width=True):
         st.session_state.form_cv_text = generate_cv_text()
         st.info("CV Data Generated. Go to **Resume Parsing** tab and select 'Use Form Data'.")
         
-    st.markdown("##### Current Generated Data Preview")
+        # CRITICAL FIX: Force Streamlit to rerun and instantly paint the preview tabs
+        st.rerun()
     
     # ==============================================================================
 # 1. HELPER PARSING FUNCTIONS (Place this in your global scope / near other helper functions)
