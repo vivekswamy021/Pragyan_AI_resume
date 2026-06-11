@@ -2950,4 +2950,4 @@ def candidate_dashboard(go_to):
 # -------------------------
 
 if __name__ == '__main__':
-    candidate_dashboard()
+  candidate_dashboard()
