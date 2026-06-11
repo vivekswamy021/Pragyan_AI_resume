@@ -1464,8 +1464,8 @@ def convert_to_html_content(cv_data):
                 mime="text/html",
                 use_container_width=True
             )
-    else:
-        st.info("No CV text generated yet. Fill out the forms and click the generate button.")
+        else:
+             st.info("No CV text generated yet. Fill out the forms and click the generate button.")
 
     if st.button("🗑️ Clear All Form Data", key="clear_cv_form_data"):
         st.session_state.cv_data = {
