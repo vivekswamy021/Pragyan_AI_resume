@@ -497,33 +497,36 @@ def parse_and_store_resume(content_source, file_name_key, source_type):
 
     if extracted_text.startswith("[Error"):
         return {"error": extracted_text, "full_text": extracted_text, "excel_data": None, "name": file_name}     
-    # 2. Call LLM Parser
-    parsed_data = parse_resume_with_llm(extracted_text) 
-    # 3. Handle LLM Parsing Error
-    if parsed_data.get('error') is not None: 
-        error_name = parsed_data.get('name', file_name) 
-        return {"error": parsed_data['error'], "full_text": extracted_text, "excel_data": excel_data, "name": error_name}
+     
+    # 2. Call LLM Parser
+    parsed_data = parse_resume_with_llm(extracted_text) 
+    
+    # 3. Handle LLM Parsing Error
+    if parsed_data.get('error') is not None: 
+        error_name = parsed_data.get('name', file_name) 
+        # FIXED: Changed 'excel_data' to 'None' since it isn't defined yet
+        return {"error": parsed_data['error'], "full_text": extracted_text, "excel_data": None, "name": error_name}
 
-    # 4. Create compiled text for download/Q&A
-    compiled_text = ""
-    for k, v in parsed_data.items():
-        if v and k not in ['error']:
-            compiled_text += f"## {k.replace('_', ' ').title()}\n\n"
-            if isinstance(v, list):
-                # Ensure all list items are strings for clean display
-                compiled_text += "\n".join([f"* {str(item)}" for item in v]) + "\n\n"
-            else:
-                compiled_text += str(v) + "\n\n"
+    # 4. Create compiled text for download/Q&A
+    compiled_text = ""
+    for k, v in parsed_data.items():
+        if v and k not in ['error']:
+            compiled_text += f"## {k.replace('_', ' ').title()}\n\n"
+            if isinstance(v, list):
+                # Ensure all list items are strings for clean display
+                compiled_text += "\n".join([f"* {str(item)}" for item in v]) + "\n\n"
+            else:
+                compiled_text += str(v) + "\n\n"
 
-    # Ensure final_name uses the parsed name
-    final_name = parsed_data.get('name', 'Unknown_Candidate').replace(' ', '_') 
-    
-    return {
-        "parsed": parsed_data, 
-        "full_text": compiled_text, 
-        "excel_data": excel_data, 
-        "name": final_name
-    }
+    # Ensure final_name uses the parsed name
+    final_name = parsed_data.get('name', 'Unknown_Candidate').replace(' ', '_') 
+    
+    return {
+        "parsed": parsed_data, 
+        "full_text": compiled_text, 
+        "excel_data": None, # If you generate excel data later, handle it after this block
+        "name": final_name
+    }
 
 def get_download_link(data, filename, file_format, title="Parsed Data"):
     """
