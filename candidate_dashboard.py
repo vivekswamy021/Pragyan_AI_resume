@@ -1435,7 +1435,7 @@ def convert_to_html_content(cv_data):
     return html
     tab_md, tab_json, tab_html_pdf = st.tabs(["Markdown (.md)", "JSON (.json)", "HTML/PDF Preview"])
 
-        with tab_md:
+    with tab_md:
             st.code(markdown_text, language='markdown')
             st.download_button(
                 label="⬇️ Download Markdown (.md)",
@@ -1445,7 +1445,7 @@ def convert_to_html_content(cv_data):
                 use_container_width=True
             )
 
-        with tab_json:
+    with tab_json:
             st.json(json_data)
             st.download_button(
                 label="⬇️ Download JSON (.json)",
@@ -1455,7 +1455,7 @@ def convert_to_html_content(cv_data):
                 use_container_width=True
             )
 
-        with tab_html_pdf:
+    with tab_html_pdf:
             st.components.v1.html(html_content, height=400, scrolling=True)
             st.download_button(
                 label="⬇️ Download HTML (.html)",
