@@ -12,7 +12,7 @@ import base64
 
 # --- CONFIGURATION & API SETUP ---
 
-GROQ_MODEL = "llama-3.1-8b-instant"
+GROQ_MODEL ="llama-3.3-70b-versatile"              # -----llama-3.1-8b-instant-------
 # Load environment variables (e.g., GROQ_API_KEY)
 load_dotenv()
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
@@ -392,7 +392,7 @@ def parse_resume_with_llm(text):
             parsed_data = json.loads(json_content)
             
             if not parsed_data.get('name'):
-                 parsed_data['name'] = get_fallback_name()
+                parsed_data['name'] = get_fallback_name()
                  
             parsed_data['error'] = None 
             
@@ -408,7 +408,7 @@ def parse_resume_with_llm(text):
             parsed_data = json.loads(content)
             
             if not parsed_data.get('name'):
-                 parsed_data['name'] = get_fallback_name()
+                parsed_data['name'] = get_fallback_name()
             
             parsed_data['error'] = None 
             return parsed_data
@@ -452,7 +452,6 @@ def parse_resume_with_llm(text):
                 json_str = json_str[:-len('```')]
             
             json_str = json_str.strip()
-            
             parsed = json.loads(json_str)
         else:
             raise json.JSONDecodeError("Could not isolate a valid JSON structure from LLM response.", content, 0)
@@ -470,7 +469,7 @@ def parse_resume_with_llm(text):
     except Exception as e:
         error_msg = f"LLM API interaction error: {e}"
         return {"name": get_fallback_name(), "error": error_msg}
-
+        
 # Updated signature to match the request
 def parse_and_store_resume(content_source, file_name_key, source_type):
     """Handles extraction, parsing, and storage of CV data from either a file or pasted text."""
@@ -496,37 +495,32 @@ def parse_and_store_resume(content_source, file_name_key, source_type):
         st.session_state.current_parsing_source_name = file_name
 
     if extracted_text.startswith("[Error"):
-        return {"error": extracted_text, "full_text": extracted_text, "excel_data": None, "name": file_name}     
-     
-    # 2. Call LLM Parser
-    parsed_data = parse_resume_with_llm(extracted_text) 
+        return {"error": extracted_text, "full_text": extracted_text, "excel_data": None, "name": file_name}
     
-    # 3. Handle LLM Parsing Error
+    parsed_data = parse_resume_with_llm(extracted_text)
+    
     if parsed_data.get('error') is not None: 
         error_name = parsed_data.get('name', file_name) 
-        # FIXED: Changed 'excel_data' to 'None' since it isn't defined yet
-        return {"error": parsed_data['error'], "full_text": extracted_text, "excel_data": None, "name": error_name}
+        return {"error": parsed_data['error'], "full_text": extracted_text, "excel_data": excel_data, "name": error_name}
 
-    # 4. Create compiled text for download/Q&A
     compiled_text = ""
     for k, v in parsed_data.items():
         if v and k not in ['error']:
             compiled_text += f"## {k.replace('_', ' ').title()}\n\n"
             if isinstance(v, list):
-                # Ensure all list items are strings for clean display
                 compiled_text += "\n".join([f"* {str(item)}" for item in v]) + "\n\n"
             else:
                 compiled_text += str(v) + "\n\n"
 
-    # Ensure final_name uses the parsed name
     final_name = parsed_data.get('name', 'Unknown_Candidate').replace(' ', '_') 
     
     return {
         "parsed": parsed_data, 
         "full_text": compiled_text, 
-        "excel_data": None, # If you generate excel data later, handle it after this block
+        "excel_data": excel_data, 
         "name": final_name
     }
+
 
 def get_download_link(data, filename, file_format, title="Parsed Data"):
     """
@@ -540,11 +534,10 @@ def get_download_link(data, filename, file_format, title="Parsed Data"):
             mime_type = "application/json"
         elif file_format == 'markdown':
             mime_type = "text/markdown"
-        else: # text
+        else:
             mime_type = "text/plain"
             
     elif file_format == 'html':
-        # Convert markdown-like text to basic HTML for a clean printable document
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -574,24 +567,22 @@ def get_download_link(data, filename, file_format, title="Parsed Data"):
         return "" 
 
     b64 = base64.b64encode(data_bytes).decode()
-    
-    # Return the full data URI
     return f"data:{mime_type};base64,{b64}"
 
 
 def render_download_button(data_uri, filename, label, color):
     """Renders an HTML button that triggers a file download."""
     if color == 'json':
-        bg_color = "#4CAF50" # Green
+        bg_color = "#4CAF50"
         icon = "💾"
     elif color == 'markdown':
-        bg_color = "#008CBA" # Blue
+        bg_color = "#008CBA"
         icon = "⬇️"
     elif color == 'html':
-        bg_color = "#f44336" # Red
+        bg_color = "#f44336"
         icon = "📄"
     elif color == 'cover':
-        bg_color = "#FFC300" # Yellow/Orange
+        bg_color = "#FFC300"
         icon = "✉️"
     else:
         bg_color = "#555555"
@@ -619,7 +610,6 @@ def render_download_button(data_uri, filename, label, color):
         """, 
         unsafe_allow_html=True
     )
-    
 # --- END HELPER FUNCTIONS ---
 
 
@@ -660,7 +650,7 @@ def extract_jd_metadata(jd_text):
     Provide the output strictly as a valid JSON object matching the schema above. Do not wrap the JSON in markdown code blocks like ```json ... ```.
     """
 
-    # 3. Fallback Heuristic Handling
+    # 3. Fallback Heuristic Handling (If running locally via MockGroqClient or API key is missing)
     if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
         jd_lower = jd_text.lower()
         if 'data scientist' in jd_lower or 'machine learning' in jd_lower:
@@ -690,13 +680,14 @@ def extract_jd_metadata(jd_text):
         response = client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
+            temperature=0.1,  # Low temperature guarantees deterministic, analytical extraction
             response_format={"type": "json_object"}
         )
         
         content = response.choices[0].message.content.strip()
         parsed_metadata = json.loads(content)
         
+        # Post-processing structural validation
         if not parsed_metadata.get('role'):
             parsed_metadata['role'] = "Target Role"
         if not isinstance(parsed_metadata.get('key_skills'), list):
@@ -715,9 +706,10 @@ def extract_jd_metadata(jd_text):
             "role": "API Error", 
             "key_skills": [f"Connection failed: {str(e)}"], 
             "job_type": "N/A"
-        }
-        
+        }  
 
+
+# --- Evaluation JD Fit ---
 def evaluate_jd_fit(job_description, parsed_json):
     """
     Evaluates how well a resume fits a given job description, 
@@ -726,24 +718,20 @@ def evaluate_jd_fit(job_description, parsed_json):
     global client, GROQ_MODEL, GROQ_API_KEY
     
     if parsed_json.get('error') is not None: 
-         return f"Cannot evaluate due to resume parsing errors: {parsed_json['error']}"
+        return f"Cannot evaluate due to resume parsing errors: {parsed_json['error']}"
 
-    # FIXED: Uniform mock client syntax signature
     if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
-         response = client.chat.completions.create(
-             model=GROQ_MODEL, 
-             messages=[{"role": "user", "content": f"Evaluate how well the following resume content matches the provided job description: {job_description}"}]
-         )
-         return response.choices[0].message.content.strip()
+        # Mock Client is hardcoded to return a structured output including Gaps.
+        response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": f"Evaluate how well the following resume content matches the provided job description: {job_description}"}])
+        return response.choices[0].message.content.strip()
 
     if not job_description.strip(): 
         return "Please paste a job description."
 
-    # FIXED: Added support for both capitalized schemas and alternative 'key_skills' signatures
     relevant_resume_data = {
-        'Skills': parsed_json.get('skills') or parsed_json.get('key_skills') or 'Not found or empty',
-        'Experience': parsed_json.get('experience') or 'Not found or empty',
-        'Education': parsed_json.get('education') or 'Not found or empty',
+        'Skills': parsed_json.get('skills', 'Not found or empty'),
+        'Experience': parsed_json.get('experience', 'Not found or empty'),
+        'Education': parsed_json.get('education', 'Not found or empty'),
     }
     resume_summary = json.dumps(relevant_resume_data, indent=2)
 
@@ -761,7 +749,7 @@ def evaluate_jd_fit(job_description, parsed_json):
     4.  **Gaps/Areas for Improvement:** Key requirements in the JD that are missing or weak in the resume. Focus on specific technical skills or experience areas.
     5.  **Overall Summary:** A concise summary of the fit.
     
-    **Format the output strictly as follows, ensuring the scores are easily parsable:**
+    **Format the output strictly as follows, ensuring the scores are easily parsable (use brackets or no brackets around scores, but they must be present):**
     Overall Fit Score: [Score]/10
     
     --- Section Match Analysis ---
@@ -790,10 +778,141 @@ def evaluate_jd_fit(job_description, parsed_json):
     except Exception as e:
         error_output = f"AI Evaluation Error: Failed to connect or receive response from LLM. Error: {e}\n{traceback.format_exc()}"
         return error_output
+        
+# ATS  resume Score -------------------
+import streamlit as st
+import re
+import io
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+# --- Ensure required state variables exist globally ---
+if "ats_score_calculated" not in st.session_state:
+    st.session_state.ats_score_calculated = False
+if "ats_score_metrics" not in st.session_state:
+    st.session_state.ats_score_metrics = {}
+if "ats_original_resume_text" not in st.session_state:
+    st.session_state.ats_original_resume_text = ""
+if "ats_job_description_text" not in st.session_state:
+    st.session_state.ats_job_description_text = ""
+if "ats_optimized_resume_text" not in st.session_state:
+    st.session_state.ats_optimized_resume_text = ""
+if "last_uploaded_file_name" not in st.session_state:
+    st.session_state.last_uploaded_file_name = None
+if "last_uploaded_jd_name" not in st.session_state:
+    st.session_state.last_uploaded_jd_name = None
 
 
+def optimize_resume_for_ats(resume_text, jd_text, report_metrics):
+    """Queries the Groq API to convert the raw profile into a tailored, scanner-compliant resume."""
+    global client, GROQ_MODEL, GROQ_API_KEY
+    
+    if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
+        return f"# OPTIMIZED ATS RESUME\n\n{resume_text}\n\n*Note: Add explicit tech keywords to finalize structural tuning.*"
+
+    feedback_context = f"""
+    - Personal Info Status: {report_metrics.get('personal_info')}
+    - Summary Section Status: {report_metrics.get('summary')}
+    - Skills Block Status: {report_metrics.get('skills')}
+    - Section Headers Compliance: {report_metrics.get('titles')}
+    - Work Experience Layout Strategy: {report_metrics.get('exp_structure')}
+    - Work Experience Metric Content: {report_metrics.get('exp_content')}
+    - Education Timeline Validation: {report_metrics.get('education_grade')}
+    - Engineering Projects Validation: {report_metrics.get('projects_grade')}
+    """
+
+    prompt = f"""
+    You are an elite expert technical recruiter and specialized ATS compliance scanner engineer.
+    Your objective is to ingest the candidate's raw profile text and rewrite it completely to hit a 95%+ pass rating on corporate parser scrapers by resolving the explicit issues identified in the audit report.
+    
+    {"If provided, optimize it specifically to match this Job Description:" + jd_text if jd_text.strip() else ""}
+    
+    --- Candidate Raw Resume ---
+    {resume_text}
+    
+    --- Hiring Manager Audit Context (Fix Every Section Marked '0%' or 'Deficient') ---
+    {feedback_context}
+    
+    --- ATS Architectural Requirements ---
+    1. Structure the layout cleanly using crisp standard Markdown headers (e.g., # Name, ## Professional Summary, ## Core Technical Skills, ## Professional Experience, ## Education, ## Projects).
+    2. Convert all vague descriptions or tasks into impact metrics and action-driven bullet paths (use phrases starting with 'Engineered', 'Optimized', 'Architected', 'Spearheaded' and weave in explicit quantified indicators like %, $, or hours saved where applicable).
+    3. Remove all non-standard elements like embedded charts, script symbols, layout tables, columns, sidebars, or progress bar gauges. Convert these strictly into clean, linear chronologies.
+    4. Inject clear, standardized technical industry standard keyword terminology so machine search queries flag the profile instantly.
+    5. Ensure all list elements use a clean plain text bullet character. Do not use '+', '-', or '*' indicators inside the raw final text payload.
+    
+    Provide ONLY the completely rewritten, structural Markdown text of the optimized resume. Do not include chat introductory prefaces, greeting notes, meta-commentary, or markdown code fences like ```markdown.
+    """
+    try:
+        response = client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"ATS Generation Error: Failed to re-architect profile matrix context details. Detail: {str(e)}"
+
+
+def generate_pdf_bytes(resume_text):
+    """Compiles a cleanly styled, single-column, highly machine-scannable true PDF block using pure ReportLab."""
+    buffer = io.BytesIO()
+    
+    # Establish document blueprint margins optimized for typical parser scanners
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=54,  # 0.75 in
+        leftMargin=54,
+        topMargin=54,
+        bottomMargin=54
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    # Define sharp, linear, high-opacity scannable text constraints
+    body_style = ParagraphStyle(
+        'ATSPdfBody',
+        parent=styles['Normal'],
+        fontName='Times-Roman',
+        fontSize=10.5,
+        leading=15,
+        textColor=colors.HexColor('#111111'),
+        spaceAfter=6
+    )
+    
+    story = []
+    
+    # Parse individual line arrays to structural document flows
+    lines = resume_text.split('\n')
+    for line in lines:
+        cleaned_line = line.strip()
+        if not cleaned_line:
+            story.append(Spacer(1, 8))
+            continue
+            
+        # Format headers natively to maintain readable typography
+        if cleaned_line.startswith('##'):
+            header_text = cleaned_line.replace('##', '').strip()
+            header_style = ParagraphStyle('H2', fontName='Times-Bold', fontSize=13, leading=18, spaceBefore=12, spaceAfter=6, textColor=colors.HexColor('#222222'))
+            story.append(Paragraph(f"<b>{header_text}</b>", header_style))
+        elif cleaned_line.startswith('#'):
+            header_text = cleaned_line.replace('#', '').strip()
+            header_style = ParagraphStyle('H1', fontName='Times-Bold', fontSize=18, leading=22, spaceBefore=4, spaceAfter=8, textColor=colors.HexColor('#111111'))
+            story.append(Paragraph(f"<b>{header_text}</b>", header_style))
+        else:
+            story.append(Paragraph(cleaned_line, body_style))
+            
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+    
+# --- Cover Letter Generator Helpers ---
+# --- Cover Letter Generator Helpers ---
 def extract_basic_entities(resume_text, jd_content):
     """Safely extracts candidate names, target roles, and core skill sets from raw inputs."""
+    # 1. Candidate Name Extraction Heuristic
     lines = [line.strip() for line in resume_text.split('\n') if line.strip()]
     cand_name = "Candidate Name"
     if lines:
@@ -801,6 +920,7 @@ def extract_basic_entities(resume_text, jd_content):
         if len(potential_name) < 40 and not any(kw in potential_name.lower() for kw in ['resume', 'cv', 'experience', 'education']):
             cand_name = potential_name
 
+    # 2. Target Role Title Extraction Heuristic
     role_title = "Technical Specialist"
     role_match = re.search(r'(?:Role|Position|Title|Job Title)[:\s\n]+([\w\s/-]+)', jd_content, re.IGNORECASE)
     if role_match:
@@ -812,6 +932,11 @@ def extract_basic_entities(resume_text, jd_content):
     elif 'cloud engineer' in jd_content.lower():
         role_title = "Cloud Engineer"
 
+    # Clean character overrides out of structural variable names
+    role_title = role_title.replace('#', '').replace('*', '').replace('[', '').replace(']', '').strip()
+    cand_name = cand_name.replace('#', '').replace('*', '').replace('[', '').replace(']', '').strip()
+
+    # 3. Core Tech Stack Extraction Heuristic
     skills_inventory = ["Python", "Pandas", "NumPy", "SQL", "Streamlit", "Docker", "Kubernetes", "AWS", "GCP", "Scikit-Learn"]
     extracted_skills = [skill for skill in skills_inventory if skill.lower() in resume_text.lower()]
     skills_phrase = ", ".join(extracted_skills[:4]) if extracted_skills else "software engineering principles and modern frameworks"
@@ -819,37 +944,139 @@ def extract_basic_entities(resume_text, jd_content):
     return cand_name, role_title, skills_phrase
 
 
+# ----------- Template Compiler -----------
 def compile_static_template(resume_text, jd_content, template_style):
     """Compiles structurally sound cover letter blueprints natively using candidate context details."""
     cand_name, role_title, skills_phrase = extract_basic_entities(resume_text, jd_content)
     
+    # 1. Simple Template Option Blueprint
     if template_style == "Simple":
-        return f"""[Date]\n\nHiring Manager\n[Company Name]\n\n**Subject: Application for {role_title} Position - {cand_name}**\n\nDear Hiring Manager,\n\nPlease accept this letter as formal expression of my interest in the {role_title} position currently open at your company. My background includes technical training combined with hands-on software design work utilizing tools like {skills_phrase}.\n\nThrough independent project execution, I have built web applications from structural database setups down to final production tracking systems. I specialize in troubleshooting software complexities, writing maintainable logic configurations, and quickly mastering new development environments.\n\nI am eager to apply my skills to your active engineering objectives. Thank you for your review and evaluation of my attached application documentation.\n\nSincerely,\n\n{cand_name}"""
+        return f"""[Date]
 
+Hiring Manager
+[Company Name]
+
+Subject: Application for {role_title} Position - {cand_name}
+
+Dear Hiring Manager,
+
+Please accept this letter as formal expression of my interest in the {role_title} position currently open at your company. My background includes technical training combined with hands-on software design work utilizing tools like {skills_phrase}.
+
+Through independent project execution, I have built web applications from structural database setups down to final production tracking systems. I specialize in troubleshooting software complexities, writing maintainable logic configurations, and quickly mastering new development environments.
+
+I am eager to apply my skills to your active engineering objectives. Thank you for your review and evaluation of my attached application documentation.
+
+Sincerely,
+
+{cand_name}"""
+
+    # 2. Professional Template Option Blueprint
     elif template_style == "Professional":
-        return f"""[Date]\n\nHiring Manager\n[Company Name]\n[Company Address]\n\n**Subject: Application for {role_title} - {cand_name}**\n\nDear Hiring Manager,\n\nI am writing to express my strong interest in the {role_title} position at your organization. Given the production parameters and technical criteria outlined in your job specification document, I am confident that my technical capabilities match your engineering needs closely.\n\nMy practical execution experience is centered around building robust code layers and automating data workflows. I have practical experience implementing, testing, and maintaining software apps using {skills_phrase}. Managing systems across complete development files has trained me to systematically debug performance constraints.\n\nI am eager to discuss how my technical versatility, analytical thinking capabilities, and commitment to delivery can support your performance targets. Thank you for your consideration.\n\nSincerely,\n\n{cand_name}"""
+        return f"""[Date]
 
+Hiring Manager
+[Company Name]
+[Company Address]
+
+Subject: Application for {role_title} - {cand_name}
+
+Dear Hiring Manager,
+
+I am writing to express my strong interest in the {role_title} position at your organization. Given the production parameters and technical criteria outlined in your job specification document, I am confident that my technical capabilities match your engineering needs closely.
+
+My practical execution experience is centered around building robust code layers and automating data workflows. I have practical experience implementing, testing, and maintaining software apps using {skills_phrase}. Managing systems across complete development files has trained me to systematically debug performance constraints.
+
+I am eager to discuss how my technical versatility, analytical thinking capabilities, and commitment to delivery can support your performance targets. Thank you for your consideration.
+
+Sincerely,
+
+{cand_name}"""
+
+    # 3. Modern Template Option Blueprint
     elif template_style == "Modern":
-        return f"""[Date]\n\nHiring Team\n[Company Name]\n\n**Subject: Re: Innovative {role_title} Application - {cand_name}**\n\nDear Hiring Team,\n\nThe opportunity to scale platforms as a {role_title} directly matches my passion for engineering efficient tech layers. I excel at converting messy system logic parameters into high-velocity production systems.\n\nMy practical profile highlights active experience building and optimizing with frameworks like {skills_phrase}. I approach product challenges by treating infrastructure automation and clean coding logic as foundational requirements, not optional additions. This structured approach cuts down processing bugs and guarantees operational resilience.\n\nI am looking to bring my energy, fast learning agility, and execution focus straight onto your product roadmap deliverables. Let's connect to review my project portfolio indicators in detail.\n\nBest Regards,\n\n{cand_name}"""
+        return f"""[Date]
 
+Hiring Team
+[Company Name]
+
+Subject: Re: Innovative {role_title} Application - {cand_name}
+
+Dear Hiring Team,
+
+The opportunity to scale platforms as a {role_title} directly matches my passion for engineering efficient tech layers. I excel at converting messy system logic parameters into high-velocity production systems.
+
+My practical profile highlights active experience building and optimizing with frameworks like {skills_phrase}. I approach product challenges by treating infrastructure automation and clean coding logic as foundational requirements, not optional additions. This structured approach cuts down processing bugs and guarantees operational resilience.
+
+I am looking to bring my energy, fast learning agility, and execution focus straight onto your product roadmap deliverables. Let's connect to review my project portfolio indicators in detail.
+
+Best Regards,
+
+{cand_name}"""
+
+    # 4. Creative Template Option Blueprint
     else:
-        return f"""[Date]\n\nHiring Team / Engineering Division\n[Company Name]\n\n**Subject: Application for {role_title} - {cand_name}**\n\nDear Creative Team,\n\nEvery system architecture tells a story—from the efficiency of database calls to the responsiveness of UI components. I am looking to apply my skills to the open {role_title} role to build creative code solutions that directly address your scalability objectives.\n\nMy development journey is defined by a deep curiosity for modern computing workflows. Using tools such as {skills_phrase}, I design solutions around the end-user experience, ensuring processing logic is built for both scale and speed. I bring unique perspective, adaptive learning habits, and rigorous testing habits to the engineering room.\n\nI am excited about your company's commitment to building impactful platforms and would love to join forces to execute your upcoming technical releases.\n\nWarm Regards,\n\n{cand_name}"""
+        return f"""[Date]
+
+Hiring Team / Engineering Division
+[Company Name]
+
+Subject: Application for {role_title} - {cand_name}
+
+Dear Creative Team,
+
+Every system architecture tells a story—from the efficiency of database calls to the responsiveness of UI components. I am looking to apply my skills to the open {role_title} role to build creative code solutions that directly address your scalability objectives.
+
+My development journey is defined by a deep curiosity for modern computing workflows. Using tools such as {skills_phrase}, I design solutions around the end-user experience, ensuring processing logic is built for both scale and speed. I bring unique perspective, adaptive learning habits, and rigorous testing habits to the engineering room.
+
+I am excited about your company's commitment to building impactful platforms and would love to join forces to execute your upcoming technical releases.
+
+Warm Regards,
+
+{cand_name}"""
 
 
+# ------------------------------------------
 def generate_tailored_cover_letter(resume_text, jd_content, template_style, cache_bust=None):
-    """Queries the Groq API for full semantic contextual cover letter tailoring."""
+    """Queries the Groq API for full semantic contextual cover letter tailoring optimized by selected design tone."""
     global client, GROQ_MODEL, GROQ_API_KEY
     
-    cand_name, role_title, _ = extract_basic_entities(resume_text, jd_content)
+    cand_name, role_title, skills_phrase = extract_basic_entities(resume_text, jd_content)
     
     if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
         return compile_static_template(resume_text, jd_content, template_style)
 
+    # --- ADVANCED ENTITY EXTRACTION FOR PLACEHOLDERS ---
+    # Try to extract a company name from the first few lines of the JD text
+    company_name = "the company"
+    company_match = re.search(r'(?:Company|Employer|Organization)[:\s\n]+([\w\s.\-]+)', jd_content, re.IGNORECASE)
+    if company_match:
+        company_name = company_match.group(1).strip()
+    elif "--- Simulated JD for:" in jd_content:
+        # Fallback handle for simulated mock layouts
+        co_line = [line for line in jd_content.split('\n') if "Company:" in line]
+        if co_line:
+            company_name = co_line[0].replace("Company:", "").strip()
+
+    # Core rules for each selected style type fed directly into the model path
+    style_guidelines = {
+        "Simple": "Direct, clean, minimalistic structure. Focus straightforwardly on basic capabilities, project building, and explicit interest.",
+        "Professional": "Formal corporate tone. Emphasize operational alignment, criteria matching matrices, debugging, and robust processing logic constraints.",
+        "Modern": "High-velocity, energetic tech-forward tone. Treat testing and automated infrastructure mechanics as a passion, using modern delivery frameworks.",
+        "Creative": "Narrative, architectural storytelling tone. Connect computing workflows, unique perspectives, adaptive learning, and scalability to product roadmaps."
+    }
+
+    selected_guideline = style_guidelines.get(template_style, style_guidelines["Professional"])
+
+    # Update current time variables dynamically for header insertion
+    from datetime import datetime
+    current_date = datetime.now().strftime("%B %d, %Y")
+
     prompt = f"""
-    You are an elite executive career architect. Write a tailored, high-converting cover letter for the position of: **{role_title}**.
+    You are an elite career consultant and executive resume writer. Write a tailored, highly specific cover letter for the position of: {role_title} at {company_name}.
     
-    **Tone Blueprint (Strictly follow this style):**
-    {template_style} design format. Formulate paragraphs to fit clear structural expectations.
+    CRITICAL STRUCTURE AND TONE RULE:
+    You must draft this document specifically following the "{template_style}" tone design format. 
+    Style Context: {selected_guideline}
 
     --- Target Job Description (JD) ---
     {jd_content}
@@ -857,37 +1084,39 @@ def generate_tailored_cover_letter(resume_text, jd_content, template_style, cach
     --- Candidate Resume Context ---
     {resume_text}
 
-    --- Output Requirements ---
-    Provide ONLY the raw markdown text of the cover letter. Use brackets like [Company Name] for structural placeholders if they are not explicitly present in the provided context. Do not include introductory notes, chat meta-commentary, or markdown code blocks like ```markdown.
+    --- EXPLICIT COMPLIANCE FOR ENTITIES ---
+    - Use "{current_date}" for the date block at the top left.
+    - If the target company name is explicitly identifiable in the text, replace [Company Name] with it. If not found, output "the company" or leave it as "your organization" smoothly. Do not return empty bracket expressions.
+    - Do NOT include markdown styling or headers (No '#', '##', or '**').
+    - Provide ONLY the raw text message body. Do not write introductory chatter, contextual meta-commentary, or wrap your code output inside a backend block markdown envelope structure like ```markdown.
     """
 
     try:
         response = client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7
+            temperature=0.65
         )
-        return response.choices[0].message.content.strip()
+        raw_output = response.choices[0].message.content.strip()
+        
+        # Clean standard structural formatting syntax leaks out of active canvas views completely
+        cleaned_output = raw_output.replace('#', '').replace('**', '').replace('```markdown', '').replace('```', '')
+        return cleaned_output.strip()
     except Exception as e:
         return f"AI Generation Error: Failed to compile cover letter. Detail: {str(e)}"
-
-
+        
+# GAP course plan -------------
 def generate_gap_course_plan(gap_analysis_text, jd_role, candidate_skills):
-    """
-    Generates a detailed course plan and certification suggestions to fill identified gaps.
-    """
+    """Generates a detailed course plan and certification suggestions to fill identified gaps."""
     global client, GROQ_MODEL, GROQ_API_KEY
     
     if not gap_analysis_text.strip() or "No significant gaps" in gap_analysis_text:
         return "No specific gaps were identified in the match analysis. Focus on advanced skills in your core area."
         
-    # FIXED: Uniform mock client syntax signature
     if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
-         response = client.chat.completions.create(
-             model=GROQ_MODEL, 
-             messages=[{"role": "user", "content": f"Generate a detailed course plan and suggest relevant certifications for Gaps Identified: {gap_analysis_text}"}]
-         )
-         return response.choices[0].message.content.strip()
+        # Mock client returns a hardcoded, structured plan (see MockGroqClient)
+        response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": f"Generate a detailed course plan and suggest relevant certifications for Gaps Identified: {gap_analysis_text}"}])
+        return response.choices[0].message.content.strip()
 
     prompt = f"""
     You are an expert career consultant. Based on the candidate's profile and the identified skill gaps for the role of **{jd_role}**, 
@@ -916,16 +1145,18 @@ def generate_gap_course_plan(gap_analysis_text, jd_role, candidate_skills):
     except Exception as e:
         error_output = f"AI Generation Error: Failed to connect or receive response from LLM for course plan. Error: {e}\n{traceback.format_exc()}"
         return error_output
-        
-# --- ADAPTED LLM Functions for Interview Preparation (Modified) ---
 
+
+# --- ADAPTED LLM Functions for Interview Preparation (Modified) ---
 def generate_interview_questions(source_data, source_type, identifier):
     """
     Generates interview questions based on either a resume section or a full JD.
     source_type can be 'resume' (source_data is parsed_json) or 'jd' (source_data is jd_content string).
     identifier is the section name (e.g., 'Skills') or JD name.
+    
+    The prompt is updated to explicitly request HR, experience, situation, and technical questions.
     """
-    global client, GROQ_MODEL, GROQ_API_KEY
+    global client, GROQ_MODEL
     
     if source_type == 'resume':
         target_section_display = identifier
@@ -949,14 +1180,13 @@ def generate_interview_questions(source_data, source_type, identifier):
     """
         
     elif source_type == 'jd':
-        jd_content = source_data if isinstance(source_data, str) else str(source_data)
-        jd_name = identifier
+        jd_content = identifier
         
         if not jd_content.strip():
             return "Error: Job Description content is empty."
             
         context_block = f"""
-    --- Job Description (JD) Content for Role: {jd_name} ---
+    --- Job Description (JD) Content for Role: {source_data} ---
     {jd_content}
     
     Generate a list of interview questions specifically targeting the **JD** requirements and the stated role, to assess candidate fit.
@@ -987,9 +1217,8 @@ def generate_interview_questions(source_data, source_type, identifier):
     """
 
     try:
-        # FIXED: Corrected syntax chain signature for mock implementations
         if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
-            response = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
+            response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
         else:
             response = client.chat.completions.create(
                 model=GROQ_MODEL,
@@ -1003,22 +1232,24 @@ def generate_interview_questions(source_data, source_type, identifier):
         st.error(error_msg)
         return f"Error generating questions: {error_msg}"
 
-
+# # interview evaluation--------------
 def evaluate_interview_answers(qa_list, resume_context):
     """
     Evaluates a list of candidate's recorded answers based on the questions and resume context.
     The output is a full markdown report.
     """
-    global client, GROQ_MODEL, GROQ_API_KEY
+    global client, GROQ_MODEL
     
     # Format Q&A for LLM
     qa_exchange = "\n\n--- Candidate Answers ---\n\n"
     for i, item in enumerate(qa_list):
+        # Ensure question and answer are strings
+        # Remove the (Level/Type) part from the question before sending it to the evaluator if necessary
         question = str(item['question'])
         answer = str(item['answer'])
         qa_exchange += f"Q{i+1}: {question}\n"
         qa_exchange += f"Answer {i+1}: {answer}\n"
-        qa_exchange += "---\n"
+        qa_exchange += "---"
 
     prompt = f"""
     You are an expert interviewer evaluating a candidate's recorded answers.
@@ -1043,9 +1274,8 @@ def evaluate_interview_answers(qa_list, resume_context):
     """
 
     try:
-        # FIXED: Corrected syntax signature alignment for mock mode runs
         if isinstance(client, MockGroqClient) or not GROQ_API_KEY:
-            response = client.chat.completions.create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
+            response = client.chat().create(model=GROQ_MODEL, messages=[{"role": "user", "content": prompt}])
         else:
             response = client.chat.completions.create(
                 model=GROQ_MODEL,
@@ -1056,8 +1286,11 @@ def evaluate_interview_answers(qa_list, resume_context):
     except Exception as e:
         return f"Evaluation Error: Failed to connect to LLM for scoring. Error: {e}"
 
+# --- END ADAPTED LLM Functions ---
 
+# --- Tab Content Functions ---
 def resume_parsing_tab():
+    # --- TAB 1: Resume Parsing ---
     st.header("📄 Resume Upload and Parsing")
     
     input_method = st.radio(
@@ -1131,7 +1364,7 @@ def resume_parsing_tab():
         else:
             st.info("No resume file is currently uploaded. Please upload a file above.")
 
-    else: 
+    else: # input_method == "Paste Text"
         st.markdown("### 1. Paste Your CV Text")
         
         pasted_text = st.text_area(
@@ -1149,6 +1382,7 @@ def resume_parsing_tab():
             if st.button("Parse and Load Pasted Text", use_container_width=True):
                 with st.spinner("Parsing pasted text..."):
                     st.session_state.candidate_uploaded_resumes = []
+                    
                     result = parse_and_store_resume(pasted_text, file_name_key='single_resume_candidate', source_type='text')
                     
                     if result.get('error') is None:
@@ -1173,26 +1407,31 @@ def resume_parsing_tab():
     st.markdown("---")
         
 
+# --- CV Management Tab Function (NEW) ---
 def cv_management_tab():
     """Tab to allow form-based CV data entry and multi-format preview/download."""
     st.header("📝 CV Management & Form Generation")
     st.markdown("Generate a resume text structure by filling out the sections below. This text can then be parsed in the 'Resume Parsing' tab.")
     
+    # --- 1. Personal Info ---
     st.subheader("1. Personal Information")
     col_name, col_email, col_phone = st.columns(3)
     
+    # 1.1 Name
     with col_name:
         st.session_state.cv_data['personal_info']['name'] = st.text_input(
             "Full Name", 
             value=st.session_state.cv_data['personal_info'].get('name', ''), 
             key='cv_name'
         )
+    # 1.2 Email
     with col_email:
         st.session_state.cv_data['personal_info']['email'] = st.text_input(
             "Email", 
             value=st.session_state.cv_data['personal_info'].get('email', ''), 
             key='cv_email'
         )
+    # 1.3 Phone
     with col_phone:
         st.session_state.cv_data['personal_info']['phone'] = st.text_input(
             "Phone Number", 
@@ -1200,6 +1439,7 @@ def cv_management_tab():
             key='cv_phone'
         )
         
+    # 1.4 Communication Address (New Field)
     st.session_state.cv_data['personal_info']['address'] = st.text_input(
         "Communication Address (Optional)",
         value=st.session_state.cv_data['personal_info'].get('address', ''),
@@ -1208,6 +1448,7 @@ def cv_management_tab():
     
     st.markdown("---")
 
+    # --- 2. Education ---
     st.subheader("2. Education")
     with st.form("education_form", clear_on_submit=True):
         col_deg, col_uni, col_fy, col_ty, col_score = st.columns([2, 2, 1, 1, 1])
@@ -1215,6 +1456,7 @@ def cv_management_tab():
         with col_uni: university = st.text_input("University/Institution", key='edu_uni')
         with col_fy: year_from = st.text_input("From Year", key='edu_fy')
         with col_ty: year_to = st.text_input("To Year", key='edu_ty')
+        # New Field: Academic Scores
         with col_score: score = st.text_input("Scores (GPA/%)", key='edu_score', help="e.g., 3.8/4.0 or 85%")
         
         if st.form_submit_button("Add Education"):
@@ -1228,6 +1470,7 @@ def cv_management_tab():
         st.dataframe(st.session_state.cv_data['education'], use_container_width=True, hide_index=True)
     st.markdown("---")
 
+    # --- 3. Experience ---
     st.subheader("3. Professional Experience")
     with st.form("experience_form", clear_on_submit=True):
         col_comp, col_role, col_ctc = st.columns([2, 2, 1])
@@ -1238,6 +1481,7 @@ def cv_management_tab():
         with col_fy: year_from = st.text_input("From Year/Date", key='exp_fy')
         with col_ty: year_to = st.text_input("To Year/Date (or Present)", key='exp_ty')
         
+        # Separated Description Fields
         responsibilities = st.text_area("Key Responsibilities (Use bullet points)", key='exp_resp', height=100)
         achievements = st.text_area("Key Achievements/Metrics", key='exp_achiev', height=100)
         
@@ -1253,6 +1497,7 @@ def cv_management_tab():
                     desc_parts.append(f"Achievements: {achiev_formatted}")
                 
                 description_text = ". ".join(desc_parts)
+
                 entry = f"Role: {role} at {company} (CTC: {ctc}) ({year_from}-{year_to}). {description_text}"
                 st.session_state.cv_data['experience'].append(entry)
                 st.success(f"Added: {role} at {company}")
@@ -1261,6 +1506,7 @@ def cv_management_tab():
         st.dataframe(st.session_state.cv_data['experience'], use_container_width=True, hide_index=True)
     st.markdown("---")
 
+    # --- 4. Projects ---
     st.subheader("4. Projects")
     with st.form("projects_form", clear_on_submit=True):
         col_name, col_link = st.columns(2)
@@ -1279,6 +1525,7 @@ def cv_management_tab():
         st.dataframe(st.session_state.cv_data['projects'], use_container_width=True, hide_index=True)
     st.markdown("---")
 
+    # --- 5. Certifications ---
     st.subheader("5. Certifications")
     with st.form("cert_form", clear_on_submit=True):
         col_title, col_by = st.columns(2)
@@ -1297,6 +1544,7 @@ def cv_management_tab():
         st.dataframe(st.session_state.cv_data['certifications'], use_container_width=True, hide_index=True)
     st.markdown("---")
 
+    # --- 6. Key Responsibilities, Expertise, or Leadership Skills ---
     st.subheader("6. Key Responsibilities, Expertise, or Leadership Skills")
     st.session_state.cv_data['strengths_raw'] = st.text_area(
         "Enter relevant expertise, core competencies, or soft/leadership skills (one per line)",
@@ -1306,146 +1554,20 @@ def cv_management_tab():
     )
     st.markdown("---")
 
-    def generate_cv_text():
-        data = st.session_state.cv_data
-        text = f"# Candidate Resume Data\n\n"
-        
-        text += f"**Name**: {data['personal_info'].get('name', '')}\n"
-        text += f"**Email**: {data['personal_info'].get('email', '')}\n"
-        text += f"**Phone**: {data['personal_info'].get('phone', '')}\n"
-        if data['personal_info'].get('address'):
-            text += f"**Address**: {data['personal_info']['address']}\n"
-        text += "\n"
-        
-        text += "## Education\n"
-        if data['education']: text += "* " + "\n* ".join(data['education']) + "\n\n"
-        
-        text += "## Experience\n"
-        if data['experience']: text += "* " + "\n* ".join(data['experience']) + "\n\n"
-            
-        text += "## Projects\n"
-        if data['projects']: text += "* " + "\n* ".join(data['projects']) + "\n\n"
-            
-        text += "## Certifications\n"
-        if data['certifications']: text += "* " + "\n* ".join(data['certifications']) + "\n\n"
-            
-        strengths_raw_data = data.get('strengths_raw', '')
-        if strengths_raw_data:
-            strengths_list = [s.strip() for s in strengths_raw_data.split('\n') if s.strip()]
-            if strengths_list:
-                text += "## Key Responsibilities, Expertise, or Leadership Skills\n"
-                text += "* " + "\n* ".join(strengths_list) + "\n\n"
-            
-        return text.strip()
-
+    # --- 7. Generate and Preview Text ---
     if st.button("Generate CV Data for Parsing & Preview", type="primary", use_container_width=True):
         st.session_state.form_cv_text = generate_cv_text()
         st.info("CV Data Generated. Go to **Resume Parsing** tab and select 'Use Form Data'.")
         
-        # CRITICAL FIX: Force Streamlit to rerun and instantly paint the preview tabs
-        st.rerun()
+    st.markdown("##### Current Generated Data Preview")
     
-    # ==============================================================================
-# 1. HELPER PARSING FUNCTIONS (Place this in your global scope / near other helper functions)
-# ==============================================================================
-
-def convert_to_html_content(cv_data):
-    """
-    Converts the structured cv_data dictionary into a clean, well-styled HTML string
-    for rendering a printable PDF simulator layout.
-    """
-    personal = cv_data.get('personal_info', {})
-    
-    # 1. Start Document & Styling Blueprint
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <style>
-            body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.5; color: #333; padding: 20px; max-width: 800px; margin: auto; }}
-            .header {{ text-align: center; margin-bottom: 25px; border-bottom: 2px solid #1E90FF; padding-bottom: 15px; }}
-            .header h1 {{ margin: 0; color: #1E90FF; font-size: 28px; text-transform: uppercase; letter-spacing: 1px; }}
-            .contact-info {{ margin-top: 8px; font-size: 13px; color: #666; }}
-            .section {{ margin-bottom: 20px; }}
-            .section-title {{ font-size: 18px; color: #1E90FF; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 5px; margin-bottom: 10px; text-transform: uppercase; }}
-            .entry {{ margin-bottom: 12px; }}
-            ul {{ margin: 5px 0 0 20px; padding: 0; }}
-            li {{ margin-bottom: 4px; }}
-            p {{ margin: 0 0 5px 0; }}
-        </style>
-    </head>
-    <body>
-    
-    <div class="header">
-        <h1>{personal.get('name', 'Candidate Name')}</h1>
-        <div class="contact-info">
-            Email: {personal.get('email', 'N/A')} | Phone: {personal.get('phone', 'N/A')}
-            {f" | Address: {personal.get('address')}" if personal.get('address') else ""}
-        </div>
-    </div>
-    """
-    
-    # 2. Append Education Layer
-    if cv_data.get('education'):
-        html += '<div class="section"><div class="section-title">Education</div><ul>'
-        for edu in cv_data['education']:
-            html += f"<li>{edu}</li>"
-        html += '</ul></div>'
-        
-    # 3. Append Experience Layer
-    if cv_data.get('experience'):
-        html += '<div class="section"><div class="section-title">Professional Experience</div><ul>'
-        for exp in cv_data['experience']:
-            html += f"<li>{exp}</li>"
-        html += '</ul></div>'
-        
-    # 4. Append Projects Layer
-    if cv_data.get('projects'):
-        html += '<div class="section"><div class="section-title">Key Projects</div><ul>'
-        for proj in cv_data['projects']:
-            html += f"<li>{proj}</li>"
-        html += '</ul></div>'
-        
-    # 5. Append Certifications Layer
-    if cv_data.get('certifications'):
-        html += '<div class="section"><div class="section-title">Certifications</div><ul>'
-        for cert in cv_data['certifications']:
-            html += f"<li>{cert}</li>"
-        html += '</ul></div>'
-        
-    # 6. Append Strengths / Key Responsibilities Layer
-    strengths_raw = cv_data.get('strengths_raw', '')
-    if strengths_raw.strip():
-        html += '<div class="section"><div class="section-title">Core Competencies & Expertise</div><ul>'
-        for line in strengths_raw.split('\n'):
-            if line.strip():
-                clean_line = line.strip().lstrip('*+- ').strip()
-                html += f"<li>{clean_line}</li>"
-        html += '</ul></div>'
-        
-    # 7. Close Document Elements Blueprint
-    html += """
-    </body>
-    </html>
-    """
-    return html
-
-
-# ==============================================================================
-# 2. RENDER PIPELINE WORKSPACE (Inside your cv_management_tab definition block)
-# ==============================================================================
-
     if st.session_state.form_cv_text:
-        # Generate content for all formats
+         # Generate content for all formats
         markdown_text = st.session_state.form_cv_text
-        
         # Use standard json.dumps instead of a custom function
         json_data = json.dumps(st.session_state.cv_data, indent=4) 
-        
-        # Now calls securely since definition is globally declared above
         html_content = convert_to_html_content(st.session_state.cv_data)
-        
+
         # Create Tabs for viewing
         tab_md, tab_json, tab_html_pdf = st.tabs(["Markdown (.md)", "JSON (.json)", "HTML/PDF Preview"])
 
@@ -1492,6 +1614,152 @@ def convert_to_html_content(cv_data):
         }
         st.session_state.form_cv_text = ""
         st.rerun()
+
+
+def generate_cv_text():
+    """Generates the text/markdown format from all stored session state data."""
+    data = st.session_state.cv_data
+    text = f"# Candidate Resume Data\n\n"
+    
+    # Personal Info
+    text += f"**Name**: {data['personal_info'].get('name', '')}\n"
+    text += f"**Email**: {data['personal_info'].get('email', '')}\n"
+    text += f"**Phone**: {data['personal_info'].get('phone', '')}\n"
+    if data['personal_info'].get('address'):
+        text += f"**Address**: {data['personal_info']['address']}\n"
+    text += "\n"
+    
+    # Education
+    text += "## Education\n"
+    if data['education']: text += "* " + "\n* ".join(data['education']) + "\n\n"
+    
+    # Experience
+    text += "## Experience\n"
+    if data['experience']: text += "* " + "\n* ".join(data['experience']) + "\n\n"
+        
+    # Projects
+    text += "## Projects\n"
+    if data['projects']: text += "* " + "\n* ".join(data['projects']) + "\n\n"
+        
+    # Certifications
+    text += "## Certifications\n"
+    if data['certifications']: text += "* " + "\n* ".join(data['certifications']) + "\n\n"
+        
+    # Strengths/Skills (Renamed Section)
+    strengths_raw_data = data.get('strengths_raw', '')
+    if strengths_raw_data:
+        strengths_list = [s.strip() for s in strengths_raw_data.split('\n') if s.strip()]
+        if strengths_list:
+            text += "## Key Responsibilities, Expertise, or Leadership Skills\n"
+            text += "* " + "\n* ".join(strengths_list) + "\n\n"
+        
+    return text.strip()
+    
+    if st.button("Generate CV Data for Parsing & Preview", type="primary", use_container_width=True):
+        st.session_state.form_cv_text = generate_cv_text()
+        st.info("CV Data Generated. Go to **Resume Parsing** tab and select 'Use Form Data'.")
+        
+    st.markdown("##### Current Generated Data Preview")
+    
+    if st.session_state.form_cv_text:
+        # Generate content for all formats
+        markdown_text = st.session_state.form_cv_text
+        json_data = convert_to_json(st.session_state.cv_data) 
+        html_content = convert_to_html_content(st.session_state.cv_data)
+
+        # Create Tabs for viewing
+        tab_md, tab_json, tab_html_pdf = st.tabs(["Markdown (.md)", "JSON (.json)", "HTML/PDF Preview"])
+
+        with tab_md:
+            st.code(markdown_text, language='markdown')
+            st.download_button(
+                label="⬇️ Download Markdown (.md)",
+                data=markdown_text,
+                file_name=f"{st.session_state.cv_data['personal_info']['name'].replace(' ', '_')}_cv.md",
+                mime="text/markdown",
+                use_container_width=True
+            )
+
+        with tab_json:
+            st.json(json_data)
+            st.download_button(
+                label="⬇️ Download JSON (.json)",
+                data=json_data,
+                file_name=f"{st.session_state.cv_data['personal_info']['name'].replace(' ', '_')}_cv.json",
+                mime="application/json",
+                use_container_width=True
+            )
+
+        with tab_html_pdf:
+            st.components.v1.html(html_content, height=400, scrolling=True)
+            st.download_button(
+                label="⬇️ Download HTML (.html)",
+                data=html_content,
+                file_name=f"{st.session_state.cv_data['personal_info']['name'].replace(' ', '_')}_cv.html",
+                mime="text/html",
+                use_container_width=True
+            )
+    else:
+        st.info("No CV text generated yet. Fill out the forms and click the generate button.")
+
+    if st.button("🗑️ Clear All Form Data", key="clear_cv_form_data"):
+        st.session_state.cv_data = {
+            'personal_info': {'name': '', 'email': '', 'phone': '', 'address': ''},
+            'education': [],
+            'experience': [],
+            'projects': [],
+            'certifications': [],
+            'strengths_raw': '' 
+        }
+        st.session_state.form_cv_text = ""
+        st.rerun()
+
+
+# --- Helper URL Extraction Function (Module Level) ---
+def extract_jd_from_linkedin_url(url):
+    if "linkedin.com/jobs" not in url:
+        return f"[Error] Invalid LinkedIn Job URL: {url}"
+
+    url_lower = url.lower()
+    if "data-scientist" in url_lower:
+        role = "Data Scientist"
+        skills = ["Python", "SQL", "ML", "Data Analysis", "Pytorch", "Visualization"]
+        focus = "machine learning and statistical modeling"
+    elif "cloud-engineer" in url_lower or "aws" in url_lower:
+        role = "Cloud Engineer"
+        skills = ["AWS", "Docker", "Kubernetes", "Cloud Services", "GCP", "Terraform"]
+        focus = "infrastructure as code and cloud deployment"
+    elif "ml-engineer" in url_lower or "ai-engineer" in url_lower:
+        role = "AI/ML Engineer"
+        skills = ["MLOps", "LLM", "Deep Learning", "Python", "TensorFlow", "API Services"]
+        focus = "production-level AI/ML model development and deployment"
+    else:
+        role = "Software Engineer"
+        skills = ["Java", "API", "SQL", "React", "JavaScript"]
+        focus = "full-stack application development"
+        
+    skills_str = ", ".join(skills)
+
+    return f"""
+    --- Simulated JD for: {role} ---
+    
+    Company: MockCorp
+    Location: Remote
+    
+    Job Summary:
+    We are seeking a highly skilled **{role}** to join our team. The ideal candidate will have expertise in {skills_str}. Must be focused on **{focus}**. This is a Full-time position.
+    
+    Responsibilities:
+    * Develop and maintain systems using **{skills[0]}** and **{skills[1]}** in a collaborative environment.
+    * Manage and deploy applications on **{skills[2]}** platforms.
+    * Collaborate with cross-functional teams.
+    
+    Qualifications:
+    * 3+ years of experience.
+    * Strong proficiency in **{skills[0]}** and analytical tools.
+    * Experience with cloud platforms (e.g., AWS).
+    ---
+    """
 
 def jd_management_tab_candidate():
     st.header("📚 Manage Job Descriptions for Matching")
