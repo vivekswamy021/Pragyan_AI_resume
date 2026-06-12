@@ -1610,7 +1610,7 @@ def cv_management_tab():
         st.session_state.form_cv_text = ""
         st.rerun()
 
-
+#-----------------------------------------------
 def generate_cv_text():
     """Generates the text/markdown format from all stored session state data."""
     data = st.session_state.cv_data
