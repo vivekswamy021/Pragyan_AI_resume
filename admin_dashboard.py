@@ -16,7 +16,7 @@ from streamlit.runtime.uploaded_file_manager import UploadedFile
 # CONFIGURATION & API SETUP (Necessary for standalone functions)
 # -------------------------
 
-GROQ_MODEL = "llama-3.1-8b-instant"
+GROQ_MODEL = "openai/gpt-oss-120b"                #llama-3.1-8b-instant
 # Load environment variables (mocked if running standalone)
 load_dotenv()
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
